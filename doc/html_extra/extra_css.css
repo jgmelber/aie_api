@@ -1,0 +1,21 @@
+#titlearea table
+{
+	width:100%;
+}
+#projectlogo
+{
+	float:right;
+}
+ 
+#projectlogo img
+{ 
+	margin:5px;
+	border: 0px none;
+}
+
+#projectname
+{
+	font: 200% Tahoma, Arial,sans-serif;
+	margin: 0px;
+	padding: 2px 0px;
+}
