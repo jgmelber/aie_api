@@ -7663,7 +7663,7 @@ BINARY_OP_IMPL(Min)
 }
 
 #ifdef __AIENGINE__
-#include "aie_adf.hpp"
+//#include "aie_adf.hpp"
 #endif
 #include "operators.hpp"
 
