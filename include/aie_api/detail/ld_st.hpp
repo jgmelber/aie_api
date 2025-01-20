@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -28,6 +28,16 @@ template <typename T, unsigned Elems>
 struct vector_ldst_align
 {
     static constexpr unsigned value = (detail::type_bits_v<T> * Elems == 128)? 16 : 32;
+};
+
+#elif __AIE_ARCH__ == 21
+
+template <typename T, unsigned Elems>
+struct vector_ldst_align
+{
+    static constexpr unsigned value = (detail::type_bits_v<T> * Elems == 128)? 16 :
+                                      (detail::type_bits_v<T> * Elems == 256)? 32 :
+                                      64;
 };
 
 #endif

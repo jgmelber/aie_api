@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
 @page changelog Changelog
 
 @tableofcontents{html,latex}
 
+@section jan_2025 January 2025
+
+<h3>Global AIE API changes</h3>
+
+<ul>
+<li>Added XDNA2 support</li>
+</ul>
 
 @section vitis_2024_2 Vitis 2024.2
 

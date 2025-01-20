@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -158,6 +158,8 @@ struct transpose_bits_impl<8, T, 16>
     }
 };
 
+#if __AIE_ARCH__ == 20
+
 template <typename T>
 struct transpose_bits_impl<16, T, 64>
 {
@@ -193,6 +195,39 @@ struct transpose_bits_impl<16, T, 64>
         return concat_vector(tmp1, tmp2);
     }
 };
+
+#else
+
+template <typename T>
+struct transpose_bits_impl<16, T, 64>
+{
+    static constexpr unsigned Elems = 64;
+    using vector_type = vector<T, Elems>;
+
+    static constexpr unsigned shuffle_modes[7] = { T512_1x2_lo,
+                                                   T16_2x32_lo,
+                                                   T16_4x16_lo,
+                                                   T16_8x8_lo,
+                                                   T16_16x4_lo,
+                                                   T16_32x2_lo,
+                                                   T512_1x2_lo  };
+
+    __aie_inline
+    static vector_type run(const vector_type &v, unsigned row, unsigned col)
+    {
+        vector<T, 32> tmp1, tmp2;
+
+        const unsigned index = utils::ffs(row);
+
+        //numerical values of _lo and _hi modes for lower/upper 512b in 1024 transposes are separated by +1
+        tmp1 = ::shuffle(v.template extract<32>(0), v.template extract<32>(1), shuffle_modes[index]);
+        tmp2 = ::shuffle(v.template extract<32>(0), v.template extract<32>(1), shuffle_modes[index] + 1);
+
+        return concat_vector(tmp1, tmp2);
+    }
+};
+
+#endif
 
 //Elems 32, 16 and 8
 template <typename T, unsigned Elems>
@@ -251,6 +286,8 @@ struct transpose_bits_impl<32, T, 32>
     }
 };
 
+#if __AIE_ARCH__ == 20
+
 template <typename T>
 struct transpose_bits_impl<32, T, 16>
 {
@@ -279,6 +316,36 @@ struct transpose_bits_impl<32, T, 16>
         return ret;
     }
 };
+
+#else
+
+template <typename T>
+struct transpose_bits_impl<32, T, 16>
+{
+    static constexpr unsigned Elems = 16;
+
+    using vector_type = vector<T, Elems>;
+
+    static constexpr unsigned shuffle_modes[5] = { T512_1x2_lo,
+                                                   T32_2x8,
+                                                   T32_4x4,
+                                                   T32_8x2,
+                                                   T512_1x2_lo };
+
+    __aie_inline
+    static vector_type run(const vector_type &v, unsigned row, unsigned col)
+    {
+        vector_type ret;
+
+        const unsigned index = utils::ffs(row);
+
+        ret = ::shuffle(v, shuffle_modes[index]);
+
+        return ret;
+    }
+};
+
+#endif
 
 //Elems 8 and 4
 template <typename T, unsigned Elems>
@@ -346,6 +413,32 @@ struct transpose_bits_impl<64, T, 16>
         return ret;
     }
 };
+
+#if __AIE_ARCH__ > 20
+
+// Elems 8 and 4
+template <typename T>
+struct transpose_bits_impl<64, T, 8>
+{
+    static constexpr unsigned Elems = 8;
+    using vector_type = vector<T, Elems>;
+
+    static constexpr unsigned shuffle_modes[4] = {  T512_1x2_lo, T64_2x4, T64_4x2, T512_1x2_lo  };
+
+    __aie_inline
+    static vector_type run(const vector_type &v, unsigned row, unsigned col)
+    {
+        aie::vector<T, 8> tmp;
+
+        const unsigned index = utils::ffs(row);
+
+        tmp = ::shuffle(v, shuffle_modes[index]);
+
+        return tmp;
+    }
+};
+
+#endif
 
 //Elems 8 and 4
 template <typename T, unsigned Elems>

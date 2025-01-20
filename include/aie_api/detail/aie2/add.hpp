@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -13,11 +13,19 @@
 
 namespace aie::detail {
 
+struct add_op {
+    auto operator()(auto... args) const { return ::add(args...); }
+};
+
+struct sub_op {
+    auto operator()(auto... args) const { return ::sub(args...); }
+};
+
 template <AddSubOperation Op>
 constexpr auto get_add_sub_op()
 {
-    if      constexpr (Op == AddSubOperation::Add) return [](auto... args) { return ::add(args...); };
-    else if constexpr (Op == AddSubOperation::Sub) return [](auto... args) { return ::sub(args...); };
+    if      constexpr (Op == AddSubOperation::Add) return add_op{};
+    else if constexpr (Op == AddSubOperation::Sub) return sub_op{};
 }
 
 template <typename T, unsigned Elems, AddSubOperation Op>
@@ -68,7 +76,8 @@ struct add_sub_bits_impl_common
 {
     using vector_type = vector<T, Elems>;
 
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
+    using native_op = add_sub_bits_impl_common<TypeBits, T, native_elems, Op>;
 
     __aie_inline
     static vector_type run(const vector_type &v1, const vector_type &v2)
@@ -77,8 +86,8 @@ struct add_sub_bits_impl_common
         vector_type ret;
 
         if constexpr (Elems < native_elems) {
-            const vector<T, native_elems> tmp = add_sub_bits_impl<TypeBits, T, native_elems, Op>::run(v1.template grow<native_elems>(),
-                                                                                                      v2.template grow<native_elems>());
+            const vector<T, native_elems> tmp = native_op::run(v1.template grow<native_elems>(),
+                                                               v2.template grow<native_elems>());
             ret = tmp.template extract<Elems>(0);
         }
         else if constexpr (Elems == native_elems) {
@@ -162,11 +171,14 @@ struct add_sub_bits_impl_float_common;
 template <typename T, unsigned Elems, AddSubOperation Op>
 struct add_sub_bits_impl_complex_float_common;
 
+#if __AIE_ARCH__ == 20
+
 template <typename T, unsigned Elems, AddSubOperation Op>
 struct add_sub_bits_impl_float_common
 {
     using vector_type = vector<T, Elems>;
     static constexpr unsigned native_elems = 16;
+    using native_op = add_sub_bits_impl_float_common<T, native_elems, Op>;
 
     // There are no adders for bfloat16, but we can use the accumulator adders for float
 
@@ -177,7 +189,7 @@ struct add_sub_bits_impl_float_common
         vector_type ret;
 
         if      constexpr (Elems < native_elems) {
-            const vector<T, native_elems> tmp = add_sub_bits_impl_float_common<T, native_elems, Op>::run(v1.template grow<native_elems>(), v2.template grow<native_elems>());
+            const vector<T, native_elems> tmp = native_op::run(v1.template grow<native_elems>(), v2.template grow<native_elems>());
             ret = tmp.template extract<Elems>(0);
         }
         else if constexpr (Elems == native_elems) {
@@ -191,8 +203,8 @@ struct add_sub_bits_impl_float_common
             constexpr unsigned num_op = Elems / native_elems;
 
             utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-                ret.template insert<native_elems>(idx, add_sub_bits_impl_float_common<T, native_elems, Op>::run(v1.template extract<native_elems>(idx),
-                                                                                                                v2.template extract<native_elems>(idx)));
+                ret.template insert<native_elems>(idx, native_op::run(v1.template extract<native_elems>(idx),
+                                                                      v2.template extract<native_elems>(idx)));
             });
         }
 
@@ -209,7 +221,7 @@ struct add_sub_bits_impl_float_common
             constexpr unsigned num_op = Elems / native_elems;
 
             utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-                ret.template insert<native_elems>(idx, add_sub_bits_impl_float_common<T, native_elems, Op>::run(vals, v.template extract<native_elems>(idx)));
+                ret.template insert<native_elems>(idx, native_op::run(vals, v.template extract<native_elems>(idx)));
             });
 
             return ret;
@@ -229,7 +241,7 @@ struct add_sub_bits_impl_float_common
             constexpr unsigned num_op = Elems / native_elems;
 
             utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-                ret.template insert<native_elems>(idx, add_sub_bits_impl_float_common<T, native_elems, Op>::run(v.template extract<native_elems>(idx), vals));
+                ret.template insert<native_elems>(idx, native_op::run(v.template extract<native_elems>(idx), vals));
             });
 
             return ret;
@@ -249,6 +261,103 @@ template <unsigned Elems, AddSubOperation Op> struct add_sub_bits_impl<32, cbflo
 template <unsigned Elems, AddSubOperation Op> struct add_sub_bits_impl<64, cfloat,    Elems, Op> : public add_sub_bits_impl_complex_float_common<cfloat,    Elems, Op> {};
 #endif
 
+#elif __AIE_ARCH__ == 21
+
+template <typename T, unsigned Elems, AddSubOperation Op>
+struct add_sub_bits_impl_float_common
+{
+    static constexpr unsigned native_elems = 64;
+    using vector_type = vector<T, Elems>;
+    using native_op   = add_sub_bits_impl_float_common<T, native_elems, Op>;
+
+    __aie_inline
+    static vector_type run(const vector_type &v1, const vector_type &v2)
+    {
+        // There are no adders for bfloat16, but we can use the accumulator adders for float
+        constexpr auto op = get_add_sub_op<Op>();
+
+        const accum<accfloat, Elems> acc1(v1);
+        const accum<accfloat, Elems> acc2(v2);
+
+        vector_type ret;
+
+        utils::unroll_times<std::max(1u, Elems / native_elems)>([&](unsigned idx) __aie_inline {
+            accum<accfloat, native_elems> tmp = op(acc1.template grow_extract<native_elems>(idx),
+                                                   acc2.template grow_extract<native_elems>(idx));
+
+            if constexpr (Elems < native_elems)
+                ret = tmp.template extract<Elems>(0).template to_vector<T>();
+            else
+                ret.template insert<native_elems>(idx, tmp.template to_vector<T>());
+        });
+
+        return ret;
+    }
+
+    template <unsigned Elems2>
+    __aie_inline
+    static vector_type run(vector_elem_const_ref<T, Elems2> a, const vector_type &v)
+    {
+        return run((T)a, v);
+    }
+
+    template <unsigned Elems2>
+    __aie_inline
+    static vector_type run(const vector_type &v, vector_elem_const_ref<T, Elems2> a)
+    {
+        return run(v, (T)a);
+    }
+
+    __aie_inline
+    static vector_type run(const T &a, const vector_type &v)
+    {
+        if constexpr (Elems > native_elems) {
+            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+
+            vector_type ret;
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                ret.template insert<native_elems>(idx, native_op::run(vals, v.template extract<native_elems>(idx)));
+            });
+
+            return ret;
+        }
+        else {
+            return run(broadcast<T, Elems>::run(a), v);
+        }
+    }
+
+    __aie_inline
+    static vector_type run(const vector_type &v, const T &a)
+    {
+        if constexpr (Elems > native_elems) {
+            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+
+            vector_type ret;
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                ret.template insert<native_elems>(idx, native_op::run(v.template extract<native_elems>(idx), vals));
+            });
+
+            return ret;
+        }
+        else {
+            return run(v, broadcast<T, Elems>::run(a));
+        }
+    }
+};
+
+template <unsigned Elems, AddSubOperation Op> struct add_sub_bits_impl<16, bfloat16, Elems, Op> : public add_sub_bits_impl_float_common<bfloat16, Elems, Op> {};
+
+#if __AIE_API_FP32_EMULATION__
+template <unsigned Elems, AddSubOperation Op> struct add_sub_bits_impl<32, float,    Elems, Op> : public add_sub_bits_impl_float_common<float,    Elems, Op> {};
+#endif
+
+#if __AIE_API_COMPLEX_FP32_EMULATION__
+template <unsigned Elems, AddSubOperation Op> struct add_sub_bits_impl<64, cfloat,   Elems, Op> : public add_sub_bits_impl_complex_float_common<cfloat,   Elems, Op> {};
+#endif
+
+#endif
 
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 

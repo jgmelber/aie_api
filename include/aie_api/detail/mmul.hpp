@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -21,7 +21,10 @@
  *
  * <table>
  * <caption>Matrix multiplication modes for real types</caption>
- * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>8b x 16b<th>16b x 16b<th>32b x 16b<th>16b x 32b<th>32b x 32b<sup>c</sup><th>bfloat16 x bfloat16<th>float x float
+ * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>8b x 16b<th>16b x 16b<th>32b x 16b<th>16b x 32b<th>32b x 32b<sup>c</sup>
+ * <th>%bfloat16 x %bfloat16
+ * <th>float x float<sup>d</sup>
+ * <th>bfp16 x bfp16
  * <tr><td style="white-space: nowrap;">
  *         AIE
  *     <td style="vertical-align:top">
@@ -42,8 +45,9 @@
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *         4x2x4<sup>a</sup><br/> 2x2x2<sup>a</sup><br/> 2x4x2<sup>ab</sup><br/> 2x8x2<sup>ab</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x4x1<sup>ab</sup>
+ *     <td style="vertical-align:top">
  * <tr><td style="white-space: nowrap;">
- *         AIE-ML
+ *         AIE-ML/XDNA 1
  *     <td style="vertical-align:top">
  *         4x16x8<br/>8x16x8<sup>a</sup><br/>4x32x8<sup>ab</sup>
  *     <td style="vertical-align:top">
@@ -64,6 +68,31 @@
  *         4x8x4<br/> 8x8x4<sup>a</sup><br/> 4x16x8<sup>ab</sup><br/> 8x8x8<sup>ab</sup>
  *     <td style="vertical-align:top">
  *         4x8x4<br/> 4x1x4<sup>b</sup><br/> 4x1x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ * <tr><td style="white-space: nowrap;">
+ *         XDNA 2
+ *     <td style="vertical-align:top">
+ *         4x16x16
+ *     <td style="vertical-align:top">
+ *         4x8x8<br/> 8x8x8
+ *     <td style="vertical-align:top">
+ *         4x4x8<br> 8x4x8<br> 4x8x8<br> 2x8x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         8x2x8<sup>b</sup><br/> 4x4x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<br> 8x2x8<br> 2x4x8<br> 4x4x8<br/> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<br/> 2x4x8<sup>ab</sup><br/> 4x4x8<sup>ab</sup><br/> 4x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x4x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<sup>ab</sup><br/> 4x4x4<sup>ab</sup><br/> 4x4x8<sup>ab</sup><br/> 8x2x8<sup>ab</sup><br/> 4x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         8x8x4<sup>ab</sup><br/> 4x8x8<sup>abc</sup><br/> 4x8x4<sup>ab</sup><br/> 8x8x8<sup>e</sup><br/> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x8x4<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         8x8x8<br/> 8x8x16<sup>ab</sup>
  * </table>
  *
  * <table>
@@ -71,7 +100,8 @@
  * <tr><th>Arch.<th>16b x c16b<th>16b x c32b<th>c16b x 16b<th>c16b x c16b<th>c16b x 32b
  *     <th>c16b x c32b<th>32b x c16b<th>32b x c32b<sup>c</sup><th>c32b x 16b<th>c32b x c16b
  *     <th>c32b x 32b<sup>c</sup><th>c32b x c32b<sup>c</sup>
- *     <th>float x cfloat<th>cfloat x float<th>cfloat x cfloat
+ *     <th>%bfloat16 x %cbfloat16<th>%cbfloat16 x %bfloat16<th>%cbfloat16 x %cbfloat16
+ *     <th>float x cfloat<sup>d</sup><th>cfloat x float<sup>d</sup><th>cfloat x cfloat<sup>d</sup>
  * <tr><td style="white-space: nowrap;">
  *         AIE
  *     <td style="vertical-align:top">
@@ -99,13 +129,16 @@
  *     <td style="vertical-align:top">
  *         1x2x2<sup>a</sup><br/> 2x2x1<sup>a</sup><br/> 2x2x1
  *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
  *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
  *     <td style="vertical-align:top">
  *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x4x1<sup>a</sup><br/> 2x4x1<sup>ab</sup>
  *     <td style="vertical-align:top">
  *         2x2x2<sup>a</sup><br/> 2x2x4<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
  * <tr><td style="white-space: nowrap;">
- *         AIE-ML
+ *         AIE-ML/XDNA 1
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
@@ -123,6 +156,36 @@
  *     <td style="vertical-align:top">
  *         1x2x8<sup>ab</sup>
  *     <td style="vertical-align:top">
+ *         2x8x2<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         2x8x2<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         2x8x2<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ * <tr><td style="white-space: nowrap;">
+ *         XDNA 2
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x4x8<sup>ab</sup><br/> 2x4x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         1x4x8<sup>ab</sup><br/> 2x2x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         1x2x4<sup>ab</sup><br/> 1x2x8<sup>ab</sup><br/> 1x2x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         1x2x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  * </table>
@@ -130,11 +193,13 @@
  * \note
  * <sup>a</sup> - Emulated using multiple intrinsic calls.<br/>
  * <sup>b</sup> - Require additional data manipulation.<br/>
- * <sup>c</sup> - 32b * 16b multiplications are emulated on AIE-ML
+ * <sup>c</sup> - 32b * 16b multiplications are emulated on AIE-ML/XDNA 1 and XDNA 2.<br/>
+ * <sup>d</sup> - float multiplications are emulated on AIE-ML/XDNA 1 and XDNA 2 using native %bfloat16 multiplications.<br/>
+ * <sup>e</sup> - Mode available through block-floating-point emulation to increase throughput at the cost of accuracy. Enabled by defining AIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16 at compile time.
  *
  * @paragraph group_mmul_page_multidim_gemm GEMM leveraging multidimensional addressing
  *
- * \note Multi-dimensional addressing and the corresponding tensor buffer streams were introduced with AIE-ML
+ * \note Multi-dimensional addressing and the corresponding tensor buffer streams were introduced with AIE-ML/XDNA 1
  *
  * Below is an example of an optimized bfloat16 GEMM kernel in which both input matrices, A and B, are addressed in the following 4D patterns (see \ref tensor_buffer_streams):
  *
@@ -214,7 +279,7 @@
  *
  * @paragraph group_mmul_page_supported_sparse_modes Supported Sparse Matrix Multiplication Modes
  *
- * AIE-ML introduced hardware support for sparse matrix multiplication. For an M x K x N matrix multiplication with
+ * AIE-ML/XDNA 1 introduced hardware support for sparse matrix multiplication. For an M x K x N matrix multiplication with
  * A being M x K, B being K x N, and C being M x N, a sparse B matrix may be stored in memory using a data layout
  * which avoids storing zero values.
  *
@@ -224,9 +289,9 @@
  *
  * <table>
  * <caption>Matrix multiplication modes for real types (sparse B matrix)</caption>
- * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>16b x 16b<th>bfloat16 x bfloat16
+ * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>16b x 16b<th>%bfloat16 x %bfloat16
  * <tr><td style="white-space: nowrap;">
- *         AIE-ML
+ *         AIE-ML/XDNA 1
  *     <td style="vertical-align:top">
  *         4x32x8
  *     <td style="vertical-align:top">
@@ -237,6 +302,16 @@
  *         2x8x8<br/> 4x8x8<sup>a</sup><br/> 2x8x16<sup>ab</sup>
  *     <td style="vertical-align:top">
  *         4x16x4<br/> 4x16x8<sup>ab</sup>
+ * <tr><td style="white-space: nowrap;">
+ *         XDNA 2
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x16x8<br/> 8x16x8
+ *     <td style="vertical-align:top">
+ *         2x16x8<br/> 4x16x8
+ *     <td style="vertical-align:top">
+ *         2x8x8<br/> 4x8x8
+ *     <td style="vertical-align:top">
  * </table>
  *
  * \note
@@ -481,7 +556,7 @@ struct C_block_larger_internal
     }
 };
 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ >= 20
 // C_block_interleave_cols implementation requires accumulator shuffles
 // which aren't supported on AIE1 due to loss of precision
 template <typename TypeA, typename TypeB, unsigned AccumBits, unsigned Elems, unsigned NumCols, unsigned NumAccums = 1>
@@ -673,7 +748,7 @@ private:
     using vec_to_acc   = vector_to_accum_cast<accum_tag,    interleave_t, lanes_per_shuffled_acc>;
 };
 
-#endif //__AIE_ARCH__ == 20
+#endif //__AIE_ARCH__ >= 20
 
 }
 
@@ -684,6 +759,10 @@ private:
 #elif __AIE_ARCH__ == 20
 
 #include "aie2/mmul.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/mmul.hpp"
 
 #endif
 

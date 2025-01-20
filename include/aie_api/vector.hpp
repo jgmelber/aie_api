@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -20,6 +20,11 @@
 #include "detail/aie1/vector.hpp"
 
 #elif __AIE_ARCH__ == 20
+
+#include "detail/aie2/vector_native_types.hpp"
+#include "detail/aie2/vector.hpp"
+
+#elif __AIE_ARCH__ == 21
 
 #include "detail/aie2/vector_native_types.hpp"
 #include "detail/aie2/vector.hpp"

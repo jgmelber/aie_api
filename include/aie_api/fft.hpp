@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -81,6 +81,7 @@ using fft_dit [[deprecated("Use fft_r*_dit_stage function instead")]] =
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
+    requires(arch::is(arch::Gen1, arch::Gen2))
 __aie_fft_inline
 void fft_dit_r2_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw,
@@ -89,9 +90,11 @@ void fft_dit_r2_stage(const Input * __restrict x,
     constexpr unsigned Radix = 2;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw),  "Insufficient twiddle alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw, n, shift_tw, shift, inv, out);
 }
@@ -121,6 +124,7 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
+    requires(arch::is(arch::AIE, arch::AIE_ML))
 __aie_fft_inline
 void fft_dit_r3_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -130,10 +134,12 @@ void fft_dit_r3_stage(const Input * __restrict x,
     constexpr unsigned Radix = 3;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, n, shift_tw, shift, inv, out);
 }
@@ -164,6 +170,7 @@ void fft_dit_r3_stage(const Input * __restrict x,
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
+    requires(arch::is(arch::Gen1, arch::Gen2))
 __aie_fft_inline
 void fft_dit_r4_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -174,11 +181,13 @@ void fft_dit_r4_stage(const Input * __restrict x,
     constexpr unsigned Radix = 4;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, n, shift_tw, shift, inv, out);
 }
@@ -210,6 +219,7 @@ void fft_dit_r4_stage(const Input * __restrict x,
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
+    requires(arch::is(arch::AIE, arch::AIE_ML))
 __aie_fft_inline
 void fft_dit_r5_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -221,12 +231,14 @@ void fft_dit_r5_stage(const Input * __restrict x,
     constexpr unsigned Radix = 5;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw3), "Insufficient twiddle 3 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, tw3, n, shift_tw, shift, inv, out);
 }
@@ -248,7 +260,7 @@ void fft_dit_r5_stage(const Input * __restrict x,
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(detail::is_floating_point_v<Input>)
+    requires(arch::is(arch::AIE, arch::AIE_ML) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r2_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw,
@@ -257,9 +269,11 @@ void fft_dit_r2_stage(const Input * __restrict x,
     constexpr unsigned Radix = 2;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw),  "Insufficient twiddle alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw, n, 0, 0, inv, out);
 }
@@ -287,7 +301,7 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(detail::is_floating_point_v<Input>)
+    requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r3_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -297,10 +311,12 @@ void fft_dit_r3_stage(const Input * __restrict x,
     constexpr unsigned Radix = 3;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, n, 0, 0, inv, out);
 }
@@ -341,11 +357,13 @@ void fft_dit_r4_stage(const Input * __restrict x,
     constexpr unsigned Radix = 4;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, n, 0, 0, inv, out);
 }
@@ -388,12 +406,14 @@ void fft_dit_r5_stage(const Input * __restrict x,
     constexpr unsigned Radix = 5;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw3), "Insufficient twiddle 3 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage<Radix, Vectorization, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, tw3, n, 0, 0, inv, out);
 }
@@ -431,9 +451,11 @@ void fft_dit_r2_stage(const Input * __restrict x,
     constexpr unsigned Radix = 2;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw),  "Insufficient twiddle alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw, n, vectorization, shift_tw, shift, inv, out);
 }
@@ -475,10 +497,12 @@ void fft_dit_r3_stage(const Input * __restrict x,
     constexpr unsigned Radix = 3;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw0, tw1, n, vectorization, shift_tw, shift, inv, out);
 }
@@ -522,11 +546,13 @@ void fft_dit_r4_stage(const Input * __restrict x,
     constexpr unsigned Radix = 4;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, n, vectorization, shift_tw, shift, inv, out);
 }
@@ -572,12 +598,14 @@ void fft_dit_r5_stage(const Input * __restrict x,
     constexpr unsigned Radix = 5;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw3), "Insufficient twiddle 3 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, tw3, n, vectorization, shift_tw, shift, inv, out);
 }
@@ -610,9 +638,11 @@ void fft_dit_r2_stage(const Input * __restrict x,
     constexpr unsigned Radix = 2;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw),  "Insufficient twiddle alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw, n, vectorization, 0, 0, inv, out);
 }
@@ -652,10 +682,12 @@ void fft_dit_r3_stage(const Input * __restrict x,
     constexpr unsigned Radix = 3;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw0, tw1, n, vectorization, 0, 0, inv, out);
 }
@@ -699,12 +731,14 @@ void fft_dit_r5_stage(const Input * __restrict x,
     constexpr unsigned Radix = 5;
     static_assert(detail::is_valid_fft_op_v<Radix, Input, Output, Twiddle>, "Requested FFT mode is not implemented");
 
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(x),   "Insufficient input alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw0), "Insufficient twiddle 0 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw1), "Insufficient twiddle 1 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw2), "Insufficient twiddle 2 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(tw3), "Insufficient twiddle 3 alignment");
     RUNTIME_ASSERT_NO_ASSUME(detail::check_vector_alignment(out), "Insufficient output alignment");
+#endif
 
     detail::fft_dit_stage_dyn_vec<Radix, Input, Output, Twiddle>::run(x, tw0, tw1, tw2, tw3, n, vectorization, 0, 0, inv, out);
 }

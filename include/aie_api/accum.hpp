@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -10,6 +10,9 @@
 #include "aie_types.hpp"
 #include "concepts.hpp"
 #include "vector.hpp"
+#if AIE_API_ML_VERSION >= 210
+#include "block_vector.hpp"
+#endif
 
 #include "detail/accum.hpp"
 #include "detail/utils.hpp"
@@ -22,6 +25,10 @@
 
 #include "detail/aie2/accum.hpp"
 
+#elif __AIE_ARCH__ == 21
+ 
+#include "detail/aie2p/accum.hpp"
+ 
 #endif
 
 namespace aie {
@@ -200,6 +207,24 @@ public:
         this->from_vector(v, shift);
     }
 
+#if AIE_API_ML_VERSION >= 210
+    /**
+     * \brief Construct from a block vector.
+     *
+     * The accumulator class and the vector type must be compatible.
+     * The accumulator size and the block vector size must be the same.
+     *
+     * @param v     Data used to construct the accumulator from.
+     * @param shift Upshift value.
+     */
+    template <typename T> requires(detail::is_valid_block_type_v<T>)
+    __aie_inline
+    explicit accum(const block_vector<T, Elems> &v, int shift = 0)
+    {
+        this->from_vector(v, shift);
+    }
+#endif
+
     /**
      * \brief Operator for conversion to the internal underlying type.
      *
@@ -357,7 +382,7 @@ public:
      * \brief Applies shift-round-saturate to the elements of the accumulator and stores the result into a vector of the
      * requested type, keeping the original values unchanged.
      *
-     * \note On AIE-ML shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
+     * \note On AIE-ML/XDNA 1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
      * is selected or saturation against 0 is required.
      *
      * @param shift Number of bits that need to be downshifted.
@@ -369,14 +394,23 @@ public:
         return base_type::template to_vector<T>(shift);
     }
 
+#if AIE_API_ML_VERSION >= 210
+    template <typename T> requires(detail::is_valid_block_type_v<T>)
+    __aie_inline
+    block_vector<T, Elems> to_vector(int shift = 0) const
+    {
+        return base_type::template to_vector<T>(shift);
+    }
+#endif
+
     /**
      * \brief Applies shift-round-saturate to the elements of the accumulator and stores the result into a vector of the
      * type and signedness requested.
      *
      * The original values are left unchanged.
      *
-     * \note Currently functional on AIE-ML only.
-     * \note On AIE-ML shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
+     * \note Currently functional on AIE-ML/XDNA 1 or later architectures only.
+     * \note On AIE-ML/XDNA 1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
      * is selected or saturation against 0 is required.
      *
      * @param v_sign Returned vector is signed or not, regardless of the underlying type.
@@ -388,6 +422,15 @@ public:
     {
         return base_type::template to_vector_sign<T>(v_sign, shift);
     }
+
+#if AIE_API_ML_VERSION >= 210
+    template <typename T> requires(detail::is_valid_block_type_v<T>)
+    __aie_inline
+    block_vector<T, Elems> to_vector_sign(bool v_sign, int shift = 0) const
+    {
+        return base_type::template to_vector_sign<T>(v_sign, shift);
+    }
+#endif
 
     /**
      * \brief Permutes and applies shift-round-saturate to the elements of the accumulator. Then, it stores the result
@@ -433,13 +476,29 @@ public:
         base_type::from_vector(v, shift);
     }
 
+#if AIE_API_ML_VERSION >= 210
+    /**
+     * \brief Updates the contents of the accumulator using the values in the given block vector after applying the requested upshift
+     * operation.
+     *
+     * @param v     Input block vector.
+     * @param shift Number of bits to be upshifted.
+     */
+    template <typename T> requires(detail::is_valid_block_type_v<T>)
+    __aie_inline
+    void from_vector(const block_vector<T, Elems> &v, int shift = 0)
+    {
+        base_type::from_vector(v, shift);
+    }
+#endif
+
     /**
      * \brief Updates the contents of the accumulator using the values in the given vector after applying the requested upshift
      * operation.
      *
      * Allows for dynamic control of whether the values are considered signed or not.
      *
-     * \note Currently functional on AIE-ML only.
+     * \note Currently functional on AIE-ML/XDNA 1 or later architectures only.
      *
      * @param v      Input vector.
      * @param v_sign Values are considered signed or not, regardless of the underlying type.

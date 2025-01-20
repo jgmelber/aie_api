@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -27,12 +27,15 @@ struct add_sub_accum_vector_bits_impl_common
     template <unsigned Elems2 = Elems>
     using  accum_type = accum<accum_tag, Elems2>;
 
+    static constexpr unsigned native_elems = 1024 / accum_type<>::value_bits();
+    static constexpr unsigned num_ops      = std::max(1u, accum_type<>::bits() / 1024);
+
+    using native_impl = add_sub_accum_vector_bits_impl_common<AccumBits, TypeBits, T, native_elems, Op>;
+
     __aie_inline
     static accum_type<> run(const accum_type<> &acc, bool zero_acc, const vector_type &v)
     {
         constexpr auto op = get_add_sub_accum_op<Op>();
-
-        constexpr unsigned native_elems = 1024 / accum_type<>::value_bits();
 
         if constexpr (accum_type<>::bits() <= 1024) {
             accum_type<native_elems> tmp;
@@ -43,29 +46,14 @@ struct add_sub_accum_vector_bits_impl_common
 
             return tmp.template extract<Elems>(0);
         }
-        else if constexpr (accum_type<>::bits() == 2048) {
+        else {
             accum_type<> ret;
 
-            const accum_type<native_elems> acc2_1(v.template extract<native_elems>(0));
-            const accum_type<native_elems> acc2_2(v.template extract<native_elems>(1));
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                const accum_type<native_elems> tmp(v.template extract<native_elems>(idx));
 
-            ret.template insert<native_elems>(0, op(acc.template extract<native_elems>(0), acc2_1, zero_acc, 0, 0, 0));
-            ret.template insert<native_elems>(1, op(acc.template extract<native_elems>(1), acc2_2, zero_acc, 0, 0, 0));
-
-            return ret;
-        }
-        else if constexpr (accum_type<>::bits() == 4096) {
-            accum_type<> ret;
-
-            const accum_type<native_elems> acc2_1(v.template extract<native_elems>(0));
-            const accum_type<native_elems> acc2_2(v.template extract<native_elems>(1));
-            const accum_type<native_elems> acc2_3(v.template extract<native_elems>(2));
-            const accum_type<native_elems> acc2_4(v.template extract<native_elems>(3));
-
-            ret.template insert<native_elems>(0, op(acc.template extract<native_elems>(0), acc2_1, zero_acc, 0, 0, 0));
-            ret.template insert<native_elems>(1, op(acc.template extract<native_elems>(1), acc2_2, zero_acc, 0, 0, 0));
-            ret.template insert<native_elems>(2, op(acc.template extract<native_elems>(2), acc2_3, zero_acc, 0, 0, 0));
-            ret.template insert<native_elems>(3, op(acc.template extract<native_elems>(3), acc2_4, zero_acc, 0, 0, 0));
+                ret.template insert<native_elems>(idx, op(acc.template extract<native_elems>(idx), tmp, zero_acc, 0, 0, 0));
+            });
 
             return ret;
         }
@@ -75,13 +63,26 @@ struct add_sub_accum_vector_bits_impl_common
     __aie_inline
     static accum_type<> run(const accum_type<> &acc, bool zero_acc, vector_elem_const_ref<T, Elems2> a)
     {
-        return run(acc, zero_acc, broadcast<T, Elems>::run(a));
+        return run(acc, zero_acc, (T)a);
     }
 
     __aie_inline
     static accum_type<> run(const accum_type<> &acc, bool zero_acc, const T &a)
     {
-        return run(acc, zero_acc, broadcast<T, Elems>::run(a));
+        if constexpr (Elems > native_elems) {
+            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+
+            accum_type<> ret;
+
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                ret.insert(idx, native_impl::run(acc.template extract<native_elems>(idx), zero_acc, vals));
+            });
+
+            return ret;
+        }
+        else {
+            return run(acc, zero_acc, broadcast<T, Elems>::run(a));
+        }
     }
 };
 
@@ -91,6 +92,8 @@ struct add_sub_accum_bits_impl_common
     using   accum_tag = accum_tag_t<Class, AccumBits>;
     template <unsigned Elems2 = Elems>
     using  accum_type = accum<accum_tag, Elems2>;
+
+    static constexpr unsigned num_ops = std::max(1u, accum_type<>::bits() / 1024);
 
     __aie_inline
     static accum_type<> run(const accum_type<> &acc1, bool zero_acc1, const accum_type<> &acc2)
@@ -106,21 +109,14 @@ struct add_sub_accum_bits_impl_common
 
             return tmp.template extract<Elems>(0);
         }
-        else if constexpr (accum_type<>::bits() == 2048) {
+        else {
             accum_type<> ret;
 
-            ret.template insert<native_elems>(0, op(acc1.template extract<native_elems>(0), acc2.template extract<native_elems>(0), zero_acc1, 0, 0, 0));
-            ret.template insert<native_elems>(1, op(acc1.template extract<native_elems>(1), acc2.template extract<native_elems>(1), zero_acc1, 0, 0, 0));
-
-            return ret;
-        }
-        else if constexpr (accum_type<>::bits() == 4096) {
-            accum_type<> ret;
-
-            ret.template insert<native_elems>(0, op(acc1.template extract<native_elems>(0), acc2.template extract<native_elems>(0), zero_acc1, 0, 0, 0));
-            ret.template insert<native_elems>(1, op(acc1.template extract<native_elems>(1), acc2.template extract<native_elems>(1), zero_acc1, 0, 0, 0));
-            ret.template insert<native_elems>(2, op(acc1.template extract<native_elems>(2), acc2.template extract<native_elems>(2), zero_acc1, 0, 0, 0));
-            ret.template insert<native_elems>(3, op(acc1.template extract<native_elems>(3), acc2.template extract<native_elems>(3), zero_acc1, 0, 0, 0));
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                ret.template insert<native_elems>(idx, op(acc1.template extract<native_elems>(idx),
+                                                          acc2.template extract<native_elems>(idx),
+                                                          zero_acc1, 0, 0, 0));
+            });
 
             return ret;
         }
@@ -136,6 +132,8 @@ struct add_sub_accum_bits_impl_common<32, AccumClass::FP, Elems, Op>
     template <unsigned Elems2 = Elems>
     using  accum_type = accum<accum_tag, Elems2>;
 
+    static constexpr unsigned num_ops = std::max(1u, accum_type<>::bits() / 512u);
+
     __aie_inline
     static accum_type<> run(const accum_type<> &acc1, bool zero_acc1, const accum_type<> &acc2)
     {
@@ -150,66 +148,22 @@ struct add_sub_accum_bits_impl_common<32, AccumClass::FP, Elems, Op>
 
             return tmp.template extract<Elems>(0);
         }
-        else if constexpr (accum_type<>::bits() <= 1024) {
+        else {
             accum_type<> ret;
 
             accum_type<native_elems> tmp1, tmp2;
 
-            tmp1 = op(acc1.template extract<native_elems>(0), acc2.template extract<native_elems>(0), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(1), acc2.template extract<native_elems>(1), zero_acc1, 0, 0);
+            utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
+                tmp1 = op(acc1.template extract<native_elems>(2 * idx + 0),
+                          acc2.template extract<native_elems>(2 * idx + 0),
+                          zero_acc1, 0, 0);
+                tmp2 = op(acc1.template extract<native_elems>(2 * idx + 1),
+                          acc2.template extract<native_elems>(2 * idx + 1),
+                          zero_acc1, 0, 0);
 
-            ret.insert(0, tmp1);
-            ret.insert(1, tmp2);
-
-            return ret;
-        }
-        else if constexpr (accum_type<>::bits() == 2048) {
-            accum_type<> ret;
-
-            accum_type<native_elems> tmp1, tmp2;
-
-            tmp1 = op(acc1.template extract<native_elems>(0), acc2.template extract<native_elems>(0), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(1), acc2.template extract<native_elems>(1), zero_acc1, 0, 0);
-
-            ret.insert(0, tmp1);
-            ret.insert(1, tmp2);
-
-            tmp1 = op(acc1.template extract<native_elems>(2), acc2.template extract<native_elems>(2), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(3), acc2.template extract<native_elems>(3), zero_acc1, 0, 0);
-
-            ret.insert(2, tmp1);
-            ret.insert(3, tmp2);
-
-            return ret;
-        }
-        else if constexpr (accum_type<>::bits() == 4096) {
-            accum_type<> ret;
-
-            accum_type<native_elems> tmp1, tmp2;
-
-            tmp1 = op(acc1.template extract<native_elems>(0), acc2.template extract<native_elems>(0), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(1), acc2.template extract<native_elems>(1), zero_acc1, 0, 0);
-
-            ret.insert(0, tmp1);
-            ret.insert(1, tmp2);
-
-            tmp1 = op(acc1.template extract<native_elems>(2), acc2.template extract<native_elems>(2), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(3), acc2.template extract<native_elems>(3), zero_acc1, 0, 0);
-
-            ret.insert(2, tmp1);
-            ret.insert(3, tmp2);
-
-            tmp1 = op(acc1.template extract<native_elems>(4), acc2.template extract<native_elems>(4), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(5), acc2.template extract<native_elems>(5), zero_acc1, 0, 0);
-
-            ret.insert(4, tmp1);
-            ret.insert(5, tmp2);
-
-            tmp1 = op(acc1.template extract<native_elems>(6), acc2.template extract<native_elems>(6), zero_acc1, 0, 0);
-            tmp2 = op(acc1.template extract<native_elems>(7), acc2.template extract<native_elems>(7), zero_acc1, 0, 0);
-
-            ret.insert(6, tmp1);
-            ret.insert(7, tmp2);
+                ret.insert(2 * idx + 0, tmp1);
+                ret.insert(2 * idx + 1, tmp2);
+            });
 
             return ret;
         }
@@ -259,6 +213,8 @@ struct add_sub_accum_vector_bits_impl_float_common
     template <unsigned Elems2 = Elems>
     using  accum_type = accum<accum_tag, Elems2>;
 
+    static constexpr unsigned num_ops = std::max(1u, accum_type<>::bits() / 512u);
+
     __aie_inline
     static accum_type<> run(const accum_type<> &acc, bool zero_acc, const vector_type &v)
     {
@@ -275,29 +231,14 @@ struct add_sub_accum_vector_bits_impl_float_common
 
             return tmp.template extract<Elems>(0);
         }
-        else if constexpr (accum_type<>::bits() == 1024) {
+        else {
             accum_type<> ret;
 
-            const accum_type<native_elems> acc2_1(v.template extract<native_elems>(0));
-            const accum_type<native_elems> acc2_2(v.template extract<native_elems>(1));
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                const accum_type<native_elems> tmp(v.template extract<native_elems>(idx));
 
-            ret.template insert<native_elems>(0, op(acc.template extract<native_elems>(0), acc2_1, zero_acc, 0, 0));
-            ret.template insert<native_elems>(1, op(acc.template extract<native_elems>(1), acc2_2, zero_acc, 0, 0));
-
-            return ret;
-        }
-        else if constexpr (accum_type<>::bits() == 2048) {
-            accum_type<> ret;
-
-            const accum_type<native_elems> acc2_1(v.template extract<native_elems>(0));
-            const accum_type<native_elems> acc2_2(v.template extract<native_elems>(1));
-            const accum_type<native_elems> acc2_3(v.template extract<native_elems>(2));
-            const accum_type<native_elems> acc2_4(v.template extract<native_elems>(3));
-
-            ret.template insert<native_elems>(0, op(acc.template extract<native_elems>(0), acc2_1, zero_acc, 0, 0));
-            ret.template insert<native_elems>(1, op(acc.template extract<native_elems>(1), acc2_2, zero_acc, 0, 0));
-            ret.template insert<native_elems>(2, op(acc.template extract<native_elems>(2), acc2_3, zero_acc, 0, 0));
-            ret.template insert<native_elems>(3, op(acc.template extract<native_elems>(3), acc2_4, zero_acc, 0, 0));
+                ret.template insert<native_elems>(idx, op(acc.template extract<native_elems>(idx), tmp, zero_acc, 0, 0));
+            });
 
             return ret;
         }

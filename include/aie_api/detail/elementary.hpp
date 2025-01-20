@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -161,6 +161,10 @@ using elementary_acc    = elementary_acc_bits<Op, accum<T, N>::accum_bits(), TR,
 #elif __AIE_ARCH__ == 20
 
 #include "aie2/elementary.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/elementary.hpp"
 
 #endif
 

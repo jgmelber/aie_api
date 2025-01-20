@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -139,6 +139,13 @@ template <> inline __aie_inline auto accum_extract<2,  v16caccfloat>(const v16ca
 template <> inline __aie_inline auto accum_extract<2,   v8caccfloat>(const  v8caccfloat& acc, unsigned idx) { return accum_extract<4>(acc, idx / 2); }
 template <> inline __aie_inline auto accum_extract<2,   v4caccfloat>(const  v4caccfloat& acc, unsigned idx) { return accum_extract<4>(acc, idx / 2); }
 #endif
+
+template <AccumClass Class, unsigned MinBits, unsigned Elems>
+class accum_base;
+
+template <AccumClass Class, unsigned MinBits, unsigned... Es>
+__aie_inline
+accum_base<Class, MinBits, (Es + ...)> concat_helper(const accum_base<Class, MinBits, Es>&... inputs);
 
 template <AccumClass Class, unsigned MinBits, unsigned Elems>
 class accum_base
@@ -686,43 +693,52 @@ public:
     }
 
     template <unsigned E2, unsigned... Es>
-        requires(Elems == (E2 + (Es + ...)) && ((Elems / E2 == Elems / Es) && ...))
+        requires(Elems == (E2 + (Es + ...)) && ((E2 == Es) && ...))
     __aie_inline
     void upd_all(const accum_base<Class, MinBits, E2> &subacc, const accum_base<Class, MinBits, Es> & ...subaccums)
     {
-        constexpr unsigned native_bits          = 1024;
-        constexpr unsigned native_elems         = native_bits / value_bits();
+        using subaccum_t                       = accum_base<Class, MinBits, E2>;
+        constexpr unsigned num_subaccums       = 1 + sizeof...(Es);
+        constexpr unsigned subaccum_elems      = subaccum_t::size();
+        constexpr unsigned num_chunks          = utils::num_elems_v<storage_t>;
+        constexpr unsigned chunk_elems         = size() / num_chunks;
+        constexpr unsigned subaccums_per_chunk = chunk_elems / subaccum_elems;
 
-        using subaccum_t                        = accum_base<Class, MinBits, E2>;
-        constexpr unsigned subaccum_bits        = subaccum_t::value_bits() * E2;
-        constexpr unsigned subaccums_per_concat = native_bits / subaccum_bits;
-        constexpr unsigned num_storage_slots    = utils::num_elems_v<storage_t>;
-        constexpr unsigned num_storage_slots_in = utils::num_elems_v<typename subaccum_t::storage_t>;
+        const std::array arr = {subacc, subaccums...};
+        if constexpr (num_chunks > 1 && chunk_elems > subaccum_elems) {
+            auto update_chunk = [&] <size_t... Is> (unsigned start, std::index_sequence<Is...>) __aie_inline {
+                return concat_helper(arr[start + Is]...);
+            };
 
-        if constexpr (num_storage_slots == 1) {
-            data = ::concat(subacc, subaccums...);
-        }
-        else if constexpr (num_storage_slots > 1 && num_storage_slots_in == 1) {
-            const std::array t = {subacc, subaccums...};
-
-            utils::unroll_times<num_storage_slots>([&](auto i) __aie_inline {
-                if constexpr (subaccums_per_concat == 1)
-                    data[i] = t[i];
-                else if constexpr (subaccums_per_concat == 2)
-                    data[i] = ::concat(t[i * subaccums_per_concat + 0],
-                                       t[i * subaccums_per_concat + 1]);
-                else if constexpr (subaccums_per_concat == 4)
-                    data[i] = ::concat(t[i * subaccums_per_concat + 0],
-                                       t[i * subaccums_per_concat + 1],
-                                       t[i * subaccums_per_concat + 2],
-                                       t[i * subaccums_per_concat + 3]);
+            utils::unroll_times<num_chunks>([&] (unsigned c) __aie_inline {
+                insert(c, update_chunk(c * subaccums_per_chunk,
+                                       std::make_index_sequence<subaccums_per_chunk>()));
             });
         }
-        else if constexpr (num_storage_slots > 1 && num_storage_slots_in > 1) {
-            const std::array t = {subacc, subaccums...};
+        else if constexpr (chunk_elems < subaccum_elems) {
+            constexpr unsigned chunks_per_subaccum = subaccum_elems / chunk_elems;
 
-            utils::unroll_times_2d<num_storage_slots / num_storage_slots_in, num_storage_slots_in>([&](unsigned i, unsigned j) __aie_inline {
-                data[i * num_storage_slots_in + j] = t[i].template extract<native_elems>(j);
+            utils::unroll_times<num_chunks>([&] (unsigned c) __aie_inline {
+                const unsigned s = c / chunks_per_subaccum;
+                const unsigned s_chunk = c % chunks_per_subaccum;
+                insert(c, arr[s].template extract<chunk_elems>(s_chunk));
+            });
+        }
+        else if constexpr (chunk_elems > 1 && chunk_elems == subaccum_elems) {
+            utils::unroll_times<num_chunks>([&] (unsigned c) __aie_inline {
+                insert(c, arr[c]);
+            });
+        }
+        else if constexpr (num_subaccums == 8) {
+            data = ::concat(::concat(arr[0], arr[1], arr[2], arr[3]),
+                            ::concat(arr[4], arr[5], arr[6], arr[7]));
+        }
+        else if constexpr (num_subaccums < 8) {
+            data = ::concat(subacc, subaccums...);
+        }
+        else {
+            utils::unroll_times<num_subaccums>([&] (unsigned idx) __aie_inline {
+                insert(idx, arr[idx]);
             });
         }
     }
@@ -992,6 +1008,15 @@ private:
 #endif
 };
 
+template <AccumClass Class, unsigned MinBits, unsigned... Es>
+__aie_inline
+inline accum_base<Class, MinBits, (Es + ...)> concat_helper(const accum_base<Class, MinBits, Es>&... inputs)
+{
+    accum_base<Class, MinBits, (Es + ...)> result;
+    result.upd_all(inputs...);
+    return result;
 }
+
+} // namespace aie::detail
 
 #endif

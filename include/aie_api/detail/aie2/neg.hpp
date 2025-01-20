@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -8,6 +8,7 @@
 #define __AIE_API_DETAIL_AIE2_NEG__HPP__
 
 #include "../broadcast.hpp"
+#include "../utils.hpp"
 
 namespace aie::detail {
 
@@ -18,109 +19,50 @@ struct neg_bits_impl<4, T, Elems>
 
     static_assert(vector_type::is_signed());
 
+    using next_type = utils::get_next_integer_type_t<T>;
+    static constexpr unsigned native_elems = native_vector_length_v<next_type>;
+    using native_op = neg_bits_impl<8, next_type, native_elems>;
+
     static vector_type run(const vector_type &v)
     {
-         if constexpr (Elems < 256) {
-             return neg_bits_impl<8, int8, Elems>::run(v.unpack()).pack();
-         }
-         else {
-             vector<T, Elems / 2> res1 = neg_bits_impl<8, int8, Elems / 2>::run(v.template extract<Elems / 2>(0).unpack()).pack();
-             vector<T, Elems / 2> res2 = neg_bits_impl<8, int8, Elems / 2>::run(v.template extract<Elems / 2>(1).unpack()).pack();
-
-             return concat_vector(res1, res2);
-         }
+        return neg_bits_impl<8, next_type, Elems>::run(v.unpack()).pack();
     }
 };
 
 template <typename T, unsigned Elems>
-struct neg_bits_impl<8, T, Elems>
+struct neg_bits_impl_common
 {
     using vector_type = vector<T, Elems>;
 
     static_assert(vector_type::is_signed());
 
+    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    using native_op = neg_bits_impl_common<T, native_elems>;
+
     static vector_type run(const vector_type &v)
     {
         vector_type ret;
 
-        if constexpr (Elems <= 32) {
-            vector<T, 64> tmp;
-
-            tmp = ::neg(v.template grow<64>());
-
-            ret = tmp.template extract<Elems>(0);
+        if constexpr (Elems < native_elems) {
+            ret = native_op::run(v.template grow<native_elems>()).template extract<Elems>(0);
         }
-        else if constexpr (Elems == 64) {
+        else if constexpr (Elems == native_elems) {
             ret = ::neg(v);
         }
-        else if constexpr (Elems == 128) {
-            const vector<T, Elems / 2> tmp1 = ::neg(v.template extract<Elems / 2>(0)); ret.insert(0, tmp1);
-            const vector<T, Elems / 2> tmp2 = ::neg(v.template extract<Elems / 2>(1)); ret.insert(1, tmp2);
+        else {
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                ret.insert(idx, native_op::run(v.template extract<native_elems>(idx)));
+            });
         }
 
         return ret;
     }
 };
 
-template <typename T, unsigned Elems>
-struct neg_bits_impl<16, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    static_assert(vector_type::is_signed());
-
-    static vector_type run(const vector_type &v)
-    {
-        vector_type ret;
-
-        if constexpr (Elems <= 16) {
-            vector<T, 32> tmp;
-
-            tmp = ::neg(v.template grow<32>());
-
-            ret = tmp.template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 32) {
-            ret = ::neg(v);
-        }
-        else if constexpr (Elems == 64) {
-            const vector<T, Elems / 2> tmp1 = ::neg(v.template extract<Elems / 2>(0)); ret.insert(0, tmp1);
-            const vector<T, Elems / 2> tmp2 = ::neg(v.template extract<Elems / 2>(1)); ret.insert(1, tmp2);
-        }
-
-        return ret;
-    }
-};
-
-template <typename T, unsigned Elems>
-struct neg_bits_impl<32, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    static_assert(vector_type::is_signed());
-
-    static vector_type run(const vector_type &v)
-    {
-        vector_type ret;
-
-        if constexpr (Elems <= 8) {
-            vector<T, 16> tmp;
-
-            tmp = ::neg(v.template grow<16>());
-
-            ret = tmp.template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 16) {
-            ret = ::neg(v);
-        }
-        else if constexpr (Elems == 32) {
-            const vector<T, Elems / 2> tmp1 = ::neg(v.template extract<Elems / 2>(0)); ret.insert(0, tmp1);
-            const vector<T, Elems / 2> tmp2 = ::neg(v.template extract<Elems / 2>(1)); ret.insert(1, tmp2);
-        }
-
-        return ret;
-    }
-};
+template <typename T, unsigned Elems> struct neg_bits_impl< 8, T, Elems> : neg_bits_impl_common<T, Elems> {};
+template <typename T, unsigned Elems> struct neg_bits_impl<16, T, Elems> : neg_bits_impl_common<T, Elems> {};
+template <typename T, unsigned Elems> struct neg_bits_impl<32, T, Elems> : neg_bits_impl_common<T, Elems> {};
+template <typename T, unsigned Elems> struct neg_bits_impl<64, T, Elems> : neg_bits_impl_common<T, Elems> {};
 
 template <unsigned Elems>
 struct neg_bits_impl<16, bfloat16, Elems>
@@ -128,17 +70,17 @@ struct neg_bits_impl<16, bfloat16, Elems>
     using           T = bfloat16;
     using vector_type = vector<T, Elems>;
 
+    static constexpr unsigned native_elems = 32;
+    using native_op = neg_bits_impl<16, T, native_elems>;
+
     static vector_type run(const vector_type &v)
     {
         vector_type ret;
 
-        constexpr unsigned native_neg_elems = 32;
-        using native_neg_type = neg_bits_impl<16, T, native_neg_elems>;
-
-        if constexpr (Elems == 8 || Elems == 16) {
-            ret = native_neg_type::run(v.template grow<native_neg_elems>()).template extract<Elems>(0);
+        if constexpr (Elems < native_elems) {
+            ret = native_op::run(v.template grow<native_elems>()).template extract<Elems>(0);
         }
-        else if constexpr (Elems == 32) {
+        else if constexpr (Elems == native_elems) {
             vector<uint16, Elems> tmp;
 
             // Negate bfloat values by flipping the upper bit. XOR is emulated so overflow is leveraged
@@ -146,9 +88,15 @@ struct neg_bits_impl<16, bfloat16, Elems>
 
             ret = vector_cast<T>(tmp);
         }
-        else if constexpr (Elems == 64) {
-            ret = concat_vector(native_neg_type::run(v.template extract<native_neg_elems>(0)),
-                                native_neg_type::run(v.template extract<native_neg_elems>(1)));
+        else {
+            vector<uint16, native_elems> tmp;
+            auto offset = broadcast<uint16, native_elems>::run(0x8000);
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                // Negate float values by flipping the upper bit. XOR is emulated so overflow is leveraged
+                tmp = ::add(vector_cast<uint16>(v.template extract<native_elems>(idx)), offset);
+                ret.insert(idx, vector_cast<T>(tmp));
+            });
         }
 
         return ret;
@@ -162,17 +110,17 @@ struct neg_bits_impl<32, float, Elems>
     using           T = float;
     using vector_type = vector<T, Elems>;
 
+    static constexpr unsigned native_elems = 16;
+    using native_op = neg_bits_impl<32, T, native_elems>;
+
     static vector_type run(const vector_type &v)
     {
         vector_type ret;
 
-        constexpr unsigned native_neg_elems = 16;
-        using native_neg_type = neg_bits_impl<32, T, native_neg_elems>;
-
-        if constexpr (Elems == 4 || Elems == 8) {
-            ret = native_neg_type::run(v.template grow<native_neg_elems>()).template extract<Elems>(0);
+        if constexpr (Elems < native_elems) {
+            ret = native_op::run(v.template grow<native_elems>()).template extract<Elems>(0);
         }
-        else if constexpr (Elems == 16) {
+        else if constexpr (Elems == native_elems) {
             vector<uint32, Elems> tmp;
 
             // Negate float values by flipping the upper bit. XOR is emulated so overflow is leveraged
@@ -180,45 +128,21 @@ struct neg_bits_impl<32, float, Elems>
 
             ret = vector_cast<T>(tmp);
         }
-        else if constexpr (Elems == 32) {
-            ret = concat_vector(native_neg_type::run(v.template extract<native_neg_elems>(0)),
-                                native_neg_type::run(v.template extract<native_neg_elems>(1)));
+        else {
+            vector<uint32, native_elems> tmp;
+            auto offset = broadcast<uint32, native_elems>::run(0x80000000);
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                // Negate float values by flipping the upper bit. XOR is emulated so overflow is leveraged
+                tmp = ::add(vector_cast<uint32>(v.template extract<native_elems>(idx)), offset);
+                ret.insert(idx, vector_cast<T>(tmp));
+            });
         }
 
         return ret;
     }
 };
 #endif
-
-template <typename T, unsigned Elems>
-struct neg_bits_impl<64, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    static_assert(vector_type::is_signed());
-
-    static vector_type run(const vector_type &v)
-    {
-        vector_type ret;
-
-        if constexpr (Elems <= 4) {
-            vector<T, 8> tmp;
-
-            tmp = ::neg(v.template grow<8>());
-
-            ret = tmp.template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 8) {
-            ret = ::neg(v);
-        }
-        else if constexpr (Elems == 16) {
-            const vector<T, Elems / 2> tmp1 = ::neg(v.template extract<Elems / 2>(0)); ret.insert(0, tmp1);
-            const vector<T, Elems / 2> tmp2 = ::neg(v.template extract<Elems / 2>(1)); ret.insert(1, tmp2);
-        }
-
-        return ret;
-    }
-};
 
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 template <unsigned Elems>
@@ -229,17 +153,17 @@ struct neg_bits_impl<64, cfloat, Elems>
 
     static_assert(vector_type::is_signed());
 
+    static constexpr unsigned native_elems = 8;
+    using native_op = neg_bits_impl<64, T, native_elems>;
+
     static vector_type run(const vector_type &v)
     {
         vector_type ret;
 
-        constexpr unsigned native_neg_elems = 8;
-        using native_neg_type = neg_bits_impl<64, T, native_neg_elems>;
-
-        if constexpr (Elems == 2 || Elems == 4) {
-            ret = native_neg_type::run(v.template grow<native_neg_elems>()).template extract<Elems>(0);
+        if constexpr (Elems < native_elems) {
+            ret = native_op::run(v.template grow<native_elems>()).template extract<Elems>(0);
         }
-        else if constexpr (Elems == 8) {
+        else if constexpr (Elems == native_elems) {
             vector<uint32, Elems * 2> tmp;
 
             // Negate float values by flipping the upper bit. XOR is emulated so overflow is leveraged
@@ -247,9 +171,15 @@ struct neg_bits_impl<64, cfloat, Elems>
 
             ret = vector_cast<T>(tmp);
         }
-        else if constexpr (Elems == 16) {
-            ret = concat_vector(native_neg_type::run(v.template extract<native_neg_elems>(0)),
-                                native_neg_type::run(v.template extract<native_neg_elems>(1)));
+        else {
+            vector<uint32, native_elems * 2> tmp;
+            auto offset = broadcast<uint32, native_elems * 2>::run(0x80000000);
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                // Negate float values by flipping the upper bit. XOR is emulated so overflow is leveraged
+                tmp = ::add(vector_cast<uint32>(v.template extract<native_elems>(idx)), offset);
+                ret.insert(idx, vector_cast<T>(tmp));
+            });
         }
 
         return ret;
@@ -281,12 +211,22 @@ struct neg_acc_common_impl
     }
 };
 
+#if __AIE_ARCH__ == 20
 template <unsigned Elems> struct neg_acc_bits_impl<32,     acc32, Elems> : public neg_acc_common_impl<32,     acc32, Elems, 32> {};
 template <unsigned Elems> struct neg_acc_bits_impl<64,     acc64, Elems> : public neg_acc_common_impl<64,     acc64, Elems, 16> {};
 template <unsigned Elems> struct neg_acc_bits_impl<64,    cacc64, Elems> : public neg_acc_common_impl<64,    cacc64, Elems,  8> {};
 template <unsigned Elems> struct neg_acc_bits_impl<32,  accfloat, Elems> : public neg_acc_common_impl<32,  accfloat, Elems, 16> {};
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 template <unsigned Elems> struct neg_acc_bits_impl<32, caccfloat, Elems> : public neg_acc_common_impl<32, caccfloat, Elems,  8> {};
+#endif
+#elif __AIE_ARCH__ == 21
+template <unsigned Elems> struct neg_acc_bits_impl<32,     acc32, Elems> : public neg_acc_common_impl<32,     acc32, Elems, 64> {};
+template <unsigned Elems> struct neg_acc_bits_impl<64,     acc64, Elems> : public neg_acc_common_impl<64,     acc64, Elems, 32> {};
+template <unsigned Elems> struct neg_acc_bits_impl<64,    cacc64, Elems> : public neg_acc_common_impl<64,    cacc64, Elems, 16> {};
+template <unsigned Elems> struct neg_acc_bits_impl<32,  accfloat, Elems> : public neg_acc_common_impl<32,  accfloat, Elems, 32> {};
+#if __AIE_API_COMPLEX_FP32_EMULATION__
+template <unsigned Elems> struct neg_acc_bits_impl<32, caccfloat, Elems> : public neg_acc_common_impl<32, caccfloat, Elems, 16> {};
+#endif
 #endif
 
 }

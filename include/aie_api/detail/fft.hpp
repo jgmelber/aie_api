@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -17,25 +17,25 @@
  * <table>
  * <caption>Supported FFT/IFFT Modes</caption>
  * <tr>
- *   <th>Input Type <th>Output Type <th>Twiddle Type <th>AIE Supported Radices      <th>AIE-ML Supported Radices
+ *   <th>Input Type <th>Output Type <th>Twiddle Type <th>AIE Supported Radices      <th>AIE-ML/XDNA 1 Supported Radices   <th>XDNA 2 Supported Radices
  * <tr>
- *   <td>c16b       <td>c16b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5
+ *   <td>c16b       <td>c16b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5        <td align="center"> 2, 4
  * <tr>
- *   <td>c16b       <td>c32b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5
+ *   <td>c16b       <td>c32b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5        <td align="center"> 2, 4
  * <tr>
- *   <td>c32b       <td>c16b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5
+ *   <td>c32b       <td>c16b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5        <td align="center"> 2, 4
  * <tr>
- *   <td>c32b       <td>c32b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5
+ *   <td>c32b       <td>c32b        <td>c16b         <td align="center"> 2, 3, 4, 5 <td align="center"> 2, 3, 4, 5        <td align="center"> 2, 4
  * <tr>
- *   <td>c16b       <td>c32b        <td>c32b         <td align="center"> 2          <td align="center">
+ *   <td>c16b       <td>c32b        <td>c32b         <td align="center"> 2          <td align="center">                   <td align="center">
  * <tr>
- *   <td>c32b       <td>c16b        <td>c32b         <td align="center"> 2          <td align="center">
+ *   <td>c32b       <td>c16b        <td>c32b         <td align="center"> 2          <td align="center">                   <td align="center">
  * <tr>
- *   <td>c32b       <td>c32b        <td>c32b         <td align="center"> 2, 3, 4, 5 <td align="center">
+ *   <td>c32b       <td>c32b        <td>c32b         <td align="center"> 2, 3, 4, 5 <td align="center">                   <td align="center">
  * <tr>
- *   <td>%cbfloat16 <td>%cbfloat16  <td>%cbfloat16   <td align="center">            <td align="center"> 2, 4
+ *   <td>%cbfloat16 <td>%cbfloat16  <td>%cbfloat16   <td align="center">            <td align="center"> 2, 4              <td align="center">
  * <tr>
- *   <td>cfloat     <td>cfloat      <td>cfloat       <td align="center"> 2, 3, 5    <td align="center">
+ *   <td>cfloat     <td>cfloat      <td>cfloat       <td align="center"> 2, 3, 5    <td align="center">                   <td align="center">
  * </table>
  *
  * \note
@@ -43,31 +43,31 @@
  * <table>
  * <caption>Underlying output vector sizes</caption>
  * <tr>
- *   <th>Input Type <th>Output Type <th>Twiddle Type <th>AIE Output Vector Size            <th>AIE-ML Output Vector Size
+ *   <th>Input Type <th>Output Type <th>Twiddle Type <th>AIE Output Vector Size            <th>AIE-ML/XDNA 1 Output Vector Size  <th>XDNA 2 Output Vector Size
  * <tr>
- *   <td>c16b       <td>c16b        <td>c16b         <td align="center"> 4 (8 for radix 2) <td align="center"> 8
+ *   <td>c16b       <td>c16b        <td>c16b         <td align="center"> 4 (8 for radix 2) <td align="center"> 8                 <td align="center"> 16
  * <tr>
- *   <td>c16b       <td>c32b        <td>c16b         <td align="center"> 4 (8 for radix 2) <td align="center"> 8
+ *   <td>c16b       <td>c32b        <td>c16b         <td align="center"> 4 (8 for radix 2) <td align="center"> 8                 <td align="center"> 16
  * <tr>
- *   <td>c32b       <td>c16b        <td>c16b         <td align="center"> 4                 <td align="center"> 8
+ *   <td>c32b       <td>c16b        <td>c16b         <td align="center"> 4                 <td align="center"> 8                 <td align="center"> 16
  * <tr>
- *   <td>c32b       <td>c32b        <td>c16b         <td align="center"> 4                 <td align="center"> 8
+ *   <td>c32b       <td>c32b        <td>c16b         <td align="center"> 4                 <td align="center"> 8                 <td align="center"> 16
  * <tr>
- *   <td>c16b       <td>c32b        <td>c32b         <td align="center"> 4                 <td align="center">
+ *   <td>c16b       <td>c32b        <td>c32b         <td align="center"> 4                 <td align="center">                   <td align="center">
  * <tr>
- *   <td>c32b       <td>c16b        <td>c32b         <td align="center"> 4                 <td align="center">
+ *   <td>c32b       <td>c16b        <td>c32b         <td align="center"> 4                 <td align="center">                   <td align="center">
  * <tr>
- *   <td>c32b       <td>c32b        <td>c32b         <td align="center"> 2                 <td align="center">
+ *   <td>c32b       <td>c32b        <td>c32b         <td align="center"> 2                 <td align="center">                   <td align="center">
  * <tr>
- *   <td>%cbfloat16 <td>%cbfloat16  <td>%cbfloat16   <td align="center">                   <td align="center"> 8
+ *   <td>%cbfloat16 <td>%cbfloat16  <td>%cbfloat16   <td align="center">                   <td align="center"> 8                 <td align="center">
  * <tr>
- *   <td>cfloat     <td>cfloat      <td>cfloat       <td align="center"> 4                 <td align="center">
+ *   <td>cfloat     <td>cfloat      <td>cfloat       <td align="center"> 4                 <td align="center">                   <td align="center">
  * </table>
  *
  * \note The minimum point size supported by an FFT is given by the product of the radix with the underlying output vector size.
  * This is due to the fact that a radix R FFT will use R output pointers, each writing an amount of data equal to the underlying output vector size.
  * For example, a radix 4 FFT with cint16 input data, cint32 output data, and cint16 twiddles will have a minimum point size of 16 (4 * 4) on AIE
- * while the minimum point size on AIE-ML will be 32 (4 * 8).
+ * while the minimum point size on AIE-ML/XDNA 1 will be 32 (4 * 8).
  */
 
 namespace aie::detail {
@@ -220,6 +220,53 @@ static constexpr unsigned fft_get_out_vector_size(unsigned Radix, unsigned Vecto
     return 8;
 }
 
+#else
+
+template <typename Input, typename Output, typename Twiddle>
+static constexpr unsigned fft_get_stage(unsigned Radix, unsigned Vectorization)
+{
+    //TODO: check legal vectorization value? Also could probably refactor to an expression compute this directly from datatype bits, fft_get_out_vector_number and fft_get_out_vector_size
+    if      constexpr (std::is_same_v<Twiddle, cint16>) {
+        if constexpr (std::is_same_v<Input, Output>) {
+            if (Radix == 2) {
+                if      (Vectorization == 1) { return 4; }
+                else if (Vectorization == 2) { return 3; }
+                else if (Vectorization == 4) { return 2; }
+                else if (Vectorization == 8) { return 1; }
+                else                         { return 0; }
+            }
+            else if (Radix == 4) {
+                if      (Vectorization == 1) { return 2; }
+                else if (Vectorization == 4) { return 1; }
+                else                         { return 0; }
+            }
+        }
+        else {
+            //TODO: this only covers the up/down levels we currently implement
+            if      constexpr (std::is_same_v<Input, cint16>) { return 0; }
+            else if constexpr (std::is_same_v<Input, cint32>) {
+                if (Radix == 2) {
+                    if (Vectorization == 1) { return 4; }
+                }
+                else if (Radix == 4) {
+                    if      (Vectorization == 1) { return 2; }
+                    else if (Vectorization == 4) { return 1; }
+                    else                         { return 0; }
+                }
+            }
+        }
+    }
+
+    UNREACHABLE_MSG("Unreachable\n");
+}
+
+template <typename Input, typename Output, typename Twiddle>
+static constexpr unsigned fft_get_out_vector_size(unsigned Radix, unsigned Vectorization)
+{
+    if   (std::is_same_v<Input, cint32> && Radix == 4 && Vectorization == 1) return 8;
+    else                                                                     return 16;
+}
+
 #endif
 
 template <typename Input, typename Output>
@@ -320,6 +367,11 @@ struct is_valid_fft_op
             if      constexpr (std::is_same_v<Input, cbfloat16> && std::is_same_v<Output, cbfloat16> && (Radix == 2 || Radix == 4))
                 return true;
         }
+#elif __AIE_ARCH__ == 21
+        if      constexpr (std::is_same_v<Twiddle, cint16>) {
+            if      constexpr (utils::is_one_of_v<Input, cint16, cint32> && utils::is_one_of_v<Output, cint16, cint32> && (Radix == 2 || Radix == 4))
+                return true;
+        }
 #endif
 
         return false;
@@ -344,6 +396,10 @@ struct fft_dit_stage_dyn_vec;
 #elif __AIE_ARCH__ == 20
 
 #include "aie2/fft_dit.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/fft_dit.hpp"
 
 #endif
 

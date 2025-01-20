@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -306,14 +306,13 @@ struct mmul_bf16_bf16<8, 1, 8, 32> : public C_block<bfloat16, bfloat16, 32, 64, 
 template <unsigned M, unsigned K, unsigned N>
 struct mmul<M, K, N, bfloat16, bfloat16, 32> : public mmul_bf16_bf16<M, K, N, 32> { using mmul_bf16_bf16<M, K, N, 32>::mmul_bf16_bf16; };
 
-//TODO: Enable when mmul intrinsics are added
-#if 0 && __AIE_API_CBF16_SUPPORT__
-template <>
-struct mmul_cbf16_cbf16<2, 8, 2, 32> : public C_block<cbfloat16, cbfloat16, 32, 4, 1>
-{
-    using TypeA = cbfloat16;
-    using TypeB = cbfloat16;
+#if __AIE_API_CBF16_SUPPORT__
+template <typename TypeA, typename TypeB, unsigned M, unsigned K, unsigned N, unsigned AccumBits>
+struct mmul_cbf16;
 
+template <typename TypeA, typename TypeB>
+struct mmul_cbf16<TypeA, TypeB, 2, 8, 2, 32> : public C_block<TypeA, TypeB, 32, 4, 1>
+{
     using vector_A_type = vector<TypeA, 16>;
     using vector_B_type = vector<TypeB, 16>;
 
@@ -333,7 +332,13 @@ struct mmul_cbf16_cbf16<2, 8, 2, 32> : public C_block<cbfloat16, cbfloat16, 32, 
 };
 
 template <unsigned M, unsigned K, unsigned N>
-struct mmul<M, K, N, cbfloat16, cbfloat16, 32> : public mmul_cbf16_cbf16<M, K, N, 32> { using mmul_cbf16_cbf16<M, K, N, 32>::mmul_cbf16_cbf16; };
+struct mmul<M, K, N, cbfloat16, cbfloat16, 32> : public mmul_cbf16<cbfloat16, cbfloat16, M, K, N, 32> { using mmul_cbf16<cbfloat16, cbfloat16, M, K, N, 32>::mmul_cbf16; };
+
+template <unsigned M, unsigned K, unsigned N>
+struct mmul<M, K, N,  bfloat16, cbfloat16, 32> : public mmul_cbf16< bfloat16, cbfloat16, M, K, N, 32> { using mmul_cbf16< bfloat16, cbfloat16, M, K, N, 32>::mmul_cbf16; };
+
+template <unsigned M, unsigned K, unsigned N>
+struct mmul<M, K, N, cbfloat16,  bfloat16, 32> : public mmul_cbf16<cbfloat16,  bfloat16, M, K, N, 32> { using mmul_cbf16<cbfloat16,  bfloat16, M, K, N, 32>::mmul_cbf16; };
 #endif
 
 }
