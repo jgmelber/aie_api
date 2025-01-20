@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_MAX_MIN_REDUCE__HPP__
 #define __AIE_API_DETAIL_AIE2_MAX_MIN_REDUCE__HPP__
+
+#include <limits>
 
 #include "../max_min.hpp"
 #include "../shuffle.hpp"

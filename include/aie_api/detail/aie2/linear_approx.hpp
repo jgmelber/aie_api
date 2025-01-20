@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -44,7 +44,7 @@ struct linear_approx<int8, lut<4, int8, int8>>
     template <unsigned Lanes>
     using accum_type = accum<acc32, Lanes>;
 
-    static constexpr unsigned acc_lanes = 16;
+    static constexpr unsigned acc_lanes = __AIE_ARCH__ == 20 ? 16 : 32;
     using bias_type = accum<acc64, acc_lanes>;
 
 public:
@@ -102,6 +102,7 @@ public:
 
         v64int8 coeff0, coeff1, coeff2, coeff3;
 
+#if __AIE_ARCH__ == 20
         vector<int16, 32> input16 = input_.unpack();
 
         accum<acc64, 16> acc64;
@@ -121,6 +122,23 @@ public:
         index = acc64.to_vector<uint32>(shift_addr_);
         index = ::min(index, idx_max_vec_);
         ::load_lut_2x_int8(LUT_ab_, LUT_cd_, index, coeff2, coeff3);
+#elif __AIE_ARCH__ == 21
+        accum<acc64, 32> acc = ::mac_elem_32(input_.unpack(), ::broadcast_one_to_v32int16(), bias_vec_);
+        vector<uint32, 32> index = acc.to_vector<uint32>(shift_addr_);
+
+
+        //First load
+        ::load_lut_2x_int8(LUT_ab_, LUT_cd_,
+                           ::min(index.extract<16>(0), idx_max_vec_),
+                           coeff0, coeff1);
+
+        chess_separator_scheduler_local(); //Needed to enforce read/write order on pDin/pDout in all cases (CRVO-3520)
+
+        //Second load
+        ::load_lut_2x_int8(LUT_ab_, LUT_cd_,
+                           ::min(index.extract<16>(1), idx_max_vec_),
+                           coeff2, coeff3);
+#endif
 
         //Discards unused 48b gaps
         coeff0 = ::shuffle(coeff0, coeff1, T16_16x4_lo);
@@ -132,10 +150,18 @@ public:
         vector<int8, 64> slope  = ::shuffle(coeff0, coeff0, T8_64x2_lo);
         vector<int8, 32> offset = ::extract_v32int8(::shuffle(coeff0, coeff0, T8_64x2_hi), 0);
 
+#if __AIE_ARCH__ == 20
         accum_type<32> result(offset, shift_offset_);
         remainder = ::band(vector<int8,32>(*pDin_).cast_to<uint8>().grow<64>(), rem_mask_vec_);
         pDin_ = ::add_2d_byte(pDin_, incD2_, numD_, cntDin_, incD1_);
         result = ::mac_elem_32_2(slope, remainder, result);
+#elif __AIE_ARCH__ == 21
+        accum_type<64> result;
+        result.insert(0, accum_type<32>(offset, shift_offset_));
+        remainder = ::band(vector<int8,32>(*pDin_).cast_to<uint8>().grow<64>(), rem_mask_vec_);
+        pDin_ = ::add_2d_byte(pDin_, incD2_, numD_, cntDin_, incD1_);
+        result = ::mac_elem_64(slope, remainder, result);
+#endif
 
         return result.template extract<Vec::size()>(0);
     }
@@ -222,7 +248,11 @@ public:
         accum_type<16> result;
         vector<int16, 16> input_ = input.template grow<16>();
 
+#if __AIE_ARCH__ == 20
         vector<uint32, 16> chess_storage(x4) index; //TODO: Remove this chess_storage when possible CRVO-4142
+#elif __AIE_ARCH__ == 21
+        vector<uint32, 16> index;
+#endif
         vector<uint16, 32> remainder;
 
         remainder = ::band((v32uint16)::set_v32int16(0, input_), rem_mask_vec_); //Mask at the start in this implementation, before storing through the scratchpad
@@ -230,7 +260,11 @@ public:
         //input - remainder to zero out the remainder bits so they don't impact when rounding
         result  = ::mac_elem_16_2_conf(::set_v32int16(0, input_), ::sel(broadcast<int16,32>::run(1), zeros<int16,32>::run(), 0xFFFF0000), result, 0, 0, 0, 1);
 
+#if __AIE_ARCH__ == 20
         result = ::add(result, bias_vec_);
+#elif __AIE_ARCH__ == 21
+        result = accum_type<32>(::add(result.grow<32>(), bias_vec_.grow<32>())).extract<16>(0);
+#endif
 
         index = result.to_vector<uint32>(shift_addr_);
         index = ::min(index, idx_max_vec_);
@@ -355,6 +389,7 @@ public:
 
         ::load_lut_2x_float(LUT_ab_, LUT_cd_, index, coeff0, coeff1);
 
+#if __AIE_ARCH__ == 20
         accum_type<16> offset      = (v16accfloat) ::shuffle(coeff0, coeff1, T32_16x2_hi);
         vector<bfloat16, 32> slope = ::shuffle(coeff0, coeff1, T16_16x4_lo);
 
@@ -363,6 +398,17 @@ public:
         accum_type<16> result = ::mac_elem_16_2(slope, delay_in_, offset);
 
         return result.template extract<Vec::size()>(0);
+#elif __AIE_ARCH__ == 21
+        accum<accfloat, 32>  offset_;
+                             offset_.insert(1, accum_type<16>((v16accfloat)::shuffle(coeff0, coeff1, T32_16x2_hi)));
+        vector<bfloat16, 32> slope = ::shuffle(coeff0, coeff1, T16_16x4_lo);
+
+        delay_in_.insert<16>(1, *pDin_);        pDin_ = ::add_2d_byte(pDin_, incD2_, numD_, cntDin_, incD1_);
+
+        accum<accfloat, 32> result = ::mac_elem_32(slope, delay_in_, offset_);
+
+        return result.extract<16>(1).template extract<Vec::size()>(0);
+#endif
     }
 
 private:

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -129,6 +129,8 @@ template <> struct zeros_type_for_accum<AccumClass::CInt> { using type = cint32;
 template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = float;    };
 #elif __AIE_ARCH__ == 20
 template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = float;    };
+#elif __AIE_ARCH__ == 21
+template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = bfloat16; };
 #endif
 #if __AIE_ARCH__ == 10 || __AIE_API_COMPLEX_FP32_EMULATION__
 template <> struct zeros_type_for_accum<AccumClass::CFP>  { using type = cfloat;   };
@@ -175,7 +177,7 @@ using zeros_acc = zeros_acc_bits<Class, AccumBits, Elems>;
 
 #include "aie1/broadcast.hpp"
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 #include "aie2/broadcast.hpp"
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -128,7 +128,7 @@ static constexpr AccumClass accum_class_for_mul_types_v = accum_class_for_mul_ty
 template <typename T>
 struct is_valid_accum_type
 {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static constexpr bool value = utils::is_one_of_v<T,  acc16,  acc24,  acc32,  acc40,  acc48,  acc56,  acc64, accfloat> ||
                                   utils::is_one_of_v<T, cacc16, cacc24, cacc32, cacc40, cacc48, cacc56, cacc64
 #if __AIE_API_COMPLEX_FP32_EMULATION__
@@ -220,15 +220,22 @@ struct is_accum<accum<Tag, Elems>>
 };
 
 template <typename A, typename B>
-    // Either both or neither types are floating point
-    requires(is_floating_point_v<A> == is_floating_point_v<B>)
+    requires(
+        // Either both or neither types are floating point
+        is_floating_point_v<A> == is_floating_point_v<B>
+    )
 static constexpr unsigned default_accum_bits()
 {
     if constexpr (type_bits_v<A> < type_bits_v<B>)
         return default_accum_bits<B, A>();
 
-    if constexpr (is_floating_point_v<A>)
+    if constexpr (is_floating_point_v<A> || is_floating_point_v<B>)
         return 32;
+
+#if __AIE_ARCH__ == 21
+    if constexpr (is_block_floating_point_v<A>)
+        return 32;
+#endif
 
 // TODO: replace with AIE_API_MATH_VERSION when it is supported
 #if __AIE_ARCH__ == 10
@@ -243,7 +250,7 @@ static constexpr unsigned default_accum_bits()
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, int16>) return 48;
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, int32>) return 64;
     }
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     else if constexpr (is_complex_v<A> && is_complex_v<B>) {
         if      constexpr (std::is_same_v<A, cint16> && std::is_same_v<B, cint16>) return 48; // TODO: check discrepancy with AIE1
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, cint16>) return 48;
@@ -278,7 +285,7 @@ template <unsigned SumBits, bool is_float = false> struct default_accum_tag_help
 // TODO: replace with AIE_API_MATH_VERSION when it is supported
 #if __AIE_ARCH__ == 10
 template <> struct default_accum_tag_helper<32, true>  { using type = accfloat; using ctype = caccfloat; };
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 template <> struct default_accum_tag_helper<32, true>  { using type = accfloat; using ctype = caccfloat; };
 #else
@@ -295,8 +302,8 @@ template <> struct default_accum_tag_helper<64>        { using type = acc64;    
 template <typename A, typename B> struct default_accum_tag
 {
     using type = std::conditional_t<is_complex_v<A> || is_complex_v<B>,
-                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A>>::ctype,
-                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A>>::type>;
+                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A> || is_floating_point_v<B>>::ctype,
+                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A> || is_floating_point_v<B>>::type>;
 };
 
 template <typename A, typename B>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -48,6 +48,10 @@
 
 #include "aie2/config.hpp"
 
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/config.hpp"
+
 #endif
 
 #if (AIE_API_NATIVE == 0) && (__AIE_API_SCALAR_TYPES_CONSTEXPR__ != 0)
@@ -63,7 +67,7 @@
 #define BFLOAT16_CONSTEXPR
 #endif
 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 #if __AIE_API_SHIFT_BYTES__
 #define SHIFT_BYTES ::shift_bytes
@@ -76,6 +80,8 @@
 namespace aie {
 
 /**
+ * @ingroup group_utility_functions
+ *
  * Structure used to represent the AIE architecture being compiled against.
  */
 struct arch {
@@ -83,8 +89,23 @@ struct arch {
      * An enum defining available AIE architectures.
      */
     enum ArchVersion : unsigned {
-        AIE    = 10,
-        AIE_ML = 20,
+        AIE      = 10,
+        AIE_ML   = 20,
+        XDNA_2   = 21
+    };
+
+    /**
+     * An enum defining available AIE generations, which are defined as:
+     *
+     * <ul>
+     * <li>Gen1: AIE</li>
+     * <li>Gen2: AIE-ML/XDNA 1, XDNA_2</li>
+     * </ul>
+     *
+     */
+    enum ArchGeneration : unsigned {
+        Gen1 = 1,
+        Gen2 = 2
     };
 
     /**
@@ -93,12 +114,25 @@ struct arch {
     static constexpr ArchVersion version = ArchVersion(__AIE_ARCH__);
 
     /**
+     * Represents the current AIE generation.
+     */
+    static constexpr ArchGeneration generation = ArchGeneration(__AIE_ARCH__ / 10);
+
+    /**
      * Checks if the current AIE architecture version against the supplied pack.
      *
      * @param vs A pack of ArchVersions to test the current version against
      */
     template <typename... T> requires (std::is_same_v<T, ArchVersion> && ...)
     static constexpr bool is(T... vs) { return ((version == vs) || ...); }
+
+    /**
+     * Checks if the current AIE architecture version against the supplied generation pack.
+     *
+     * @param vs A pack of ArchGenerations to test the current version against
+     */
+    template <typename... T> requires (std::is_same_v<T, ArchGeneration> && ...)
+    static constexpr bool is(T... gens) { return ((generation == gens) || ...); }
 };
 
 }

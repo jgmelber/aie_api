@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -29,7 +29,7 @@ struct window_helper
         }
 #endif // __AIE_API_USE_NATIVE_1024B_VECTOR__
 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         // TODO: CRVO-3196: implement this more efficiently if possible
         if constexpr (vector_type::bits() == 128)
             value.template store<Resource>((typename vector_type::value_type *)w->ptr);
@@ -50,7 +50,7 @@ struct window_helper
         }
 #endif // __AIE_API_USE_NATIVE_1024B_VECTOR__
 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         // TODO: CRVO-3196: implement this more efficiently if possible
         if constexpr (vector_type::bits() == 128) {
             value.template store<Resource>((typename vector_type::value_type *)w->ptr);
@@ -77,7 +77,7 @@ struct window_helper
         else
 #endif // __AIE_API_USE_NATIVE_1024B_VECTOR__
         {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
             // TODO: CRVO-3196: implement this more efficiently if possible
             if constexpr (vector_type::bits() == 128) {
                 vector_type ret;
@@ -128,7 +128,7 @@ struct window_helper
         else
 #endif // __AIE_API_USE_NATIVE_1024B_VECTOR__
         {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
             // TODO: CRVO-3196: implement this more efficiently if possible
             if constexpr (vector_type::bits() == 128) {
                 vector_type ret;

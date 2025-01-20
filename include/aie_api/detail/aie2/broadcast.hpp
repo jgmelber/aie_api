@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -12,6 +12,68 @@
 #include "../vector.hpp"
 
 namespace aie::detail {
+
+namespace
+{
+template <unsigned TypeBits, typename T, unsigned Elems> struct native_broadcast;
+
+template <typename T, unsigned Elems>
+struct native_broadcast<8, T, Elems>
+{
+    using type = typename vector<T, Elems>::native_type;
+
+    static auto run(T a) {
+        return (type)::broadcast_to_v64int8(__builtin_bit_cast(int8, a));
+    }
+
+    static auto run_zeros() {
+        return (type)::broadcast_zero_to_v64int8();
+    }
+};
+
+template <typename T, unsigned Elems>
+struct native_broadcast<16, T, Elems>
+{
+    using type = typename vector<T, Elems>::native_type;
+
+    static auto run(T a) {
+        return (type)::broadcast_to_v32int16(__builtin_bit_cast(int16, a));
+    }
+
+    static auto run_zeros() {
+        return (type)::broadcast_zero_to_v32int16();
+    }
+};
+
+template <typename T, unsigned Elems>
+struct native_broadcast<32, T, Elems>
+{
+    using type = typename vector<T, Elems>::native_type;
+
+    static auto run(T a) {
+        return (type)::broadcast_to_v16int32(__builtin_bit_cast(int32, a));
+    }
+
+    static auto run_zeros() {
+        return (type)::broadcast_zero_to_v16int32();
+    }
+};
+
+template <typename T, unsigned Elems>
+struct native_broadcast<64, T, Elems>
+{
+    using type = typename vector<T, Elems>::native_type;
+
+    static auto run(T a) {
+        return (type)::broadcast_to_v8cint32(__builtin_bit_cast(cint32, a));
+    }
+
+    static auto run_zeros() {
+        return (type)::broadcast_zero_to_v8cint32();
+    }
+};
+} // namespace
+
 
 template <typename T, unsigned Elems>
 struct broadcast_bits_impl<4, T, Elems>
@@ -32,27 +94,24 @@ struct broadcast_bits_impl<4, T, Elems>
     }
 };
 
-template <typename T, unsigned Elems>
-struct broadcast_bits_impl<8, T, Elems>
+template <unsigned TypeBits, typename T, unsigned Elems>
+struct broadcast_bits_common_impl
 {
     using vector_type = vector<T, Elems>;
 
     __aie_inline
     static vector_type run(const T &a)
     {
-        constexpr unsigned native_broadcast_elems = 64;
-        using native_broadcast_type = broadcast_bits_impl<8, T, native_broadcast_elems>;
+        constexpr unsigned native_broadcast_elems = max_intrinsic_vector_elems<T>::value;
+        using native_broadcast_type = broadcast_bits_impl<TypeBits, T, native_broadcast_elems>;
 
         vector_type ret;
 
-        if constexpr (Elems == 16 || Elems == 32) {
+        if constexpr (Elems < native_broadcast_elems) {
             ret = native_broadcast_type::run(a).template extract<Elems>(0);
         }
-        else if constexpr (Elems == 64) {
-            if constexpr (vector_type::is_signed())
-                ret = ::broadcast_to_v64int8(a);
-            else
-                ret = ::broadcast_to_v64uint8(a);
+        else if constexpr (Elems == native_broadcast_elems) {
+            ret = native_broadcast<TypeBits, T, native_broadcast_elems>::run(a);
         }
         else {
             const auto tmp = native_broadcast_type::run(a);
@@ -66,120 +125,11 @@ struct broadcast_bits_impl<8, T, Elems>
     }
 };
 
-template <typename T, unsigned Elems>
-struct broadcast_bits_impl<16, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
+template <typename T, unsigned Elems> struct broadcast_bits_impl<8,  T, Elems> : public broadcast_bits_common_impl<8,  T, Elems> {};
+template <typename T, unsigned Elems> struct broadcast_bits_impl<16, T, Elems> : public broadcast_bits_common_impl<16, T, Elems> {};
+template <typename T, unsigned Elems> struct broadcast_bits_impl<32, T, Elems> : public broadcast_bits_common_impl<32, T, Elems> {};
+template <typename T, unsigned Elems> struct broadcast_bits_impl<64, T, Elems> : public broadcast_bits_common_impl<64, T, Elems> {};
 
-    __aie_inline
-    static vector_type run(const T &a)
-    {
-        constexpr unsigned native_broadcast_elems = 32;
-        using native_broadcast_type = broadcast_bits_impl<16, T, native_broadcast_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 8 || Elems == 16) {
-            ret = native_broadcast_type::run(a).template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 32) {
-            if      constexpr (std::is_same_v<T, bfloat16>)
-                ret = ::broadcast_to_v32bfloat16(a);
-            else if constexpr (vector_type::is_signed())
-                ret = ::broadcast_to_v32int16(a);
-            else
-                ret = ::broadcast_to_v32uint16(a);
-        }
-        else{
-            const auto tmp = native_broadcast_type::run(a);
-
-            utils::unroll_times<Elems / native_broadcast_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
-
-template <typename T, unsigned Elems>
-struct broadcast_bits_impl<32, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    __aie_inline
-    static vector_type run(const T &a)
-    {
-        constexpr unsigned native_broadcast_elems = 16;
-        using native_broadcast_type = broadcast_bits_impl<32, T, native_broadcast_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 4 || Elems == 8) {
-            ret = native_broadcast_type::run(a).template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 16) {
-#if __AIE_API_CBF16_SUPPORT__
-            if constexpr (std::is_same_v<T, cbfloat16>)
-                ret = (v16cbfloat16)::broadcast_to_v16cint16(__builtin_bit_cast(cint16, a));
-            else
-#endif
-            if constexpr (vector_type::is_complex())
-                ret = ::broadcast_to_v16cint16(a);
-            else if constexpr (vector_type::is_floating_point())
-                ret = ::broadcast_to_v16float(a);
-            else if constexpr (vector_type::is_signed())
-                ret = ::broadcast_to_v16int32(a);
-            else
-                ret = ::broadcast_to_v16uint32(a);
-        }
-        else {
-            const auto tmp = native_broadcast_type::run(a);
-
-            utils::unroll_times<Elems / native_broadcast_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
-
-template <typename T, unsigned Elems>
-struct broadcast_bits_impl<64, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    __aie_inline
-    static vector_type run(const T &a)
-    {
-        constexpr unsigned native_broadcast_elems = 8;
-        using native_broadcast_type = broadcast_bits_impl<64, T, native_broadcast_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 2 || Elems == 4) {
-            ret = native_broadcast_type::run(a).template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 8) {
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-            if constexpr (std::is_same_v<T, cfloat>)
-                ret = (v8cfloat)::broadcast_to_v8cint32(__builtin_bit_cast(cint32, a));
-            else
-#endif
-                ret = ::broadcast_to_v8cint32(a);
-        }
-        else {
-            const auto tmp = native_broadcast_type::run(a);
-
-            utils::unroll_times<Elems / native_broadcast_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
 
 template <typename T, unsigned Elems>
 struct zeros_bits_impl<4, T, Elems>
@@ -198,27 +148,24 @@ struct zeros_bits_impl<4, T, Elems>
     }
 };
 
-template <typename T, unsigned Elems>
-struct zeros_bits_impl<8, T, Elems>
+template <unsigned TypeBits, typename T, unsigned Elems>
+struct zeros_bits_common_impl
 {
     using vector_type = vector<T, Elems>;
 
     __aie_inline
     static vector_type run()
     {
-        constexpr unsigned native_zeros_elems = 64;
-        using native_zeros_type = zeros_bits_impl<8, T, native_zeros_elems>;
+        constexpr unsigned native_zeros_elems = max_intrinsic_vector_elems<T>::value;
+        using native_zeros_type = zeros_bits_impl<TypeBits, T, native_zeros_elems>;
 
         vector_type ret;
 
-        if constexpr (Elems == 16 || Elems == 32) {
+        if constexpr (Elems < native_zeros_elems) {
             ret = native_zeros_type::run().template extract<Elems>(0);
         }
-        else if constexpr (Elems == 64) {
-            if constexpr (vector_type::is_signed())
-                ret = ::broadcast_zero_to_v64int8();
-            else
-                ret = ::broadcast_zero_to_v64uint8();
+        else if constexpr (Elems == native_zeros_elems) {
+            ret = native_broadcast<TypeBits, T, native_zeros_elems>::run_zeros();
         }
         else {
             const auto tmp = native_zeros_type::run();
@@ -232,120 +179,11 @@ struct zeros_bits_impl<8, T, Elems>
     }
 };
 
-template <typename T, unsigned Elems>
-struct zeros_bits_impl<16, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
+template <typename T, unsigned Elems> struct zeros_bits_impl<8,  T, Elems> : public zeros_bits_common_impl<8,  T, Elems> {};
+template <typename T, unsigned Elems> struct zeros_bits_impl<16, T, Elems> : public zeros_bits_common_impl<16, T, Elems> {};
+template <typename T, unsigned Elems> struct zeros_bits_impl<32, T, Elems> : public zeros_bits_common_impl<32, T, Elems> {};
+template <typename T, unsigned Elems> struct zeros_bits_impl<64, T, Elems> : public zeros_bits_common_impl<64, T, Elems> {};
 
-    __aie_inline
-    static vector_type run()
-    {
-        constexpr unsigned native_zeros_elems = 32;
-        using native_zeros_type = zeros_bits_impl<16, T, native_zeros_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 8 || Elems == 16) {
-            ret = native_zeros_type::run().template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 32) {
-            if      constexpr (std::is_same_v<T, bfloat16>)
-                ret = ::broadcast_zero_to_v32bfloat16();
-            else if constexpr (vector_type::is_signed())
-                ret = ::broadcast_zero_to_v32int16();
-            else
-                ret = ::broadcast_zero_to_v32uint16();
-        }
-        else {
-            const auto tmp = native_zeros_type::run();
-
-            utils::unroll_times<Elems / native_zeros_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
-
-template <typename T, unsigned Elems>
-struct zeros_bits_impl<32, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    __aie_inline
-    static vector_type run()
-    {
-        constexpr unsigned native_zeros_elems = 16;
-        using native_zeros_type = zeros_bits_impl<32, T, native_zeros_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 4 || Elems == 8) {
-            ret = native_zeros_type::run().template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 16) {
-#if __AIE_API_CBF16_SUPPORT__
-            if constexpr (std::is_same_v<T, cbfloat16>)
-                ret = (v16cbfloat16)::broadcast_zero_to_v16cint16();
-            else
-#endif
-            if constexpr (vector_type::is_complex())
-                ret = ::broadcast_zero_to_v16cint16();
-            else if constexpr (vector_type::is_floating_point())
-                ret = ::broadcast_zero_to_v16float();
-            else if constexpr (vector_type::is_signed())
-                ret = ::broadcast_zero_to_v16int32();
-            else
-                ret = ::broadcast_zero_to_v16uint32();
-        }
-        else {
-            const auto tmp = native_zeros_type::run();
-
-            utils::unroll_times<Elems / native_zeros_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
-
-template <typename T, unsigned Elems>
-struct zeros_bits_impl<64, T, Elems>
-{
-    using vector_type = vector<T, Elems>;
-
-    __aie_inline
-    static vector_type run()
-    {
-        constexpr unsigned native_zeros_elems = 8;
-        using native_zeros_type = zeros_bits_impl<64, T, native_zeros_elems>;
-
-        vector_type ret;
-
-        if constexpr (Elems == 2 || Elems == 4) {
-            ret = native_zeros_type::run().template extract<Elems>(0);
-        }
-        else if constexpr (Elems == 8) {
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-            if constexpr (std::is_same_v<T, cfloat>)
-                ret = (v8cfloat)::broadcast_zero_to_v8cint32();
-            else
-#endif
-                ret = ::broadcast_zero_to_v8cint32();
-        }
-        else {
-            const auto tmp = native_zeros_type::run();
-
-            utils::unroll_times<Elems / native_zeros_elems>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, tmp);
-            });
-        }
-
-        return ret;
-    }
-};
 
 template <AccumClass Class, unsigned AccumBits, unsigned Elems>
 struct zeros_acc_bits_impl
@@ -366,6 +204,7 @@ struct zeros_acc_bits_impl
             };
         }
 #endif
+#if __AIE_ARCH__ == 20
         if constexpr (AccumBits == 32) {
             if constexpr (Class == AccumClass::Int)  return []() { return ::broadcast_zero_to_v32acc32();    };
             if constexpr (Class == AccumClass::CInt) return []() { return ::broadcast_zero_to_v8cacc64();    };
@@ -375,6 +214,32 @@ struct zeros_acc_bits_impl
             if constexpr (Class == AccumClass::Int)  return []() { return ::broadcast_zero_to_v16acc64();    };
             if constexpr (Class == AccumClass::CInt) return []() { return ::broadcast_zero_to_v8cacc64();    };
         }
+#else
+#if __AIE_API_ACC_BROADCAST_NAME__
+        if constexpr (AccumBits == 32) {
+            if constexpr (Class == AccumClass::Int)               return []() { return ::broadcast_zero_to_v64acc32();    };
+            if constexpr (Class == AccumClass::CInt)              return []() { return ::broadcast_zero_to_v16cacc64();   };
+            if constexpr (Class == AccumClass::FP && Elems <= 16) return []() { return ::broadcast_zero_to_v16accfloat(); };
+            if constexpr (Class == AccumClass::FP && Elems == 32) return []() { return ::broadcast_zero_to_v32accfloat(); };
+            if constexpr (Class == AccumClass::FP && Elems >= 64) return []() { return ::broadcast_zero_to_v64accfloat(); };
+        }
+        else if constexpr (AccumBits <= 64) {
+            if constexpr (Class == AccumClass::Int)  return []() { return ::broadcast_zero_to_v32acc64();  };
+            if constexpr (Class == AccumClass::CInt) return []() { return ::broadcast_zero_to_v16cacc64(); };
+        }
+#else
+        if constexpr (AccumBits == 32) {
+            if constexpr (Class == AccumClass::Int)               return []() { return ::clr64();  };
+            if constexpr (Class == AccumClass::CInt)              return []() { return ::clr32c(); };
+            if constexpr (Class == AccumClass::FP && Elems <= 32) return []() { return ::clr32f(); };
+            if constexpr (Class == AccumClass::FP && Elems >= 64) return []() { return ::clr64f(); };
+        }
+        else if constexpr (AccumBits <= 64) {
+            if constexpr (Class == AccumClass::Int)  return []() { return ::clr32();  };
+            if constexpr (Class == AccumClass::CInt) return []() { return ::clr32c();  };
+        }
+#endif
+#endif
     }
 
     __aie_inline

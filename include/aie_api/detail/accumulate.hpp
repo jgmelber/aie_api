@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -100,6 +100,10 @@ struct schedule_2
 #elif __AIE_ARCH__ == 20
 
 #include "aie2/accumulate.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/accumulate.hpp"
 
 #endif
 

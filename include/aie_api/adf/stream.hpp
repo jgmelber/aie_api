@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -19,7 +19,7 @@ struct stream_helper_common
 
 #if __AIE_ARCH__ == 10
     static constexpr unsigned stream_width = 128;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static constexpr unsigned stream_width = std::min(512u, type::bits());
 #endif
 
@@ -41,7 +41,7 @@ struct stream_in_helper : public stream_helper_common<N, T>
         else if constexpr (stream_in_helper::elems_per_op ==   4) return [](auto&&... args) __aie_inline { return ::readincr_v4<Resource>  (std::forward<decltype(args)>(args)...); };
         else if constexpr (stream_in_helper::elems_per_op ==   8) return [](auto&&... args) __aie_inline { return ::readincr_v8<Resource>  (std::forward<decltype(args)>(args)...); };
         else if constexpr (stream_in_helper::elems_per_op ==  16) return [](auto&&... args) __aie_inline { return ::readincr_v16<Resource> (std::forward<decltype(args)>(args)...); };
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ != 10
         else if constexpr (stream_in_helper::elems_per_op ==  32) return [](auto&&... args) __aie_inline { return ::readincr_v32<Resource> (std::forward<decltype(args)>(args)...); };
         else if constexpr (stream_in_helper::elems_per_op ==  64) return [](auto&&... args) __aie_inline { return ::readincr_v64<Resource> (std::forward<decltype(args)>(args)...); };
         else if constexpr (stream_in_helper::elems_per_op == 128) return [](auto&&... args) __aie_inline { return ::readincr_v128<Resource>(std::forward<decltype(args)>(args)...); };
@@ -165,7 +165,7 @@ struct cascade_stream_helper
     static constexpr unsigned             num_ops = compute_num_ops();
     static constexpr unsigned        elems_per_op = N / num_ops;
     static constexpr unsigned native_elems_per_op = elems_per_op;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static constexpr unsigned compute_native_elems_per_op()
     {
         if      constexpr (type::value_bits() == 32)
@@ -235,7 +235,7 @@ struct cascade_stream_helper
                     ret.template insert<4>(i, readincr_v4(w));
                 else if constexpr (elems_per_op == 8)
                     ret.template insert<8>(i, readincr_v8(w));
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
                 if      constexpr (native_elems_per_op == 4) {
                     const aie::accum<native_tag, 4> tmp = readincr_v4(w);
 
@@ -405,7 +405,7 @@ struct vector_cascade_stream_helper
 
 #if __AIE_ARCH__ == 10
     static constexpr unsigned cascade_width = 256;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static constexpr unsigned cascade_width = 512;
 #endif
 
@@ -460,7 +460,7 @@ struct vector_cascade_stream_helper
                 else if constexpr (native_elems_per_op ==   8) { return [](auto* w){ return readincr_v8(w);   }; }
                 else if constexpr (native_elems_per_op ==  16) { return [](auto* w){ return readincr_v16(w);  }; }
                 else if constexpr (native_elems_per_op ==  32) { return [](auto* w){ return readincr_v32(w);  }; }
-#elif __AIE_ARCH__ == 20 
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
                 if      constexpr (native_elems_per_op ==   8) { return [](auto* w){ return readincr_v8(w);   }; }
                 else if constexpr (native_elems_per_op ==  16) { return [](auto* w){ return readincr_v16(w);  }; }
                 else if constexpr (native_elems_per_op ==  32) { return [](auto* w){ return readincr_v32(w);  }; }
@@ -846,11 +846,14 @@ __aie_inline
 constexpr output_stream<T> &operator<<(output_stream<T> &w, const T &v)
 {
     if constexpr (aie::detail::type_bits_v<T> < 32) {
+#if __AIE_API_FP32_EMULATION__
         if constexpr (aie::detail::is_floating_point_v<T>) {
             float tmp = v;
             writeincr((output_stream<float> *)&w, tmp);
         }
-        else {
+        else
+#endif
+        {
             int tmp = v;
             writeincr((output_stream<int> *)&w, tmp);
         }
@@ -881,11 +884,14 @@ constexpr output_stream<T> &operator<<(output_stream<T> &w, const TL &tl)
     }
     else {
         if constexpr (aie::detail::type_bits_v<T> < 32) {
+#if __AIE_API_FP32_EMULATION__
             if constexpr (aie::detail::is_floating_point_v<T>) {
                 float tmp = tl.value;
                 writeincr((output_stream<float> *)&w, tmp, tl.t_last);
             }
-            else {
+            else
+#endif
+            {
                 int tmp = tl.value;
                 writeincr((output_stream<int> *)&w, tmp, tl.t_last);
             }
@@ -1074,12 +1080,15 @@ constexpr input_stream<T> &operator>>(input_stream<T> &w, T &v)
 {
     // AXI stream width is 32b. Scalar reads for types smaller than 32b are promoted to 32b
     if constexpr (aie::detail::type_bits_v<T> < 32) {
+#if __AIE_API_FP32_EMULATION__
         if constexpr (aie::detail::is_floating_point_v<T>) {
             float tmp = readincr((input_stream<float> *)&w);
 
             v = tmp;
         }
-        else {
+        else
+#endif
+        {
             int tmp = readincr((input_stream<int> *)&w);
 
             v = tmp;
@@ -1112,12 +1121,15 @@ constexpr input_stream<T> &operator>>(input_stream<T> &w, const TL &tl)
     else {
         // AXI stream width is 32b. Scalar writes for types smaller than 32b are promoted to 32b
         if constexpr (aie::detail::type_bits_v<T> < 32) {
+#if __AIE_API_FP32_EMULATION__
             if constexpr (aie::detail::is_floating_point_v<T>) {
                 const float tmp = readincr((input_stream<float> *)&w, tl.t_last);
 
                 tl.value = tmp;
             }
-            else {
+            else
+#endif
+            {
                 const int tmp = readincr((input_stream<int> *)&w, tl.t_last);
 
                 tl.value = tmp;

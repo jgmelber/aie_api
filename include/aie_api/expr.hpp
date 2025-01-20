@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -162,6 +162,44 @@ struct is_accum_op<binary_op<Parent1, Parent2, Op>>
     static constexpr bool value = detail::is_accum_v<typename binary_op<Parent1, Parent2, Op>::result_type>;
 };
 
+#if AIE_API_ML_VERSION >= 210
+template <typename T>
+struct is_block_vector_op
+{
+    static constexpr bool value = false;
+};
+
+template <typename Parent, Operation Op>
+struct is_block_vector_op<unary_op<Parent, Op>>
+{
+    static constexpr bool value = detail::is_block_vector_v<typename unary_op<Parent, Op>::result_type>;
+};
+
+template <typename Parent1, typename Parent2, Operation Op>
+struct is_block_vector_op<binary_op<Parent1, Parent2, Op>>
+{
+    static constexpr bool value = detail::is_block_vector_v<typename binary_op<Parent1, Parent2, Op>::result_type>;
+};
+
+template <typename T>
+struct is_bfp_vector_op
+{
+    static constexpr bool value = is_block_vector_op<T>::value;
+};
+
+template <typename Parent, Operation Op>
+struct is_bfp_vector_op<unary_op<Parent, Op>>
+{
+    static constexpr bool value = is_block_vector_op<unary_op<Parent, Op>>::value;
+};
+
+template <typename Parent1, typename Parent2, Operation Op>
+struct is_bfp_vector_op<binary_op<Parent1, Parent2, Op>>
+{
+    static constexpr bool value = is_block_vector_op<binary_op<Parent1, Parent2, Op>>::value;
+};
+#endif
+
 template <typename T>
 struct is_mmul_op
 {
@@ -212,6 +250,16 @@ struct op_value_type_helper<sparse_vector<T, Elems>>
 {
     using type = typename sparse_vector<T, Elems>::value_type;
 };
+
+#if AIE_API_ML_VERSION >= 210
+
+template <typename T, unsigned Elems>
+struct op_value_type_helper<block_vector<T, Elems>>
+{
+    using type = typename block_vector<T, Elems>::value_type;
+};
+
+#endif
 
 template <typename T, unsigned Elems, aie_dm_resource Resource>
 struct op_value_type_helper<vector_ref<T, Elems, Resource>>

@@ -3,7 +3,7 @@
 ..
     comment:: SPDX-License-Identifier: MIT
     comment:: Copyright (C) 2022 Xilinx, Inc.
-    comment:: Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+    comment:: Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 =================================
 AIE API

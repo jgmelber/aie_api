@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -21,6 +21,7 @@ struct native_vector_length
 };
 
 template <typename DstT, unsigned DstElems, typename T>
+__aie_inline
 static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
 {
     if constexpr (std::is_same_v<DstT, int8>   && DstElems == 16) return ::as_v16int8(from);

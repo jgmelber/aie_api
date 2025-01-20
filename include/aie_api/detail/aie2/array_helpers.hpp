@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -341,6 +341,8 @@ struct sparse_vector_fill_index<1024> {
     unsigned value = 0;
 };
 
+#if __AIE_ARCH__ == 20
+
 template <SparseVector Vector, aie_dm_resource Resource, FifoDirection Direction>
 class fifo_buffer_stream property(keep_in_registers)
 {
@@ -400,7 +402,7 @@ private:
 };
 
 template <typename T, unsigned Elems, typename IterDescriptor, aie_dm_resource Resource>
-    requires (arch::is(arch::AIE_ML))
+    requires (arch::is(arch::Gen2))
 class sliding_window_buffer_stream property(keep_in_registers)
 {
 public:
@@ -498,6 +500,8 @@ private:
     unsigned step_;
     native_type state_buff_;
 };
+
+#endif
 
 }
 

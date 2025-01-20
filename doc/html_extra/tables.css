@@ -1,0 +1,13 @@
+/* Style for table rows containing headers
+ *
+ * - Align to bottom so that headers with and without super-indices are aligned.
+ *   This works because we aren't using any sub-indices at the moment.
+ *
+ * - Sticky position allows rows to stay visible when scrolling, which is useful for large tables
+ */
+table.doxtable th {
+    vertical-align: bottom;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}

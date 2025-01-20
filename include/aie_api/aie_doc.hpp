@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -30,10 +30,11 @@
  *
  * @anchor vector_valid_parameters
  * <table>
- * <caption>Supported vector types and sizes</caption>
- * <tr><th>Arch.    <th>int4          <th>uint4         <th>int8         <th>uint8        <th>int16      <th>uint16     <th>int32     <th>uint32    <th>%bfloat16                 <th>float     <th>cint16    <th>cint32   <th>cbfloat16 <th>cfloat
- * <tr><td>AIE      <td>              <td>              <td>16/32/64/128 <td>16/32/64/128 <td>8/16/32/64 <td>           <td>4/8/16/32 <td>          <td>                          <td>4/8/16/32 <td>4/8/16/32 <td>2/4/8/16 <td>          <td>2/4/8/16
- * <tr><td>AIE-ML   <td>32/64/128/256 <td>32/64/128/256 <td>16/32/64/128 <td>16/32/64/128 <td>8/16/32/64 <td>8/16/32/64 <td>4/8/16/32 <td>4/8/16/32 <td>8/16/32/64                <td>4/8/16/32 <td>4/8/16/32 <td>2/4/8/16 <td>4/8/16/32 <td>2/4/8/16
+ * <caption>Supported vector types and native sizes</caption>
+ * <tr><th>Arch.             <th>int4          <th>uint4         <th>int8         <th>uint8        <th>int16      <th>uint16     <th>int32     <th>uint32    <th>%bfloat16  <th>float     <th>cint16    <th>cint32   <th>%cbfloat16<th>cfloat
+ * <tr><td>AIE               <td>              <td>              <td>16/32/64/128 <td>16/32/64/128 <td>8/16/32/64 <td>           <td>4/8/16/32 <td>          <td>           <td>4/8/16/32 <td>4/8/16/32 <td>2/4/8/16 <td>          <td>2/4/8/16
+ * <tr><td>AIE-ML<br/>XDNA 1 <td>32/64/128/256 <td>32/64/128/256 <td>16/32/64/128 <td>16/32/64/128 <td>8/16/32/64 <td>8/16/32/64 <td>4/8/16/32 <td>4/8/16/32 <td>8/16/32/64 <td>4/8/16/32 <td>4/8/16/32 <td>2/4/8/16 <td>4/8/16/32 <td>2/4/8/16
+ * <tr><td>XDNA 2            <td>32/64/128/256 <td>32/64/128/256 <td>16/32/64/128 <td>16/32/64/128 <td>8/16/32/64 <td>8/16/32/64 <td>4/8/16/32 <td>4/8/16/32 <td>8/16/32/64 <td>4/8/16/32 <td>4/8/16/32 <td>2/4/8/16 <td>          <td>
  * </table>
  *
  * To declare a vector, specify the desired template parameters following the
@@ -97,7 +98,7 @@
  *     <td>80b
  *     <td>80b
  *     <td>32b
- * <tr><td rowspan=2 style="white-space: nowrap">AIE-ML
+ * <tr><td rowspan=2 style="white-space: nowrap">AIE-ML<br/>XDNA 1
  *     <td>Lanes
  *     <td>8/16/32/64/128
  *     <td>4/8/16/32/64
@@ -132,6 +133,41 @@
  *     <td>
  *     <td>
  *     <td>32b
+ * <tr><td rowspan=2 style="white-space: nowrap">XDNA 2
+ *     <td>Lanes
+ *     <td>8/16/32/64/128
+ *     <td>4/8/16/32/64
+ *     <td>4/8/16/32/64
+ *     <td>4/8/16/32/64
+ *     <td>4/8/16/32/64
+ *     <td>
+ *     <td>
+ *     <td>4/8/16/32/64/128
+ *     <td>2/4/8/16/32
+ *     <td>2/4/8/16/32
+ *     <td>2/4/8/16/32
+ *     <td>2/4/8/16/32
+ *     <td>2/4/8/16/32
+ *     <td>
+ *     <td>
+ *     <td>
+ * <tr><td>Native accumulation
+ *     <td>32b
+ *     <td>64b
+ *     <td>64b
+ *     <td>64b
+ *     <td>64b
+ *     <td>
+ *     <td>
+ *     <td>32b
+ *     <td>64b
+ *     <td>64b
+ *     <td>64b
+ *     <td>64b
+ *     <td>64b
+ *     <td>
+ *     <td>
+ *     <td>
  * </table>
  *
  * Like vectors, declaring an accumulator consists of specifying all its template parameters, following the
@@ -143,6 +179,30 @@
  * @endcode
  *
  * Refer to @ref group_basic_types_initialization for examples of how to initialize accumulator objects.
+ *
+ * \note As mentioned in \ref group_adf, ADF graph code does not support non-native accumulator types.
+ *
+ * ### Block Vector
+ * A block vector represents a collection of blocked data types where several elements share some common data.
+ * Block vectors are parametrized by the element type and the number of elements, with the supported combinations
+ * on each architecture shown below.
+ *
+ * @anchor block_vector_valid_parameters
+ * <table>
+ * <caption>Supported block vector types and native sizes</caption>
+ * <tr><th>Arch.    <th>bfp16ebs8     <th>bfp16ebs16
+ * <tr><td>XDNA 2   <td>32/64/128/256 <td>32/64/128/256
+ * </table>
+ *
+ * To declare a block vector, specify the desired template parameters following the
+ * @ref block_vector_valid_parameters "block vector template parameters table". The following example declares a vector variable
+ * with 64 elements of type `bfp16ebs8`:
+ *
+ * @code{.cpp}
+ * aie::block_vector<bfp16ebs8, 64> my_vector;
+ * @endcode
+ *
+ * Refer to @ref block_buffer_streams for examples of how to load data into block vector objects.
  *
  * ### Mask
  * Some comparison operations return masks. A mask is a collection of values that can be 0 or 1.
@@ -472,9 +532,10 @@
  * @anchor vector_alignment_requirements
  * <table>
  * <caption>Required pointer alignment for a given memory access size</caption>
- * <tr><th>Arch.    <th> 128b access  <th> 256b access
- * <tr><td>AIE      <td> 128b         <td>
- * <tr><td>AIE-ML   <td> 128b         <td> 256b
+ * <tr><th>Arch.             <th> 128b access  <th> 256b access  <th> 512b access
+ * <tr><td>AIE               <td> 128b         <td>              <td>
+ * <tr><td>AIE-ML<br/>XDNA 1 <td> 128b         <td> 256b         <td>
+ * <tr><td>XDNA 2            <td> 128b         <td> 256b         <td> 512b
  * </table>
  *
  * Therefore, functions are provided for both aligned and unaligned accesses. Aligned accesses are done using the aie::load_v and aie::store_v functions.
@@ -663,7 +724,7 @@
  *
  * Tensor buffer streams are an abtraction provided by the AIE API to handle multi-dimensional addressing.
  *
- * \note Multi-dimensional addressing was introduced on AIE-ML.
+ * \note Multi-dimensional addressing was introduced on AIE-ML/XDNA 1.
  *
  * @subsubsection tensor_buffer_streams_description Tensor Descriptor
  *
@@ -719,7 +780,7 @@
  * @subsubsection tensor_buffer_streams_composition Tensor Buffer Stream Composition
  *
  * Tensor descriptors and associated buffer streams are composible to arbitrary dimensions; however, the underlying mechanisms on which
- * the abstractions are built upon in AIE-ML are three-dimensional. To overcome this, the tensor buffer streams are defined recursively,
+ * the abstractions are built upon in AIE-ML/XDNA 1 are three-dimensional. To overcome this, the tensor buffer streams are defined recursively,
  * decomposing an N-dimensional tensor into `(N-1)/3` nested streams, with a final `N%3` leaf stream. To access an inner stream, the containing
  * outer stream must be read with a `.pop()` call, which will advance the outer stream and return the inner stream. This recursive
  * definition is illustrated below with a corresponding code snippet:
@@ -870,6 +931,47 @@
  * For a more comprehensive sparse matrix multiplication example, see \ref group_mmul_page_supported_sparse_modes.
  *
  *
+ * @subsection block_buffer_streams Block Vector Buffer Streams
+ *
+ * Block vector types are unable to be loaded directly using the standard load APIs due to their sizes exceeding
+ * the core memory interface. An additional complication that arises due to the size mismatch is that while the
+ * first load may be well aligned, this would result in the second sequential load being misaligned.
+ * For example, if the core memory interface is 512b and a block vector size is 576b then each load would consist
+ * of two 512b loads and some additional processing to combine the data from each load correctly the ensure only
+ * the intended data is combined into the final loaded values. See below.
+ *
+ * \image html block_types/memory_layout.png width=70%
+ *
+ * To overcome these challenges, the AIE leverages a separate FIFO memory interface, which will share the same
+ * memory interface size but will enable larger, unaligned pops into the core. The implementation details of this
+ * interface is abstracted by the AIE API as the following types:
+ *
+ * <ul>
+ * <li>@ref aie::block_vector_input_buffer_stream</li>
+ * <li>@ref aie::block_vector_restrict_input_buffer_stream</li>
+ * <li>@ref aie::block_vector_output_buffer_stream</li>
+ * <li>@ref aie::block_vector_restrict_output_buffer_stream</li>
+ * </ul>
+ *
+ * An example usage is shown below:
+ *
+ * @code
+ * T *ptr; // T is a block type, such as bfp16ebs8
+ *
+ * aie::vector<bfloat16, 64> data(...);
+ * aie::accum<accfloat, 64> acc(data); // Conversions exists from accum to block vectors
+ *
+ * aie::block_vector_output_buffer_stream<T, 64> out_stream(ptr);
+ * out_stream << acc.to_vector<T>(); // Write block vector to memory
+ *
+ * aie::block_vector<T, 64> v;
+ * aie::block_vector_input_buffer_stream<T, 64> in_stream(ptr);
+ * in_stream >> v; // Read block vector from memory
+ * @endcode
+ *
+ * This example demonstrates the usefulness of the block vector streams as all maintainance of
+ * the FIFO is handled internally by the stream object.
+ *
  */
 
 /**
@@ -914,23 +1016,28 @@
  * \anchor DefaultAccumTag
  * <table>
  * <caption>Default accumulator tag for different integral factor types</caption>
- * <tr>	<th>Type1    <td>int4   <td>int8   <td>int8   <td>int16  <td>int16  <td>int32              <td>cint16  <td>cint16  <td>cint16  <td>cint16  <td>cint32  <td>cint32              <td>cint32
- * <tr>	<th>Type2    <td>int8   <td>int8   <td>int16  <td>int16  <td>int32  <td>int32              <td>int16   <td>int32   <td>cint16  <td>cint32  <td>int16   <td>int32               <td>cint32
- * <tr>	<th>AIE      <td>       <td>%acc48 <td>%acc48 <td>%acc48 <td>%acc48 <td>%acc80             <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc80             <td>%cacc80
- * <tr>	<th>AIE-ML   <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc64 <td>%acc64<sup>a</sup> <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <sup>a</sup><td>%cacc64<sup>a</sup>
+ * <tr>	<th>Type1             <td>int4   <td>int8   <td>int8   <td>int16  <td>int16  <td>int32              <td>cint16  <td>cint16  <td>cint16  <td>cint16  <td>cint32  <td>cint32              <td>cint32
+ * <tr>	<th>Type2             <td>int8   <td>int8   <td>int16  <td>int16  <td>int32  <td>int32              <td>int16   <td>int32   <td>cint16  <td>cint32  <td>int16   <td>int32               <td>cint32
+ * <tr>	<th>AIE               <td>       <td>%acc48 <td>%acc48 <td>%acc48 <td>%acc48 <td>%acc80             <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc48 <td>%cacc80             <td>%cacc80
+ * <tr>	<th>AIE-ML<br/>XDNA 1 <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc64 <td>%acc64<sup>a</sup> <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <sup>a</sup><td>%cacc64<sup>a</sup>
+ * <tr>	<th>XDNA 2            <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc32 <td>%acc64 <td>%acc64<sup>a</sup> <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <td>%cacc64 <sup>a</sup><td>%cacc64<sup>a</sup>
  * </table>
  *
  * \note
- * <sup>a</sup> - 32b x 32b multiplication is not natively supported on AIE-ML and is emulated using two 32b x 16b muls.<br/>
+ * <sup>a</sup> - 32b x 32b multiplication is not natively supported on AIE-ML/XDNA 1 or XDNA 2 and is emulated using two 32b x 16b muls.<br/>
  *
  * <table>
  * <caption>Default accumulator tag for different floating point factor types</caption>
- * <tr>	<th>Type1    <td>bfloat16  <td>bfloat16   <td>%cbfloat16 <td>float     <td>float      <td>cfloat
- * <tr>	<th>Type2    <td>bfloat16  <td>%cbfloat16 <td>%cbfloat16 <td>float     <td>cfloat     <td>cfloat
- * <tr>	<th>AIE      <td>          <td>           <td>           <td>%accfloat <td>%caccfloat <td>%caccfloat
- * <tr>	<th>AIE-ML   <td>%accfloat <td>%caccfloat <td>%caccfloat <td>%accfloat <td>%caccfloat <td>%caccfloat
+ * <tr>	<th>Type1             <td>%bfloat16 <td>%bfloat16  <td>%cbfloat16 <td>float                 <td>float                  <td>cfloat                 <td>bfp16ebs8 <td>bfp16ebs16
+ * <tr>	<th>Type2             <td>%bfloat16 <td>%cbfloat16 <td>%cbfloat16 <td>float                 <td>cfloat                 <td>cfloat                 <td>bfp16ebs8 <td>bfp16ebs16
+ * <tr>	<th>AIE               <td>          <td>           <td>           <td>%accfloat             <td>%caccfloat             <td>%caccfloat             <td>          <td>
+ * <tr>	<th>AIE-ML<br/>XDNA 1 <td>%accfloat <td>%caccfloat <td>%caccfloat <td>%accfloat<sup>a</sup> <td>%caccfloat<sup>a</sup> <td>%caccfloat<sup>a</sup> <td>          <td>
+ * <tr>	<th>XDNA 2            <td>%accfloat <td>%caccfloat <td>%caccfloat <td>%accfloat<sup>a</sup> <td>%caccfloat<sup>a</sup> <td>%caccfloat<sup>a</sup> <td>%accfloat <td>%accfloat
  * </table>
- *  
+ *
+ * \note
+ * <sup>a</sup> - float multiplication is emulated on AIE-ML/XDNA 1 and XDNA 2 using native %bfloat16 multiplications.<br/>
+ *
  * Users may specify a larger number of accumulation bits by explicitly passing an accumulator tag:
  *  
  * @code
@@ -979,24 +1086,32 @@
  *
  * <table>
  * <caption>Supported float to fixed conversions</caption>
- * <tr><th>               <th>                 <th>          <th colspan=2> bfloat16                                                        <th colspan=2> float
- * <tr><th> Output bits   <th> Type            <th> Arch.    <th> Implementation                                <th> Notes                                        <th> Implementation           <th> Notes
- * <tr><td rowspan=4> 4b  <td rowspan=2>Scalar <td> AIE      <td>                                               <td>                                              <td>                          <td>
- * <tr>                                        <td> AIE-ML   <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
- * <tr>                   <td rowspan=2>Vector <td> AIE      <td>                                               <td>                                              <td>                          <td>
- * <tr>                                        <td> AIE-ML   <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
- * <tr><td rowspan=4> 8b  <td rowspan=2>Scalar <td> AIE      <td>                                               <td>                                              <td> Native to 32b + cast     <td>
- * <tr>                                        <td> AIE-ML   <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
- * <tr>                   <td rowspan=2>Vector <td> AIE      <td>                                               <td>                                              <td> Element-wise scalar      <td>
- * <tr>                                        <td> AIE-ML   <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
- * <tr><td rowspan=4> 16b <td rowspan=2>Scalar <td> AIE      <td>                                               <td>                                              <td> Native to 32b + cast     <td>
- * <tr>                                        <td> AIE-ML   <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
- * <tr>                   <td rowspan=2>Vector <td> AIE      <td>                                               <td>                                              <td> Vectorized emulated impl <td>
- * <tr>                                        <td> AIE-ML   <td> Native to 32b + extract lower 16b<sup>1</sup> <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
- * <tr><td rowspan=4> 32b <td rowspan=2>Scalar <td> AIE      <td>                                               <td>                                              <td> Native                   <td>
- * <tr>                                        <td> AIE-ML   <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
- * <tr>                   <td rowspan=2>Vector <td> AIE      <td>                                               <td>                                              <td> Vectorized emulated impl <td>
- * <tr>                                        <td> AIE-ML   <td> Native                                        <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr><th>               <th>                 <th>                   <th colspan=2> %bfloat16                                                                             <th colspan=2> float
+ * <tr><th> Output bits   <th> Type            <th> Arch.             <th> Implementation                                <th> Notes                                        <th> Implementation           <th> Notes
+ * <tr><td rowspan=8> 4b  <td rowspan=4>Scalar <td> AIE               <td>                                               <td>                                              <td>                          <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                                        <td> XDNA 2            <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                   <td rowspan=4>Vector <td> AIE               <td>                                               <td>                                              <td>                          <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr>                                        <td> XDNA 2            <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr><td rowspan=8> 8b  <td rowspan=4>Scalar <td> AIE               <td>                                               <td>                                              <td> Native to 32b + cast     <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                                        <td> XDNA 2            <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                   <td rowspan=4>Vector <td> AIE               <td>                                               <td>                                              <td> Element-wise scalar      <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr>                                        <td> XDNA 2            <td> Emulated                                      <td> Uses @ref aie::rounding_mode::symmetric_zero <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr><td rowspan=8> 16b <td rowspan=4>Scalar <td> AIE               <td>                                               <td>                                              <td> Native to 32b + cast     <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                                        <td> XDNA 2            <td> Runs on vector unit                           <td>                                              <td> Native                   <td>
+ * <tr>                   <td rowspan=4>Vector <td> AIE               <td>                                               <td>                                              <td> Vectorized emulated impl <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Native to 32b + extract lower 16b<sup>1</sup> <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr>                                        <td> XDNA 2            <td> Native to 32b + extract lower 16b<sup>1</sup> <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr><td rowspan=8> 32b <td rowspan=4>Scalar <td> AIE               <td>                                               <td>                                              <td> Native                   <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit                           <td>                                              <td> Runs on vector unit      <td>
+ * <tr>                                        <td> XDNA 2            <td> Runs on vector unit                           <td>                                              <td> Native                   <td>
+ * <tr>                   <td rowspan=4>Vector <td> AIE               <td>                                               <td>                                              <td> Vectorized emulated impl <td>
+ * <tr>                                        <td> AIE-ML<br/>XDNA 1 <td> Native                                        <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
+ * <tr>                                        <td> XDNA 2            <td> Native                                        <td> Uses @ref aie::rounding_mode::floor          <td> Emulated                 <td> Uses @ref aie::rounding_mode::symmetric_zero
  * </table>
  *
  * \note
@@ -1004,15 +1119,19 @@
  *
  * <table>
  * <caption>Supported fixed to float conversions</caption>
- * <tr><th>Output type         <th>Type             <th>Arch.     <th>int4                    <th>int8                    <th>int16                   <th>int32
- * <tr><td rowspan=4>bfloat16  <td rowspan=2>Scalar <td> AIE      <td>                        <td>                        <td>                        <td>
- * <tr>                                             <td> AIE-ML   <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit
- * <tr>                        <td rowspan=2>Vector <td> AIE      <td>                        <td>                        <td>                        <td> 
- * <tr>                                             <td> AIE-ML   <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
- * <tr><td rowspan=4>float     <td rowspan=2>Scalar <td> AIE      <td>                        <td> Cast to int32 + native <td> Cast to int32 + native <td> Native
- * <tr>                                             <td> AIE-ML   <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit
- * <tr>                        <td rowspan=2>Vector <td> AIE      <td>                        <td> Element-wise scalar    <td> Emulated               <td> Element-wise scalar
- * <tr>                                             <td> AIE-ML   <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
+ * <tr><th>Output type         <th>Type             <th>Arch.              <th>int4                    <th>int8                    <th>int16                   <th>int32
+ * <tr><td rowspan=8>%bfloat16 <td rowspan=4>Scalar <td> AIE               <td>                        <td>                        <td>                        <td>
+ * <tr>                                             <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit
+ * <tr>                                             <td> XDNA 2            <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit
+ * <tr>                        <td rowspan=4>Vector <td> AIE               <td>                        <td>                        <td>                        <td> 
+ * <tr>                                             <td> AIE-ML<br/>XDNA 1 <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
+ * <tr>                                             <td> XDNA 2            <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
+ * <tr><td rowspan=8>float     <td rowspan=4>Scalar <td> AIE               <td>                        <td> Cast to int32 + native <td> Cast to int32 + native <td> Native
+ * <tr>                                             <td> AIE-ML<br/>XDNA 1 <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit    <td> Runs on vector unit
+ * <tr>                                             <td> XDNA 2            <td> Cast to int32 + native <td> Cast to int32 + native <td> Cast to int32 + native <td> Native
+ * <tr>                        <td rowspan=4>Vector <td> AIE               <td>                        <td> Element-wise scalar    <td> Emulated               <td> Element-wise scalar
+ * <tr>                                             <td> AIE-ML<br/>XDNA 1 <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
+ * <tr>                                             <td> XDNA 2            <td> Emulated               <td> Emulated               <td> Emulated               <td> Emulated
  * </table>
  */
 
@@ -1280,7 +1399,7 @@
  * @defgroup group_lut Lookup Tables
  *
  * \note
- * Lookup table functionality is only available from AIE-ML
+ * Lookup table functionality is only available from AIE-ML/XDNA 1
  *
  * Two abstractions are provided to represent lookup tables on AIE architectures:
  *
