@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -1529,6 +1529,153 @@ public:
     /** \brief Returns the value from the buffer stream and increments the stream state. */
     constexpr vector_type pop() { return base_type::pop(); }
 };
+#endif
+
+#if AIE_API_ML_VERSION >= 210
+
+/**
+ * @ingroup group_memory
+ *
+ * Implements an input stream that reads block vectors from a memory buffer.
+ *
+ * @tparam T        Type of the elements in the array.
+ * @tparam Elems    Size of the block vector.
+ * @tparam Resource Data Memory resource to be used for the access when reading from the buffer.
+ */
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+class block_vector_input_buffer_stream : public detail::block_vector_input_buffer_stream<T, Elems, Resource, /*Restrict=*/false>
+{
+private:
+    using base_type = detail::block_vector_input_buffer_stream<T, Elems, Resource, /*Restrict=*/false>;
+public:
+    __aie_inline
+    constexpr block_vector_input_buffer_stream(const T *ptr) : base_type(ptr) {}
+
+    using vector_type = typename base_type::vector_type;
+
+    /** \brief Returns the value from the buffer stream and increments the stream state.
+      *
+      * \sa pop()
+      */
+    __aie_inline
+    constexpr block_vector_input_buffer_stream& operator>>(vector_type& v) { base_type::operator>>(v); return *this; }
+
+    /** \brief Returns the value from the buffer stream and increments the stream state. */
+    __aie_inline
+    constexpr vector_type pop() { return base_type::pop(); }
+};
+
+/**
+ * @ingroup group_memory
+ *
+ * Implements an output stream that writes block vectors to a memory buffer.
+ *
+ * @tparam T        Type of the elements in the array.
+ * @tparam Elems    Size of the block vector.
+ * @tparam Resource Data Memory resource to be used for the access when writing to the buffer.
+ */
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+class block_vector_output_buffer_stream : public detail::block_vector_output_buffer_stream<T, Elems, Resource, /*Restrict=*/false>
+{
+private:
+    using base_type = detail::block_vector_output_buffer_stream<T, Elems, Resource, /*Restrict=*/false>;
+public:
+    __aie_inline
+    constexpr block_vector_output_buffer_stream(T *ptr) : base_type(ptr) {}
+
+    using vector_type = typename base_type::vector_type;
+
+    /** \brief Writes the value to the buffer stream.
+      *
+      * \sa push()
+      */
+    __aie_inline
+    constexpr block_vector_output_buffer_stream& operator<<(const vector_type& v) { base_type::operator<<(v); return *this; }
+
+    /** \brief Writes the value to the buffer stream. */
+    __aie_inline
+    constexpr void push(const vector_type& v) { return base_type::push(v); }
+};
+
+/**
+ * @ingroup group_memory
+ *
+ * Implements a restrict input stream that reads block vectors from a memory buffer.
+ *
+ * @tparam T        Type of the elements in the array.
+ * @tparam Elems    Size of the block vector.
+ * @tparam Resource Data Memory resource to be used for the access when reading from the buffer.
+ */
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+class block_vector_restrict_input_buffer_stream : public detail::block_vector_input_buffer_stream<T, Elems, Resource, /*Restrict=*/true>
+{
+private:
+    using base_type = detail::block_vector_input_buffer_stream<T, Elems, Resource, /*Restrict=*/true>;
+public:
+    __aie_inline
+    constexpr block_vector_restrict_input_buffer_stream(const T *ptr) : base_type(ptr) {}
+
+    using vector_type = typename base_type::vector_type;
+
+    /** \brief Returns the value from the buffer stream and increments the stream state.
+      *
+      * \sa pop()
+      */
+    __aie_inline
+    constexpr block_vector_restrict_input_buffer_stream& operator>>(vector_type& v) { base_type::operator>>(v); return *this; }
+
+    /** \brief Returns the value from the buffer stream and increments the stream state. */
+    __aie_inline
+    constexpr vector_type pop() { return base_type::pop(); }
+};
+
+/**
+ * @ingroup group_memory
+ *
+ * Implements a restrict output stream that writes block vectors to a memory buffer.
+ *
+ * @tparam T        Type of the elements in the array.
+ * @tparam Elems    Size of the block vector.
+ * @tparam Resource Data Memory resource to be used for the access when writing to the buffer.
+ */
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+class block_vector_restrict_output_buffer_stream : public detail::block_vector_output_buffer_stream<T, Elems, Resource, /*Restrict=*/true>
+{
+private:
+    using base_type = detail::block_vector_output_buffer_stream<T, Elems, Resource, /*Restrict=*/true>;
+public:
+    __aie_inline
+    constexpr block_vector_restrict_output_buffer_stream(T *ptr) : base_type(ptr) {}
+
+    using vector_type = typename base_type::vector_type;
+
+    /** \brief Writes the value to the buffer stream.
+      *
+      * \sa push()
+      */
+    __aie_inline
+    constexpr block_vector_restrict_output_buffer_stream& operator<<(const vector_type& v) { base_type::operator<<(v); return *this; }
+
+    /** \brief Writes the value to the buffer stream. */
+    __aie_inline
+    constexpr void push(const vector_type& v) { return base_type::push(v); }
+};
+
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+using bfp_vector_input_buffer_stream [[deprecated("Use block_vector_input_buffer_stream<T, Elems, Resource> instead")]] =
+            block_vector_input_buffer_stream<T, Elems, Resource>;
+
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+using bfp_vector_output_buffer_stream [[deprecated("Use block_vector_output_buffer_stream<T, Elems, Resource> instead")]] =
+        block_vector_output_buffer_stream<T, Elems, Resource>;
+
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+using bfp_vector_restrict_input_buffer_stream [[deprecated("Use block_vector_restrict_input_buffer_stream<T, Elems, Resource> instead")]] =
+        block_vector_restrict_input_buffer_stream<T, Elems, Resource>;
+
+template <BlockType T, unsigned Elems, aie_dm_resource Resource = aie_dm_resource::none>
+using bfp_vector_restrict_output_buffer_stream [[deprecated("Use block_vector_restrict_output_buffer_stream<T, Elems, Resource> instead")]] =
+        block_vector_restrict_output_buffer_stream<T, Elems, Resource>;
 #endif
 
 } // namespace aie

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -101,6 +101,15 @@ template <typename T> struct is_floating_point;
 
 template <typename T>
 static constexpr bool is_floating_point_v = is_floating_point<T>::value;
+
+#if __AIE_ARCH__ == 21
+
+template <typename T> struct is_block_floating_point;
+
+template <typename T>
+static constexpr bool is_block_floating_point_v = is_block_floating_point<T>::value;
+
+#endif
 
 template <typename T> struct is_signed;
 
@@ -252,6 +261,28 @@ concept SparseVector = detail::is_sparse_vector<aie_dm_resource_remove_t<T>>::va
 template <typename T>
 concept SparseVectorOrOp = detail::is_sparse_vector_or_op_v<T>;
 
+#if AIE_API_ML_VERSION >= 210
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * @concept aie::BlockVector
+ * Concept for bloack vector types. Accepts any aie::block_vector type.
+ */
+template <typename T>
+concept BlockVector = detail::is_block_vector<aie_dm_resource_remove_t<T>>::value;
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * @concept aie::BlockVectorOp
+ * Concept for an operation modifier on a block vector type.
+ */
+template <typename T>
+concept BlockVectorOp = is_block_vector_op<T>::value;
+
+#endif
+
 /**
  * @ingroup group_basic_types_concepts
  *
@@ -278,6 +309,16 @@ concept AccumOrOp = detail::is_accum_or_op_v<T>;
  */
 template <typename T>
 concept Mask = detail::is_mask<T>::value;
+
+#if AIE_API_ML_VERSION >= 210
+
+template <typename T>
+concept BlockType = detail::is_valid_block_type_v<T>;
+
+template <typename T>
+concept ElemBaseOrBlockType = detail::is_valid_element_type<T>::value || detail::is_valid_block_type<T>::value;
+
+#endif
 
 /**
  * @ingroup group_basic_types_concepts

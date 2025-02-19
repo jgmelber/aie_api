@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -49,8 +49,10 @@ struct fft_dit<Vectorization, 0, 2, cint32, cint32, cint16> : public fft_dit_com
             cnt2_(0),
             zoffs_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -166,8 +168,10 @@ struct fft_dit<Vectorization, 1, 2, cint32, cint32, cint16> : public fft_dit_com
             cnt_(0),
             zoffs_(0x1100)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -270,8 +274,10 @@ struct fft_dit<Vectorization, 2, 2, cint32, Output, cint16> : public fft_dit_com
             ptr_((const v4cint32 *)(ptr)),
             ptw_(ptw)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -372,8 +378,10 @@ struct fft_dit<Vectorization, 0, 2, cint16, cint32, cint32> : public fft_dit_com
             cnt2_(0),
             zoffs_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -500,8 +508,10 @@ struct fft_dit<Vectorization, 0, 2, cint32, cint32, cint32> : public fft_dit_com
             cnt2_(0),
             zoffs_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -616,8 +626,10 @@ struct fft_dit<Vectorization, 1, 2, cint32, cint32, cint32> : public fft_dit_com
             ptr_((const v2cint32 *)(ptr)),
             ptw_(ptw)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -721,8 +733,10 @@ struct fft_dit<Vectorization, 1, 2, cint32, cint16, cint32> : public fft_dit_com
             ptr_((const v4cint32 *)(ptr)),
             ptw_(ptw)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -829,8 +843,10 @@ struct fft_dit<Vectorization, 2, 2, cint16, Output, cint32> : public fft_dit_com
             ptr_((const v4cint16 *)(ptr)),
             ptw_(ptw)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -950,9 +966,11 @@ struct fft_dit<Vectorization, 0, 3, cint32, Output, cint16> : public fft_dit_com
             zoffs_(0x00000000),
             twdiff_((const v4cint16 *)ptw1 - (const v4cint16 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1116,9 +1134,11 @@ struct fft_dit<Vectorization, 0, 3, cint32, cint32, cint32> : public fft_dit_com
             zoffs_(0x00000000),
             twdiff_((const v2cint32 *)ptw1 - (const v2cint32 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1291,9 +1311,11 @@ struct fft_dit<Vectorization, 0, 4, cint32, cint32, cint16> : public fft_dit_com
             zoffs1_(0x00000000),
             zoffs2_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1451,9 +1473,11 @@ struct fft_dit<Vectorization, 1, 4, cint32, Output, cint16> : public fft_dit_com
             ptw1_((const v4cint16 *)ptw1),
             ptw2_((const v4cint16 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1575,9 +1599,11 @@ struct fft_dit<Vectorization, 1, 4, cint16, cint16, cint16> : public fft_dit_com
             ptw1_((const v4cint16 *)ptw1),
             ptw2_((const v4cint16 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1710,9 +1736,11 @@ struct fft_dit<Vectorization, 0, 4, cint16, Output, cint16> : public fft_dit_com
             zoffs1_(0x00000000),
             zoffs2_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -1884,9 +1912,11 @@ struct fft_dit<Vectorization, 0, 4, cint32, cint32, cint32> : public fft_dit_com
             zoffs1_(0x00000000),
             zoffs2_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -2056,9 +2086,11 @@ struct fft_dit<Vectorization, 1, 4, cint32, cint32, cint32> : public fft_dit_com
             ptw1_((const v2cint32 *)ptw1),
             ptw2_((const v2cint32 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -2201,9 +2233,11 @@ struct fft_dit<Vectorization, 1, 4, cint32, cint16, cint32> : public fft_dit_com
             ptw1_((const v4cint32 *)ptw1),
             ptw2_((const v4cint32 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -2367,9 +2401,11 @@ struct fft_dit<Vectorization, 0, 4, cint16, cint32, cint32> : public fft_dit_com
             zoffs1_(0x00000000),
             zoffs2_(0x00000000)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<8>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -2564,11 +2600,13 @@ struct fft_dit<Vectorization, 0, 5, cint32, Output, cint16> : public fft_dit_com
             td4_((const v4cint16 *)ptw4 - (const v4cint16 *)ptw2),
             td3_((const v4cint16 *)ptw3 - (const v4cint16 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw3), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw4), "Insufficient alignment");
+#endif
         }
 
         __aie_inline
@@ -2766,9 +2804,11 @@ struct fft_dit<Vectorization, 0, 5, cint32, cint32, cint32> : public fft_dit_com
             td4_((const v2cint32 *)ptw4 - (const v2cint32 *)ptw2),
             td3_((const v2cint32 *)ptw3 - (const v2cint32 *)ptw2)
         {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptr),  "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw1), "Insufficient alignment");
             RUNTIME_ASSERT(detail::check_vector_alignment<4>(ptw2), "Insufficient alignment");
+#endif
         }
 
         __aie_inline

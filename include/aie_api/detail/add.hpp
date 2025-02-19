@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -298,6 +298,12 @@ using sub_accum_vector = add_sub_accum_vector_bits<AccumBits, type_bits_v<T>, T,
 
 #include "aie2/add.hpp"
 #include "aie2/add_accum.hpp"
+#include "aie2/add_reduce.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2/add.hpp"
+#include "aie2p/add_accum.hpp"
 #include "aie2/add_reduce.hpp"
 
 #endif

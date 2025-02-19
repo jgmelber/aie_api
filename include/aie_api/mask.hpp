@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -87,9 +87,15 @@ class mask
     {
         unsigned count;
 
+#if __AIE_ARCH__ == 21
+        //TODO: Use other implementation if evaluating at compile time
+        //      Requires if consteval from C++23
+        count = ::population_count(n);
+#else
         n     = n - ((n >> 1) & 0x55555555);                    // reuse input as temporary
         n     = (n & 0x33333333) + ((n >> 2) & 0x33333333);     // temp
         count = ((n + (n >> 4) & 0xF0F0F0F) * 0x1010101) >> 24; // count
+#endif
 
         return count;
     }

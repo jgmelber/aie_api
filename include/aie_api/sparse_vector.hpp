@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -15,6 +15,10 @@
 
 #include "detail/aie2/sparse_vector_native_types.hpp"
 
+#elif __AIE_ARCH__ == 21
+
+#include "detail/aie2/sparse_vector_native_types.hpp"
+
 #endif
 
 #include "vector.hpp"
@@ -25,7 +29,7 @@
 namespace aie {
 
 template <ElemBaseType T, unsigned N>
-    requires(arch::is(arch::AIE_ML))
+    requires(arch::is(arch::Gen2))
 class sparse_vector;
 
 namespace detail {
@@ -72,12 +76,12 @@ concept NativeSparseVector = requires {
 } // namespace aie::detail
 
 template <ElemBaseType T, unsigned Elems>
-    requires(arch::is(arch::AIE_ML))
+    requires(arch::is(arch::Gen2))
 class __AIE_API_FUNDAMENTAL_TYPE__ sparse_vector
 {
 private:
     template <ElemBaseType T2, unsigned Elems2>
-         requires(arch::is(arch::AIE_ML))
+         requires(arch::is(arch::Gen2))
     friend class sparse_vector;
 
 public:
@@ -203,8 +207,10 @@ public:
      */
     __aie_inline
     operator native_type() const
+#if __AIE_ARCH__ == 20
         requires(size() != 128 || !std::is_same_v<T, bfloat16>)
         // No v128bfloat16_sparse in the compiler
+#endif
     {
         return to_native();
     }
@@ -265,16 +271,29 @@ public:
         if constexpr (detail::utils::num_elems_v<storage_t> == 2) {
             return data[idx];
         }
+#if __AIE_ARCH__ == 21
+        else if constexpr (bytes() == 256) {
+            constexpr auto extract_op = []() {
+                if      constexpr (std::is_same_v<value_type, int8>)     return [](auto&& v, int idx) { return ::extract_v128int8_sparse(v,    idx); };
+                else if constexpr (std::is_same_v<value_type, uint8>)    return [](auto&& v, int idx) { return ::extract_v128uint8_sparse(v,   idx); };
+                else if constexpr (std::is_same_v<value_type, int16>)    return [](auto&& v, int idx) { return ::extract_v64int16_sparse(v,    idx); };
+                else if constexpr (std::is_same_v<value_type, uint16>)   return [](auto&& v, int idx) { return ::extract_v64uint16_sparse(v,   idx); };
+            }();
+
+            return extract_op(data, idx);
+        }
+#endif
     }
 
     /**
-     * \brief Returns an aie::vector holding the contents in dense representation.
+     * \brief Returns an aie::vector containing @ref sparse_buffer_streams_data_format "partially decompressed" sparse
+     * values.
      */
     __aie_inline
     vector<T, Elems / 2> extract_data() const
     // Even though this type won't be instantiate in unsupported architectures,
     // ::extract_sparse_data does not exist in AIE1 and will trigger a compiler error. 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     {
         if constexpr (detail::utils::num_elems_v<storage_t> == 2 || bytes() == 256) {
             vector<T, Elems / 2> ret;
@@ -295,8 +314,10 @@ public:
 private:
     __aie_inline
     native_type to_native() const
+#if __AIE_ARCH__ == 20
         requires(size() != 128 || !std::is_same_v<T, bfloat16>)
         // No v128bfloat16_sparse in the compiler
+#endif
     {
         // TODO: verify performance of the ::concat approach
         if constexpr (detail::utils::num_elems_v<storage_t> == 2)

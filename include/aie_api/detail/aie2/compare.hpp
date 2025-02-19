@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -401,6 +401,7 @@ struct cmp_zero_bits_impl<Op, 16, T, Elems>
     }
 };
 
+#if __AIE_ARCH__ == 20
 template <CmpOp Op, unsigned Elems>
 struct cmp_bits_impl<Op, 16, bfloat16, Elems>
 {
@@ -436,8 +437,8 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
                 accum<accfloat, native_elems> acc(v1.template extract<native_elems>(idx));
                 accum<accfloat, acc_elems> zero = zeros_acc<AccumClass::FP, 32, acc_elems>::run();
 
-                const vector<T, acc_elems> v1_1 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(2 * idx + 0), zero));
-                const vector<T, acc_elems> v1_2 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(2 * idx + 1), zero));
+                const vector<T, acc_elems> v1_1 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(0), zero));
+                const vector<T, acc_elems> v1_2 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(1), zero));
 
                 m.insert(idx, mask<native_elems>::from_uint32(op(::concat(v1_1, v1_2), v2.template extract<native_elems>(idx))));
             });
@@ -484,6 +485,101 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
         }
     }
 };
+#elif __AIE_ARCH__ == 21
+template <CmpOp Op, typename T, unsigned Elems>
+struct cmp_bits_impl_float16_common
+{
+    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
+    static constexpr unsigned    acc_elems = 64;
+
+    using vector_type = vector<T, Elems>;
+    using   mask_type = mask<Elems>;
+    using   op_traits = compare_vector_traits<Op, T>;
+    using native_impl = cmp_bits_impl<Op, 16, T, native_elems>;
+
+    static constexpr auto op = op_traits::get_op();
+
+    __aie_inline
+    static mask_type run(const vector_type &v1, const vector_type &v2)
+    {
+        if constexpr (Elems <= native_elems) {
+            accum<accfloat, native_elems> acc(v1.template grow<native_elems>());
+            accum<accfloat, native_elems> zero = zeros_acc<AccumClass::FP, 32, native_elems>::run();
+
+            const accum<accfloat, acc_elems> acc_war = ::add(acc.template grow<acc_elems>(), zero.template grow<acc_elems>());
+
+            const vector<T, native_elems> v1_1 = acc_war.template extract<native_elems>(0).template to_vector<T>();
+
+            const unsigned result = op(v1_1, v2.template grow<native_elems>());
+
+            return mask_type::from_uint32(result);
+        }
+        else {
+            mask_type m;
+
+            utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
+                accum<accfloat, acc_elems> acc(v1.template extract<acc_elems>(idx));
+                accum<accfloat, acc_elems> zero = zeros_acc<AccumClass::FP, 32, acc_elems>::run();
+
+                const accum<accfloat, acc_elems> acc_war = ::add(acc, zero);
+
+                const vector<T, native_elems> v1_1 = acc_war.template extract<native_elems>(0).template to_vector<T>();
+                const vector<T, native_elems> v1_2 = acc_war.template extract<native_elems>(1).template to_vector<T>();
+
+                const unsigned result1 = op(v1_1, v2.template extract<native_elems>(0));
+                const unsigned result2 = op(v1_2, v2.template extract<native_elems>(1));
+
+                m.insert(idx, mask<2 * native_elems>::from_uint32(result1, result2));
+            });
+
+            return m;
+        }
+    }
+
+    __aie_inline
+    static mask_type run(T a, const vector_type &v)
+    {
+        if constexpr (Elems > native_elems) {
+            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+
+            mask_type ret;
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+            });
+
+            return ret;
+        }
+        else {
+            return run(broadcast<T, Elems>::run(a), v);
+        }
+    }
+
+    __aie_inline
+    static mask_type run(const vector_type &v, T a)
+    {
+        if constexpr (Elems > native_elems) {
+            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+
+            mask_type ret;
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+            });
+
+            return ret;
+        }
+        else {
+            return run(v, broadcast<T, Elems>::run(a));
+        }
+    }
+};
+
+template <CmpOp Op, unsigned Elems>
+struct cmp_bits_impl<Op, 16, bfloat16, Elems> : public cmp_bits_impl_float16_common<Op, bfloat16, Elems> {};
+
+#endif
 
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_bits_impl<Op, 32, T, Elems>

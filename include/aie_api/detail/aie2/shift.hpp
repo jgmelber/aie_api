@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -43,24 +43,6 @@ struct shift_bits_impl_common
 {
     using vector_type = vector<T, Elems>;
 
-    static constexpr auto get_ups_op()
-    {
-        if      constexpr (type_bits_v<T> < 32)       { return [](auto &&... args) __aie_inline { return ::sups(args...);  }; }
-        else                                          { return [](auto &&... args) __aie_inline { return ::lups(args...);  }; }
-    }
-
-    static constexpr auto get_srs_op()
-    {
-        if      constexpr (std::is_same_v<T, uint8>)  { return [](auto &&... args) __aie_inline { return ::ussrs(args...); }; }
-        else if constexpr (std::is_same_v<T, int8>)   { return [](auto &&... args) __aie_inline { return ::ssrs(args...);  }; }
-        else if constexpr (std::is_same_v<T, uint16>) { return [](auto &&... args) __aie_inline { return ::ulsrs(args...); }; }
-        else if constexpr (std::is_same_v<T, int16>)  { return [](auto &&... args) __aie_inline { return ::lsrs(args...);  }; }
-        else if constexpr (std::is_same_v<T, uint32>) { return [](auto &&... args) __aie_inline { return ::ulsrs(args...); }; }
-        else if constexpr (std::is_same_v<T, int32>)  { return [](auto &&... args) __aie_inline { return ::lsrs(args...);  }; }
-        else if constexpr (std::is_same_v<T, cint16>) { return [](auto &&... args) __aie_inline { return ::ssrs(args...);  }; }
-        else if constexpr (std::is_same_v<T, cint32>) { return [](auto &&... args) __aie_inline { return ::lsrs(args...);  }; }
-    }
-
     static constexpr auto get_op_elems()
     {
         if      constexpr (utils::is_one_of_v<T, int8, uint8>)   { return 32; }
@@ -81,15 +63,16 @@ struct shift_bits_impl_common
     {
         vector_type ret;
 
-        constexpr auto srs_op = get_srs_op();
-        constexpr auto ups_op = get_ups_op();
-
         constexpr unsigned op_elems   = get_op_elems(); 
         constexpr unsigned iter       = std::max(1u, Elems / op_elems);
         constexpr unsigned iter_elems = std::min(Elems, op_elems);
 
+        using accum_tag = accum_tag_for_type<T>;
+        using accum_type = accum<accum_tag, op_elems>;
+              
         utils::unroll_times<iter>([&](auto idx) __aie_inline {
-            vector<T, op_elems> tmp = srs_op(ups_op(v.template grow_extract<op_elems>(idx), upshift), downshift);
+            accum_type tmp_acc(v.template grow_extract<op_elems>(idx), upshift);
+            vector<T, op_elems> tmp = tmp_acc.template to_vector<T>(downshift);
             ret.template insert<iter_elems>(idx, tmp.template extract<iter_elems>(0));
         });
 

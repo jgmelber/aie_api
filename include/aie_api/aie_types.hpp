@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -144,9 +144,26 @@ class unaligned_vector_ref;
  * @tparam Elems Number of elements in the sparse vector.
  */
 template <ElemBaseType T, unsigned Elems = native_vector_length_v<T>>
-        requires(arch::is(arch::AIE_ML))
+        requires(arch::is(arch::Gen2))
 class sparse_vector;
 
+#if AIE_API_ML_VERSION >= 210
+
+/**
+ * @ingroup group_basic_types
+ *
+ * Type for block floating point vector registers.
+ *
+ * @tparam T     Type of the elements contained in the block vector. It must meet @ref aie::BlockType "BlockType".
+ * @tparam Elems Number of elements in the block vector.
+ */
+template <BlockType T, unsigned Elems>
+class block_vector;
+
+template <BlockType T, unsigned Elems>
+using bfp_vector [[deprecated("Use block_vector<T, Elems> instead")]] = block_vector<T, Elems>;
+
+#endif
 /**
  * @ingroup group_basic_types
  *

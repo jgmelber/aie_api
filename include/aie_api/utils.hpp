@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -8,7 +8,7 @@
  */
 
 /**
- * @defgroup group_utility_functions Uility functions
+ * @defgroup group_utility_functions Uility functions and classes
  */
 
 #pragma once
@@ -353,6 +353,25 @@ void print_matrix(const Matrix &m, unsigned cols, const char *prefix = nullptr)
         aie::set_rounding(rnd);
 }
 
+#if AIE_API_ML_VERSION >= 210
+
+/**
+ * @ingroup group_utility_print
+ *
+ * Displays the contents of a block floating point vector.
+ * \param[in] v       The vector.
+ * \param[in] nl      Set to `true` in order to add a newline at the end.
+ * \param[in] prefix  Optional text to print before the first element.
+ */
+template <typename T, unsigned Elems>
+__aie_noinline
+void print(const aie::block_vector<T, Elems> &v, bool nl = false, const char *prefix = nullptr)
+{
+    print(aie::accum<accfloat, Elems>(v) , nl, prefix);
+}
+
+#endif
+
 /**
  * @ingroup group_utility_print
  *
@@ -520,6 +539,295 @@ void unroll_times_2d(Fn &&fn)
     unroll_for_2d<unsigned, 0, TimesY, 1, 0, TimesX, 1>(std::forward<Fn>(fn));
 }
 
+/**
+  * @brief A structure containing options related to loop iteration peeling
+  *
+  * To be used with \ref aie::pipelined_loop
+  */
+struct LoopOptions
+{
+    /** @brief The number of iterations to peel at the front of the loop*/
+    unsigned peel_front = 0;
+
+    /** @brief The number of iterations to peel at the back of the loop*/
+    unsigned peel_back  = 0;
+
+    /** @brief Adjust the preamble */
+    int preamble_offset = 0;
+};
+
+/**
+ * @ingroup group_utility_functions
+ *
+ * @brief Invokes a function object a given number of times.
+ *        The pipelining can be controlled by optionally peeling iterations.
+ *
+ * @tparam MinIters Lower bound on the number of iterations of the loop body
+ * @tparam Opts     Options related to peeling loop iterations
+ * @param count     Number of iterations
+ * @param fn        \parblock
+ *                  The callable to pipeline
+ *
+ *                  ```
+ *                  constexpr unsigned MinIters = 8;
+ *                  auto loop_body = [&](unsigned idx){ ... };
+ *                  aie::pipelined_loop<MinIters, aie::LoopOptions{.peel_front = 2, .peel_back = 1}>(n, loop_body);
+ *                  ```
+ *                  \endparblock
+ */
+template<unsigned MinIters, LoopOptions Opts = LoopOptions{}, typename Fn>
+__aie_inline
+void pipelined_loop(unsigned count, Fn &&fn)
+{
+    constexpr unsigned total_peel_iters = Opts.peel_front + Opts.peel_back;
+
+    static_assert(total_peel_iters + 1 < MinIters, "Requested peeling exceeds loop range");
+
+    REQUIRES_MSG(count >= total_peel_iters, "Cannot peel more iterations than the loop will be executed");
+
+    if constexpr(MinIters > 1)
+    {
+        constexpr unsigned peel_front = Opts.peel_front;
+        constexpr unsigned peel_back  = Opts.peel_back;
+
+        if constexpr(peel_front > 0)
+        {
+            unroll_times<peel_front>(fn);
+            chess_separator();
+        }
+        
+#if !AIE_API_NATIVE
+        [[using chess: prepare_for_pipelining,
+                       min_loop_count(MinIters - total_peel_iters),
+                       pipeline_adjust_preamble(Opts.preamble_offset)]]
+#endif
+        for (unsigned i = peel_front; i < count - peel_back; i++)
+        {
+            fn(i);
+        }
+
+        if constexpr(peel_back > 0)
+        {
+            chess_separator();
+            unroll_times<peel_back>([&](auto i) __aie_inline  {
+                fn(count - peel_back + i);
+            });
+        }
+    }
+    else
+    {
+#if !AIE_API_NATIVE
+        [[using chess: min_loop_count(MinIters)]]
+#endif
+        for (unsigned i = 0; i < count; i++) {
+            fn(i);
+        }
+    }
+}
+
+/**
+ * @ingroup group_utility_functions
+ *
+ * @brief Invokes two function objects a given number of times.
+ *        The pipelining of each can be controlled by optionally peeling iterations.
+ *
+ * @tparam MinIters Lower bound on the number of iterations of the loop body
+ * @tparam OptsFn1  Options related to peeling loop iterations of the first function
+ * @tparam OptsFn2  Options related to peeling loop iterations of the second function
+ * @param count     Number of iterations
+ * @param fn1       The first callable to pipeline
+ * @param fn2       \parblock
+ *                  The second callable to pipeline
+ *
+ *                  For example, take the following
+ *                  ```
+ *                  constexpr unsigned MinIters = 4;
+ *                  auto loop_body1 = [&](unsigned idx){ ... };
+ *                  auto loop_body2 = [&](unsigned idx){ ... };
+ *                  unsigned n = 16;
+ *                  aie::pipelined_loops<MinIters, aie::LoopOptions{.peel_front = 5, .peel_back = 2},
+ *                                                 aie::LoopOptions{.peel_front = 3, .peel_back = 4}>(n, loop_body1, loop_body2);
+ *                  ```
+ *
+ *                  This will result in the following execution:
+ *
+ *                  ```
+ *                      |stage0 |stage1     |stage2 (main loop)                 |stage3 |stage4 |
+ *                  ----|-------|-----------|-----------------------------------|-------|-------|
+ *                  fn1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10| 11| 12| 13| 14| 15| - | - |
+ *                  fn2 | - | - | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10| 11| 12| 13| 14| 15|
+ * 
+ *                  ```
+ *                  \endparblock
+ */
+template<unsigned MinIters, LoopOptions OptsFn1 = LoopOptions{}, LoopOptions OptsFn2 = LoopOptions{}, typename Fn1, typename Fn2>
+__aie_inline
+void pipelined_loops(unsigned count, Fn1 &&fn1, Fn2 &&fn2)
+{
+    constexpr unsigned total_peel_iters     = OptsFn1.peel_front + OptsFn1.peel_back;
+    constexpr unsigned total_peel_iters_fn2 = OptsFn2.peel_front + OptsFn2.peel_back;
+
+    static_assert(total_peel_iters == total_peel_iters_fn2, "Both functions require the same total peeled iterations");
+    static_assert(OptsFn1.preamble_offset == OptsFn2.preamble_offset, "Both functions require the same preamble_offset");
+
+    static_assert(total_peel_iters + 1 < MinIters, "Requested peeling exceeds loop range");
+
+    REQUIRES_MSG(count >= total_peel_iters, "Cannot peel more iterations than the loop will be executed");
+
+    constexpr unsigned peel_front1 = OptsFn1.peel_front;
+    constexpr unsigned peel_back1  = OptsFn1.peel_back;
+    constexpr unsigned peel_front2 = OptsFn2.peel_front;
+    constexpr unsigned peel_back2  = OptsFn2.peel_back;
+
+    constexpr auto absdiff = [](auto x, auto y) { return x > y ? x - y : y - x; };
+
+    // There are 5 stage of peeling:
+    //   0. Running a single function as its requested peeling is greater than the other
+    //   1. Running both functions remaining peeled iterations
+    //   2. Running the main loop with both functions
+    //   3. Running both functions rotated peeled iterations
+    //   4. Running a single function as its requested rotated peeling exceeds the other
+
+    constexpr unsigned stage0_count      = absdiff(peel_front1, peel_front2);
+    constexpr unsigned stage0_fn1_offset = 0;
+    constexpr unsigned stage0_fn2_offset = 0;
+
+    constexpr unsigned stage1_count      = std::min(peel_front1, peel_front2);
+    constexpr unsigned stage1_fn1_offset = peel_front1 - stage1_count;
+    constexpr unsigned stage1_fn2_offset = peel_front2 - stage1_count;
+    
+              unsigned stage2_count      = count - total_peel_iters;
+    constexpr unsigned stage2_fn1_offset = peel_front1;
+    constexpr unsigned stage2_fn2_offset = peel_front2;
+    
+    constexpr unsigned stage3_count      = std::min(peel_back1, peel_back2);
+              unsigned stage3_fn1_offset = stage2_count + stage2_fn1_offset;
+              unsigned stage3_fn2_offset = stage2_count + stage2_fn2_offset;
+    
+    constexpr unsigned stage4_count      = absdiff(peel_back1, peel_back2);
+              unsigned stage4_fn1_offset = stage3_count + stage3_fn1_offset;
+              unsigned stage4_fn2_offset = stage3_count + stage3_fn2_offset;
+
+    // e.g. count = 16
+    //       OptsFn1 = LoopOptions{.peel_front = 5, .peel_back = 2}
+    //       OptsFn2 = LoopOptions{.peel_front = 3, .peel_back = 4}
+    //
+    //       peel_front1 = 5, peel_back1 = 2
+    //       peel_front2 = 3, peel_back2 = 4
+    //
+    // Stage      | 0 | 1 | 2  | 3  | 4  |
+    // -----------|---|---|----|----|----|
+    // count      | 2 | 3 | 9  | 2  | 2  |
+    // fn1_offset | 0 | 2 | 5  | 14 | 16 |
+    // fn2_offset | 0 | 0 | 3  | 12 | 14 |
+    //
+    //     |stage0 |stage1     |stage2 (main loop)                 |stage3 |stage4 |
+    // ----|-------|-----------|-----------------------------------|-------|-------|
+    // fn1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10| 11| 12| 13| 14| 15| - | - |
+    // fn2 | - | - | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10| 11| 12| 13| 14| 15|
+
+
+    if constexpr(stage0_count > 0)
+    {
+        if constexpr (peel_front1 > peel_front2) 
+            unroll_times<stage0_count>([&](auto i) __aie_inline { fn1(stage0_fn1_offset + i); });
+        else
+            unroll_times<stage0_count>([&](auto i) __aie_inline { fn2(stage0_fn2_offset + i); });
+    }
+
+    unroll_times<stage1_count>([&](auto i) __aie_inline {
+        fn1(stage1_fn1_offset + i);
+        fn2(stage1_fn2_offset + i);
+    });
+
+#if !AIE_API_NATIVE
+    [[using chess: prepare_for_pipelining,
+                   min_loop_count(MinIters - total_peel_iters),
+                   pipeline_adjust_preamble(OptsFn1.preamble_offset)]]
+#endif
+    for (unsigned i = 0; i < stage2_count; ++i)
+    {
+        fn1(stage2_fn1_offset + i);
+        fn2(stage2_fn2_offset + i);
+    }
+
+    unroll_times<stage3_count>([&](auto i) __aie_inline {
+        fn1(stage3_fn1_offset + i);
+        fn2(stage3_fn2_offset + i);
+    });
+
+    if constexpr(stage4_count > 0)
+    {
+        if constexpr (peel_back1 > peel_back2) 
+            unroll_times<stage4_count>([&](auto i) __aie_inline { fn1(stage4_fn1_offset + i); });
+        else
+            unroll_times<stage4_count>([&](auto i) __aie_inline { fn2(stage4_fn2_offset + i); });
+    }
+}
+
+namespace utils {
+
+using AIE_RegFile = detail::utils::AIE_RegFile;
+
+/**
+ * @ingroup group_utility_functions
+ *
+ * @brief Binds a variable to a specified register.
+ *
+ * @tparam Reg     Numeric identifier of register to bind variable to.
+ * @tparam RegFile Which register file to locate the variable in.
+ * @param val      \parblock
+ *                 The value to be placed. This may be an aie::vector, aie::accum, or scalar value.
+ *
+ *                 ```
+ *                 aie::vector<int32, 16> v;
+ *                 aie::utils::locate_in_register<4>(v)
+ *                 ```
+ *                 This will place `v` in `x4` on AIE-ML.
+ *                 \endparblock
+ */
+template<unsigned Reg = (unsigned)-1, AIE_RegFile RegFile = AIE_RegFile::Default, typename T>
+__aie_inline
+auto locate_in_register(T&& val)
+{
+    detail::utils::locate_in_register<Reg, RegFile>(val);
+    return val;
+}
+
+template<unsigned Reg = (unsigned)-1, AIE_RegFile RegFile = AIE_RegFile::Default, typename T>
+__aie_inline
+auto locate_in_register(const T& val)
+{
+    T v = val;
+    detail::utils::locate_in_register<Reg, RegFile>(v);
+    return v;
+}
+
+/**
+ * @ingroup group_utility_functions
+ *
+ * @brief Binds each variable in an array to sequential registers, starting from the specified register.
+ *
+ * @tparam Reg     Numeric identifier of register to bind the first variable to.
+ * @tparam RegFile Which register file to locate the variable in.
+ * @param val      \parblock
+ *                 The value to be placed. This may be an aie::vector, aie::accum, or scalar value.
+ *
+ *                 ```
+ *                 std::array<aie::vector<int32, 16>, 3> vs;
+ *                 aie::utils::locate_in_register<4>(vs)
+ *                 ```
+ *                 This will place `vs[0]` in `x4` and `vs[1]` in `x5`, and `vs[2]` in `x6` on AIE-ML.
+ *                 \endparblock
+ */
+template<unsigned StartIdx = 0, unsigned N, AIE_RegFile RegFile = AIE_RegFile::Default, typename T>
+__aie_inline
+void locate_in_register(T (&arr)[N])
+{
+    detail::utils::locate_in_register<StartIdx, N, RegFile>(arr);
+}
+
+} // namespace utils
 
 } // namespace aie
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -178,14 +178,14 @@ struct compound_vector_storage
     static type undef() { return utils::make_array<N>(NativeStorage::undef); }
 };
 
-template <>                               struct vector_storage<     int8,  16> { using type = v16int8;     static type undef() { return ::undef_v16int8();     } };
-template <>                               struct vector_storage<     int8,  32> { using type = v32int8;     static type undef() { return ::undef_v32int8();     } };
-template <>                               struct vector_storage<     int8,  64> { using type = v64int8;     static type undef() { return ::undef_v64int8();     } };
-template <unsigned N> requires (N >= 128) struct vector_storage<     int8,   N> : compound_vector_storage<N, vector_storage<int8, 64>> {};
+template <>                               struct vector_storage<     int8,  16> { using type =  v16int8;     static type undef() { return ::undef_v16int8();     } };
+template <>                               struct vector_storage<     int8,  32> { using type =  v32int8;     static type undef() { return ::undef_v32int8();     } };
+template <>                               struct vector_storage<     int8,  64> { using type =  v64int8;     static type undef() { return ::undef_v64int8();     } };
+template <unsigned N> requires (N >= 128) struct vector_storage<     int8,   N> : compound_vector_storage<N, vector_storage<int8,  64>> {};
 
-template <>                               struct vector_storage<    uint8,  16> { using type = v16uint8;    static type undef() { return ::undef_v16uint8();    } };
-template <>                               struct vector_storage<    uint8,  32> { using type = v32uint8;    static type undef() { return ::undef_v32uint8();    } };
-template <>                               struct vector_storage<    uint8,  64> { using type = v64uint8;    static type undef() { return ::undef_v64uint8();    } };
+template <>                               struct vector_storage<    uint8,  16> { using type =  v16uint8;    static type undef() { return ::undef_v16uint8();    } };
+template <>                               struct vector_storage<    uint8,  32> { using type =  v32uint8;    static type undef() { return ::undef_v32uint8();    } };
+template <>                               struct vector_storage<    uint8,  64> { using type =  v64uint8;    static type undef() { return ::undef_v64uint8();    } };
 template <unsigned N> requires (N >= 128) struct vector_storage<    uint8,   N> : compound_vector_storage<N, vector_storage<uint8, 64>> {};
 
 template <>                               struct vector_storage<    int16,   8> { using type =  v8int16;    static type undef() { return ::undef_v8int16();     } };
@@ -213,10 +213,10 @@ template <>                               struct vector_storage<   cint16,   8> 
 template <>                               struct vector_storage<   cint16,  16> { using type = v16cint16;   static type undef() { return ::undef_v16cint16();   } };
 template <unsigned N> requires (N >=  32) struct vector_storage<   cint16,   N> : compound_vector_storage<N, vector_storage<cint16, 16>> {};
 
-template <>                               struct vector_storage<   cint32,   2> { using type = v2cint32;    static type undef() { return ::undef_v2cint32();    } };
-template <>                               struct vector_storage<   cint32,   4> { using type = v4cint32;    static type undef() { return ::undef_v4cint32();    } };
-template <>                               struct vector_storage<   cint32,   8> { using type = v8cint32;    static type undef() { return ::undef_v8cint32();    } };
-template <unsigned N> requires (N >=  16) struct vector_storage<   cint32,   N> : compound_vector_storage<N, vector_storage<cint32, 8>> {};
+template <>                               struct vector_storage<   cint32,   2> { using type =  v2cint32;    static type undef() { return ::undef_v2cint32();    } };
+template <>                               struct vector_storage<   cint32,   4> { using type =  v4cint32;    static type undef() { return ::undef_v4cint32();    } };
+template <>                               struct vector_storage<   cint32,   8> { using type =  v8cint32;    static type undef() { return ::undef_v8cint32();    } };
+template <unsigned N> requires (N >=  16) struct vector_storage<   cint32,   N> : compound_vector_storage<N, vector_storage<cint32,  8>> {};
 
 template <>                               struct vector_storage<     int4,  32> { using type =  v32int4;    static type undef() { return ::undef_v32int4();     } };
 template <>                               struct vector_storage<     int4,  64> { using type =  v64int4;    static type undef() { return ::undef_v64int4();     } };
@@ -241,10 +241,10 @@ template <unsigned N> requires (N >=  32) struct vector_storage<   float,    N> 
 #endif
 
 #if __AIE_API_COMPLEX_FP32_EMULATION__
-template <>                               struct vector_storage<  cfloat,    2> { using type = v2cfloat;    static type undef() { return ::undef_v2cfloat();    } };
-template <>                               struct vector_storage<  cfloat,    4> { using type = v4cfloat;    static type undef() { return ::undef_v4cfloat();    } };
-template <>                               struct vector_storage<  cfloat,    8> { using type = v8cfloat;    static type undef() { return ::undef_v8cfloat();    } };
-template <unsigned N> requires (N >=  16) struct vector_storage<  cfloat,    N> : compound_vector_storage<N, vector_storage<cfloat, 8>> {};
+template <>                               struct vector_storage<  cfloat,    2> { using type =  v2cfloat;    static type undef() { return ::undef_v2cfloat();    } };
+template <>                               struct vector_storage<  cfloat,    4> { using type =  v4cfloat;    static type undef() { return ::undef_v4cfloat();    } };
+template <>                               struct vector_storage<  cfloat,    8> { using type =  v8cfloat;    static type undef() { return ::undef_v8cfloat();    } };
+template <unsigned N> requires (N >=  16) struct vector_storage<  cfloat,    N> : compound_vector_storage<N, vector_storage<cfloat,  8>> {};
 #endif
 
 #if __AIE_API_CBF16_SUPPORT__
@@ -314,8 +314,22 @@ struct is_floating_point
 #endif
                                                      , cfloat
 #endif
+#if __AIE_ARCH__ == 21
+                                                     , bfp16ebs8, bfp16ebs16
+#endif
                                                          >;
 };
+
+#if __AIE_ARCH__ == 21
+
+template <typename T> struct is_block_floating_point
+{
+    static constexpr bool value = detail::utils::is_one_of_v<T,
+                                                             bfp16ebs8,
+                                                             bfp16ebs16>;
+};
+
+#endif
 
 template <typename T>
 struct is_signed

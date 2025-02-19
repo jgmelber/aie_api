@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -73,6 +73,17 @@ template <> struct get_integer_type<false, 64> { using type = uint64_t; };
 template <> struct get_integer_type<true,  4>  { using type = int4_t;   };
 template <> struct get_integer_type<false, 4>  { using type = uint4_t;  };
 #endif
+
+template <bool Signed, typename T>
+struct apply_dynamic_sign
+{
+    using type = std::conditional_t<is_complex_v<T> || is_floating_point_v<T>,
+                                    T,
+                                    typename get_integer_type<Signed, type_bits_v<T>>::type>;
+};
+
+template <bool Signed, typename T>
+using apply_dynamic_sign_t = typename apply_dynamic_sign<Signed, T>::type;
 
 /*
  * Obtain the integer type described by the combination of sign and number of bits. Bits needs to be a power of 2 in
@@ -386,7 +397,7 @@ public:
     {
 #if __AIE_ARCH__ == 10
         idx_ = (unsigned)uintptr_t(::cyclic_add((char *)uintptr_t(idx_), 1, (char *)uintptr_t(0), max_));
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         ::add_2d_ptr((char *)uintptr_t(0), -int(max_ - 1), max_ - 1, idx_, 1);
 #endif
         return *this;
@@ -403,7 +414,7 @@ public:
 private:
 #if __AIE_ARCH__ == 10
     unsigned idx_;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     addr_t idx_;
 #endif
     const unsigned max_;
@@ -454,7 +465,7 @@ public:
 private:
 #if __AIE_ARCH__ == 10
     unsigned idx_;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     addr_t idx_;
 #endif
 };
@@ -641,6 +652,7 @@ auto make_array(Callable&& callable, Args... args)
     return make_array_helper(std::forward<Callable&&>(callable), seq{}, std::forward<Args&&>(args)...);
 }
 
+#if !__AIE_API_BUILTIN_CLZ__
 __aie_inline
 static constexpr unsigned clz_impl(unsigned n)
 {
@@ -653,12 +665,16 @@ static constexpr unsigned clz_impl(unsigned n)
 
     return ret;
 }
+#endif
 
 // Helper to compute the number of leading zeros of a value. When the input value is known at compile time it calls a
 // constexpr function. Otherwise, it uses the intrinc functions for AIE.
 __aie_inline
 static constexpr inline unsigned clz(unsigned n)
 {
+#if __AIE_API_BUILTIN_CLZ__
+    return __builtin_clz(n);
+#else
     if (std::is_constant_evaluated()) {
         return clz_impl(n);
     }
@@ -668,6 +684,7 @@ static constexpr inline unsigned clz(unsigned n)
         else
             return ::clb(n);
     }
+#endif
 }
 
 // Helper to the index of the last set bit in the given a value. When the input value is known at compile time it calls
@@ -784,7 +801,44 @@ auto apply_tuple(Function &&f, TupleLike &&t)
                               std::make_index_sequence<N>{});
 }
 
+} // namespace aie::detail::utils
+
+#if __AIE_ARCH__ == 10
+#include "aie1/utils.hpp"
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#include "aie2/utils.hpp"
+#endif
+
+namespace aie::detail::utils
+{
+
+/*
+ * Helpers for pinning variables in specified registers.
+ */
+template<unsigned Reg, AIE_RegFile RegFile, typename T>
+__aie_inline
+void locate_in_register(T& val)
+{
+#if !AIE_API_NATIVE
+    locate_in_register_impl<Reg, RegFile>(val);
+#endif
 }
+
+template<typename T, unsigned N, unsigned StartIdx, unsigned ... Is>
+__aie_inline
+void locate_in_register_helper(T (&arr)[N], std::index_sequence<Is...>)
+{
+   ((locate_in_register<StartIdx + Is>(arr[Is])), ...);
+}
+
+template<unsigned StartIdx = 0, unsigned N, typename T>
+__aie_inline
+void locate_in_register(T (&arr)[N])
+{
+    locate_in_register_helper<T, N, StartIdx>(arr, std::make_index_sequence<N>{});
+}
+
+} // namespace aie::detail::utils
 
 #if AIE_API_ML_VERSION >= 200 && !defined(__STDCPP_BFLOAT16_T__)
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -38,10 +38,19 @@ struct  exact_acc80 {};
 struct exact_cacc48 {};
 struct exact_cacc80 {};
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 struct  exact_acc32 {};
 struct  exact_acc64 {};
+
+#endif
+
+#if __AIE_ARCH__ == 21
+
+#if __AIE_API_SCALAR_BFP_TYPES__ == 0
+struct bfp16ebs8  {};
+struct bfp16ebs16 {};
+#endif
 
 #endif
 

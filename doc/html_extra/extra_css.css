@@ -23,3 +23,8 @@
 	margin: 0px;
 	padding: 2px 0px;
 }
+
+tr:has(th)
+{
+	vertical-align: bottom;
+}

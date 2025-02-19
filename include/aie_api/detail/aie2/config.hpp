@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -46,5 +46,7 @@
 #define __AIE_API_CFP_TO_FP_CONVERSIONS__           (__AIE_MODEL_VERSION__ >= 10400)
 
 #define __AIE_API_CBF16_SUPPORT__                   (__AIE_MODEL_VERSION__ >= 10500)
+
+#define __AIE_API_BUILTIN_CLZ__                     (__AIE_MODEL_VERSION__ >= 10600 && __AIE_CORE_BUILTIN_CLZ__)
 
 #endif

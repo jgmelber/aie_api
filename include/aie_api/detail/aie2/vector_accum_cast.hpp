@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -62,11 +62,28 @@ struct vector_to_accum_cast_bits_impl
 
         accum<DstTag, DstElems> ret;
 
+#if __AIE_ARCH__ == 20
         constexpr unsigned accum_bits = 1024;
         if constexpr (VecBits <= accum_bits)
             ret = accum_cast_helper<DstClass, DstBits, DstElems>(v) ;
         else
             ret = accum_cast_helper<DstClass, DstBits, DstElems>(utils::tuple_to_array(v.template split<2 * native_elems>()));
+#else
+        constexpr unsigned accum_bits = 2048;
+        constexpr unsigned split_ratio = accum_bits / native_elems;
+        if constexpr (VecBits <= 1024)
+            ret = accum_cast_helper<DstClass, DstBits, DstElems>(v) ;
+        else
+            //ret = accum_cast_helper<DstClass, DstBits, DstElems>(utils::tuple_to_array(v.template split<2 * native_elems>()));
+        {
+            constexpr unsigned num_ops = std::max(1u, Elems / (2 * native_elems));
+            auto arr = utils::tuple_to_array(v.template split<2 * native_elems>());
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                ret.insert(idx, accum_cast_helper<DstClass, DstBits, 1024 / DstBits>(arr[idx]));
+            });
+        }
+
+#endif
 
         return ret;
 #endif
@@ -79,23 +96,27 @@ struct accum_to_vector_cast_bits_impl
     using  accum_tag = accum_tag_t<Class, Bits>;
     using accum_type = accum<accum_tag, Elems>;
 
-    static auto run(const accum_type &acc)
-    {
-        constexpr unsigned VecElems = accum_type::bits() / type_bits_v<DstT>;
-        vector<DstT, VecElems> ret;
+    static constexpr unsigned vector_elems = accum_type::bits() / type_bits_v<DstT>;
+    using vector_type = vector<DstT, vector_elems>;
 
-        if constexpr (accum_type::bits() <= 512) {
-            ret = vector_cast_helper<DstT, VecElems>(acc);
+    static vector_type run(const accum_type &acc)
+    {
+        using vec_storage_t = vector_storage_t<DstT, vector_elems>;
+        constexpr unsigned num_cast_chunks = utils::num_elems_v<vec_storage_t>;
+
+        if constexpr (num_cast_chunks == 1) {
+            return vector_cast_helper<DstT, vector_elems>(acc);
         }
         else {
-            constexpr unsigned chunks          = accum_type::bits() / 512;
-            constexpr unsigned elems_per_chunk = Elems / chunks;
+            constexpr unsigned acc_chunk_elems = Elems / num_cast_chunks;
+            constexpr unsigned vec_chunk_elems = vector_elems / num_cast_chunks;
 
-            const std::array acc_array = utils::tuple_to_array(acc.template split<elems_per_chunk>());
-
-            ret = vector_cast_helper<DstT, VecElems>(acc_array);
+            return utils::apply_tuple(
+                    [](auto &&... accs) -> vec_storage_t {
+                        return {vector_cast_helper<DstT, vec_chunk_elems>(accs)...};
+                    },
+                    acc.template split<acc_chunk_elems>());
         }
-        return ret;
     }
 };
 

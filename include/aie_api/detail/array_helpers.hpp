@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -11,6 +11,9 @@
 #include <type_traits>
 
 #include "vector.hpp"
+#if AIE_API_ML_VERSION >= 210
+#include "../block_vector.hpp"
+#endif
 #include "../sparse_vector.hpp"
 #include "../vector_elem_ref.hpp"
 
@@ -38,16 +41,16 @@ template <typename T>
 using get_value_type_t = typename get_value_type<T>::type;
 
 template <typename T, unsigned Elems, typename IterDescriptor, aie_dm_resource Resource = aie_dm_resource::none>
-    requires (arch::is(arch::AIE_ML))
+    requires (arch::is(arch::Gen2))
 class sliding_window_buffer_stream;
 
 template <typename T, unsigned Elems, typename IterDescriptor, aie_dm_resource Resource = aie_dm_resource::none>
-    requires (arch::is(arch::AIE_ML))
+    requires (arch::is(arch::Gen2))
 using          const_sliding_window_buffer_stream = sliding_window_buffer_stream<const std::remove_const_t<T>, Elems, IterDescriptor, Resource>;
 
 template <typename T, unsigned Elems, unsigned Level, typename TensorIterDescriptor, aie_dm_resource Resource, bool Restrict = false>
 #if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-    requires (arch::is(arch::AIE_ML))
+    requires (arch::is(arch::Gen2))
 #endif
 class __AIE_API_KEEP_IN_REGISTERS__ tensor_buffer_stream;
 
@@ -76,7 +79,12 @@ struct sliding_window_dim_1d
     constexpr sliding_window_dim_1d() = default;
 
     constexpr sliding_window_dim_1d(int step) :
+#if __AIE_ARCH__ == 20
         inc1(step)
+#else
+        // unaligned loads via the fifo advances the input pointer by 64B
+        inc1(-64 + step)
+#endif
     {}
 
     operator int() { return inc1; }
@@ -93,7 +101,12 @@ struct sliding_window_dim_2d
 
     constexpr sliding_window_dim_2d(unsigned num1, int step,
                                                    int inc2) :
+#if __AIE_ARCH__ == 20
         num1(num1), inc1(step),       inc2(step + inc2)
+#else
+        // unaligned loads via the fifo advances the input pointer by 64B
+        num1(num1), inc1(-64 + step), inc2(-64 + step + inc2)
+#endif
     {}
 
     explicit constexpr sliding_window_dim_2d(const dim_2d& other) :
@@ -116,7 +129,12 @@ struct sliding_window_dim_3d
     constexpr sliding_window_dim_3d(unsigned num1, int step,
                                     unsigned num2, int inc2,
                                                    int inc3) :
+#if __AIE_ARCH__ == 20
         num1(num1), inc1(step),       num2(num2), inc2(step + inc2),       inc3(step + inc3)
+#else
+        // unaligned loads via the fifo advances the input pointer by 64B
+        num1(num1), inc1(-64 + step), num2(num2), inc2(-64 + step + inc2), inc3(-64 + step + inc3)
+#endif
     {}
 
     explicit constexpr sliding_window_dim_3d(const dim_3d& other) :
@@ -169,14 +187,21 @@ struct iter_state
     storage_t state_;
 };
 
+#if __AIE_ARCH__ == 21
+template <typename T, unsigned Elems, bool IsBlock> struct tensor_vector_type;
+template <typename T, unsigned Elems> struct tensor_vector_type<T, Elems, false> { using type = vector<T, Elems>;     };
+template <typename T, unsigned Elems> struct tensor_vector_type<T, Elems, true>  { using type = block_vector<T, Elems>; };
+template <typename T, unsigned Elems> using tensor_vector_type_t = typename tensor_vector_type<T, Elems, is_valid_block_type_v<T>>::type;
+#else
 template <typename T, unsigned Elems> struct tensor_vector_type { using type = vector<T, Elems>; };
 template <typename T, unsigned Elems> using tensor_vector_type_t = typename tensor_vector_type<T, Elems>::type;
+#endif
 
 #if AIE_API_ML_VERSION >= 200
 
 template <typename T, unsigned Elems, unsigned Level, typename TensorIterDescriptor, aie_dm_resource Resource, bool Restrict>
 #if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-    requires (arch::is(arch::AIE_ML))
+    requires (arch::is(arch::Gen2))
 #endif
 class __AIE_API_KEEP_IN_REGISTERS__ tensor_buffer_stream
 {
@@ -280,7 +305,7 @@ private:
 
     template <typename T2, unsigned Elems2, unsigned Level2, typename TensorIterDescriptor2, aie_dm_resource Resource2, bool Restrict2>
 #if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-        requires (arch::is(arch::AIE_ML))
+        requires (arch::is(arch::Gen2))
 #endif
     friend class tensor_buffer_stream;
 
@@ -295,6 +320,161 @@ private:
     iter_desc_storage iter_desc_;
     iter_state_storage iter_state_;
 };
+
+#if __AIE_ARCH__ == 21
+template <typename T, unsigned Elems, unsigned Level, typename TensorIterDescriptor, aie_dm_resource Resource, bool Restrict>
+#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
+    requires (arch::is(arch::XDNA_2) && is_valid_block_type_v<T>)
+#endif
+class __AIE_API_KEEP_IN_REGISTERS__ tensor_buffer_stream_block
+{
+public:
+    using          elem_type = aie_dm_resource_remove_t<T>;
+    using        vector_type = tensor_vector_type_t<std::remove_const_t<elem_type>, Elems>;
+    using         value_type = add_memory_bank_t<Resource, aie_dm_resource_set_t<vector_type, aie_dm_resource_get_v<T>>>;
+    using            pointer = std::conditional_t<std::is_const_v<T>, const value_type *, value_type *>;
+    using     native_pointer = typename vector_type::native_pointer_type;
+    using        iter_desc_t = std::decay_t<TensorIterDescriptor&>;
+    using  iter_desc_storage = const iter_desc_t&;
+    using iter_state_storage = iter_state<std::tuple_element_t<Level, iter_desc_t>>;
+
+    static constexpr unsigned MaxDepth = std::tuple_size_v<iter_desc_t> - 1;
+    using inner_type = std::conditional_t<Level == MaxDepth,
+                                          vector_type,
+                                          tensor_buffer_stream_block<T, Elems, Level + 1, iter_desc_storage, Resource, Restrict>>;
+
+    __aie_inline
+    constexpr tensor_buffer_stream_block(T * ptr, const TensorIterDescriptor& iter_desc) : ptr_((ptr_type)ptr), iter_desc_(iter_desc)
+    {
+        state_.pos = 0;
+        //if constexpr (Level == MaxDepth) ::fifo_ld_reset(ptr_, state_);
+    }
+
+    tensor_buffer_stream_block(const tensor_buffer_stream_block&)            = default;
+    tensor_buffer_stream_block& operator=(const tensor_buffer_stream_block&) = default;
+    tensor_buffer_stream_block(tensor_buffer_stream_block&&)                 = default;
+    tensor_buffer_stream_block& operator=(tensor_buffer_stream_block&&)      = default;
+    ~tensor_buffer_stream_block()                                          = default;
+
+    __aie_inline
+    constexpr inner_type pop()
+    {
+        if constexpr(Level == MaxDepth) {
+            inner_type v;
+
+            ::fifo_ld_fill(ptr_, state_);
+            const auto& inc = std::get<Level>(iter_desc_);
+            if      constexpr (std::is_same_v<dim_3d, std::decay_t<decltype(inc)>>) {
+                v = ::fifo_ld_pop_3d_byte(ptr_, state_, inc.inc3,
+                                                        inc.num1, iter_state_.state_.c1, inc.inc1,
+                                                        inc.num2, iter_state_.state_.c2, inc.inc2);
+            }
+            else if constexpr (std::is_same_v<dim_2d, std::decay_t<decltype(inc)>>) {
+                v = ::fifo_ld_pop_2d_byte(ptr_, state_, inc.inc2,
+                                                        inc.num1, iter_state_.state_.c1, inc.inc1);
+            }
+            else {
+                 v = ::fifo_ld_pop_1d_byte(ptr_, state_, inc);
+            }
+
+            return v;
+        }
+        else {
+            inner_type v = inner_type(increment(ptr_), iter_desc_);
+            return v;
+        }
+    }
+
+    __aie_inline
+    constexpr tensor_buffer_stream_block &operator>>(inner_type& v) requires (Level == MaxDepth)
+    {
+        v = pop();
+        return *this;
+    }
+
+    __aie_inline
+    constexpr void push(const vector_type& v) requires (Level == MaxDepth)
+    {
+        ::fifo_st_push(ptr_, v, state_);
+        const auto& inc = std::get<Level>(iter_desc_);
+        if      constexpr (std::is_same_v<dim_3d, std::decay_t<decltype(inc)>>) {
+            ::fifo_st_flush_3d_byte(ptr_, state_, inc.inc3,
+                    inc.num1, iter_state_.state_.c1, inc.inc1,
+                    inc.num2, iter_state_.state_.c2, inc.inc2);
+        }
+        else if constexpr (std::is_same_v<dim_2d, std::decay_t<decltype(inc)>>) {
+            ::fifo_st_flush_2d_byte(ptr_, state_, inc.inc2,
+                    inc.num1, iter_state_.state_.c1, inc.inc1);
+        }
+        else {
+            ::fifo_st_flush_1d_byte(ptr_, state_, inc);
+        }
+    }
+
+    __aie_inline
+    constexpr tensor_buffer_stream_block &operator<<(const vector_type &v) requires (Level == MaxDepth)
+    {
+        push(v);
+        return *this;
+    }
+
+    __aie_inline
+    constexpr pointer data()
+    {
+        return (pointer)ptr_;
+    }
+
+    constexpr bool operator==(const tensor_buffer_stream_block& rhs) const { return ptr_ == rhs.ptr_; }
+    constexpr bool operator!=(const tensor_buffer_stream_block& rhs) const { return ptr_ != rhs.ptr_; }
+
+private:
+#if AIE_API_NATIVE
+    using ptr_type = native_pointer*;
+#else
+    using ptr_type = std::conditional_t<Restrict, native_pointer* __restrict, native_pointer*>;
+#endif
+
+    __aie_inline
+    constexpr ptr_type increment(ptr_type ptr)
+    {
+        const auto& inc = std::get<Level>(iter_desc_);
+        if      constexpr (std::is_same_v<dim_3d, std::decay_t<decltype(inc)>>) {
+            ptr = ::add_3d_byte(ptr, inc.inc3,
+                                     inc.num1, iter_state_.state_.c1, inc.inc1,
+                                     inc.num2, iter_state_.state_.c2, inc.inc2);
+        }
+        else if constexpr (std::is_same_v<dim_2d, std::decay_t<decltype(inc)>>) {
+            ptr =  ::add_2d_byte(ptr, inc.inc2,
+                                      inc.num1, iter_state_.state_.c1, inc.inc1);
+        }
+        else {
+            ptr = ::byte_incr(ptr, inc);
+        }
+
+        return ptr;
+    }
+
+    template <typename T2, unsigned Elems2, unsigned Level2, typename TensorIterDescriptor2, aie_dm_resource Resource2, bool Restrict2>
+#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
+        requires (arch::is(arch::XDNA_2) && is_valid_block_type_v<T2>)
+#endif
+    friend class tensor_buffer_stream_block;
+
+    ptr_type ptr_;
+    fifo_state_t state_;
+    iter_desc_storage iter_desc_;
+    iter_state_storage iter_state_;
+};
+
+template <unsigned Elems, unsigned Level, typename TensorIterDescriptor, aie_dm_resource Resource, bool Restrict>
+class tensor_buffer_stream<bfp16ebs8, Elems, Level, TensorIterDescriptor, Resource, Restrict> : public tensor_buffer_stream_block<bfp16ebs8, Elems, Level, TensorIterDescriptor, Resource, Restrict> {
+        using tensor_buffer_stream_block<bfp16ebs8, Elems, Level, TensorIterDescriptor, Resource, Restrict>::tensor_buffer_stream_block;
+};
+template <unsigned Elems, unsigned Level, typename TensorIterDescriptor, aie_dm_resource Resource, bool Restrict>
+class tensor_buffer_stream<bfp16ebs16, Elems, Level, TensorIterDescriptor, Resource, Restrict> : public tensor_buffer_stream_block<bfp16ebs16, Elems, Level, TensorIterDescriptor, Resource, Restrict> {
+        using tensor_buffer_stream_block<bfp16ebs16, Elems, Level, TensorIterDescriptor, Resource, Restrict>::tensor_buffer_stream_block;
+};
+#endif
 
 #endif
 
@@ -329,6 +509,11 @@ struct random_circular_iterator_storage;
 #elif __AIE_ARCH__ == 20
 
 #include "aie2/array_helpers.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2/array_helpers.hpp"
+#include "aie2p/array_helpers.hpp"
 
 #endif
 
@@ -773,14 +958,18 @@ public:
 
     constexpr reference operator*()
     {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
         RUNTIME_ASSERT(check_vector_alignment<Elems>(ptr_), "Insufficient alignment");
+#endif
 
         return *(pointer)ptr_;
     }
 
     constexpr pointer   operator->()
     {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
         RUNTIME_ASSERT(check_vector_alignment<Elems>(ptr_), "Insufficient alignment");
+#endif
 
         return (pointer)ptr_;
     }
@@ -893,7 +1082,9 @@ public:
 
     constexpr reference operator*()
     {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
         RUNTIME_ASSERT(check_vector_alignment<Elems>(ptr_), "Insufficient alignment");
+#endif
 
         pointer __restrict tmp_ptr = (pointer) ptr_;
         return *tmp_ptr;
@@ -901,7 +1092,9 @@ public:
 
     constexpr pointer operator->()
     {
+#if !AIE_API_DISABLE_ALIGNMENT_ASSERTIONS
         RUNTIME_ASSERT(check_vector_alignment<Elems>(ptr_), "Insufficient alignment");
+#endif
 
         pointer __restrict tmp_ptr = (pointer) ptr_;
         return tmp_ptr;
@@ -1257,6 +1450,63 @@ private:
     using parent_type = fifo_buffer_stream<vector_type, Resource, FifoDirection::In>;
 };
 
+#endif
+
+#if AIE_API_ML_VERSION >= 210
+
+template <BlockType T, unsigned N, aie_dm_resource Resource, bool Restrict>
+class __AIE_API_KEEP_IN_REGISTERS__ block_vector_input_buffer_stream :
+    public fifo_buffer_stream<block_vector<std::remove_const_t<aie_dm_resource_remove_t<T>>, N>, Resource, FifoDirection::In, Restrict>
+
+{
+public:
+    using         elem_type = std::remove_const_t<aie_dm_resource_remove_t<T>>;
+    using       vector_type = block_vector<elem_type, N>;
+
+    using        value_type = vector_type;
+
+    constexpr block_vector_input_buffer_stream(const T *ptr) :
+        parent_type(ptr)
+    {
+    }
+
+    __aie_inline
+    constexpr block_vector_input_buffer_stream &operator>>(vector_type &v)
+    {
+        v = this->pop();
+        return *this;
+    }
+
+private:
+    using parent_type = fifo_buffer_stream<vector_type, Resource, FifoDirection::In, Restrict>;
+};
+
+template <BlockType T, unsigned N, aie_dm_resource Resource, bool Restrict>
+class __AIE_API_KEEP_IN_REGISTERS__ block_vector_output_buffer_stream :
+    public fifo_buffer_stream<block_vector<std::remove_const_t<aie_dm_resource_remove_t<T>>, N>, Resource, FifoDirection::Out, Restrict>
+{
+public:
+    using         elem_type = std::remove_const_t<aie_dm_resource_remove_t<T>>;
+    using       vector_type = block_vector<elem_type, N>;
+
+    using        value_type = vector_type;
+
+    __aie_inline
+    constexpr block_vector_output_buffer_stream(T *ptr) :
+        parent_type(ptr)
+    {
+    }
+
+    __aie_inline
+    constexpr block_vector_output_buffer_stream &operator<<(const vector_type &v)
+    {
+        this->push(v);
+        return *this;
+    }
+
+private:
+    using parent_type = fifo_buffer_stream<vector_type, Resource, FifoDirection::Out, Restrict>;
+};
 #endif
 
 } // namespace aie::detail

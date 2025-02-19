@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -183,7 +183,7 @@ struct cmp_impl
     __aie_inline
     static mask_type run(const T &a, const vector_type &v)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         // zero-comparison assumes zero is on the right hand side,
         // so we need to replace the compare operation with an equivalent
         if (chess_manifest(a == scalar_zero())) {
@@ -198,7 +198,7 @@ struct cmp_impl
     __aie_inline
     static mask_type run(const vector_type &v, const T &a)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         if (chess_manifest(a == scalar_zero()))
             return cmp_zero_bits_impl<Op, type_bits_v<T>, T, Elems>::run(v);
 #endif
@@ -210,7 +210,7 @@ struct cmp_impl
     __aie_inline
     static mask_type run(vector_elem_const_ref<T, Elems2> a, const vector_type &v)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         // zero-comparison assumes zero is on the right hand side,
         // so we need to replace the compare operation with an equivalent
         if (chess_manifest(a == scalar_zero())) {
@@ -226,7 +226,7 @@ struct cmp_impl
     __aie_inline
     static mask_type run(const vector_type &v, vector_elem_const_ref<T, Elems2> a)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         if (chess_manifest(a == scalar_zero()))
             return cmp_zero_bits_impl<Op, type_bits_v<T>, T, Elems>::run(v);
 #endif
@@ -337,7 +337,7 @@ using neq = cmp_impl<CmpOp::NEQ, T, Elems>;
 
 #include "aie1/compare.hpp"
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 #include "aie2/compare.hpp"
 

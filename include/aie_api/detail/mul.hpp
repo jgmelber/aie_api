@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_MUL__HPP__
 #define __AIE_API_DETAIL_MUL__HPP__
 
+#include "broadcast.hpp"
 #include "filter.hpp"
 #include "interleave.hpp"
 #include "shuffle.hpp"
@@ -100,7 +101,7 @@ enum class MulMacroOp
     Add_MulMin,
     Sub_MulMax,
     Sub_MulMin,
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     MulConj1,
     MulConj1Conj2,
     MulConj2,
@@ -151,7 +152,7 @@ static constexpr MulMacroOp swap_conjugate_order()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1) return MulMacroOp::Sub_MulAntisymConj2;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj2) return MulMacroOp::Sub_MulAntisymConj1;
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     if      constexpr (MulOp == MulMacroOp::MulConj1)            return MulMacroOp::MulConj2;
     else if constexpr (MulOp == MulMacroOp::MulConj2)            return MulMacroOp::MulConj1;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1)         return MulMacroOp::NegMulConj2;
@@ -199,7 +200,7 @@ static constexpr MulMacroOp remove_conj1()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1)      return MulMacroOp::Sub_MulAntisym;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj2;
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     if      constexpr (MulOp == MulMacroOp::MulConj1)                 return MulMacroOp::Mul;
     else if constexpr (MulOp == MulMacroOp::MulConj1Conj2)            return MulMacroOp::MulConj2;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1)              return MulMacroOp::NegMul;
@@ -251,7 +252,7 @@ static constexpr MulMacroOp remove_conj2()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj1;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj2)      return MulMacroOp::Sub_MulAntisym;
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     if      constexpr (MulOp == MulMacroOp::MulConj1Conj2)            return MulMacroOp::MulConj1;
     else if constexpr (MulOp == MulMacroOp::MulConj2)                 return MulMacroOp::Mul;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1Conj2)         return MulMacroOp::NegMulConj1;
@@ -277,7 +278,7 @@ constexpr bool has_abs()
             Op == MulMacroOp::Add_MulAbs1Conj2 ||
             Op == MulMacroOp::Sub_MulAbs1      ||
             Op == MulMacroOp::Sub_MulAbs1Conj2);
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     return false;
 #endif
 }
@@ -310,7 +311,7 @@ constexpr bool has_conj1()
             Op == MulMacroOp::Sub_MulSymConj1Conj2     ||
             Op == MulMacroOp::Sub_MulAntisymConj1      ||
             Op == MulMacroOp::Sub_MulAntisymConj1Conj2;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     return (Op == MulMacroOp::MulConj1          ||
             Op == MulMacroOp::MulConj1Conj2     ||
             Op == MulMacroOp::NegMulConj1       ||
@@ -350,7 +351,7 @@ constexpr bool has_conj2()
             Op == MulMacroOp::Sub_MulSymConj1Conj2     ||
             Op == MulMacroOp::Sub_MulAntisymConj2      ||
             Op == MulMacroOp::Sub_MulAntisymConj1Conj2;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     return (Op == MulMacroOp::MulConj2          ||
             Op == MulMacroOp::MulConj1Conj2     ||
             Op == MulMacroOp::NegMulConj2       ||
@@ -374,7 +375,7 @@ constexpr MulMacroOp to_mul_macro_op()
     else if constexpr (Op1 == Operation::Max  && Op2 == Operation::None) return MulMacroOp::MulMax;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return MulMacroOp::MulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return MulMacroOp::Mul;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -397,7 +398,7 @@ constexpr MulMacroOp to_mul_macro_op()
     else if constexpr (Op1 == Operation::Max  && Op2 == Operation::None) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_MulMax        : MulMacroOp::Sub_MulMax;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_MulConj2      : MulMacroOp::Sub_MulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_Mul           : MulMacroOp::Sub_Mul;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -474,7 +475,7 @@ constexpr MulMacroOp to_negmul_macro_op()
     else if constexpr (Op1 == Operation::Conj && Op2 == Operation::Conj) return MulMacroOp::NegMulConj1Conj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return MulMacroOp::NegMulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return MulMacroOp::NegMul;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -547,7 +548,7 @@ constexpr MulMacroOp add_to_op()
     else if constexpr (Op == MulMacroOp::NegMulAntisymConj1Conj2 || Op == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj1Conj2;
     else if constexpr (Op == MulMacroOp::MulMax                  || Op == MulMacroOp::Add_MulMax)               return MulMacroOp::Add_MulMax;
     else if constexpr (Op == MulMacroOp::MulMin                  || Op == MulMacroOp::Add_MulMin)               return MulMacroOp::Add_MulMin;
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     else if constexpr (Op == MulMacroOp::MulConj1                || Op == MulMacroOp::Add_MulConj1)             return MulMacroOp::Add_MulConj1;
     else if constexpr (Op == MulMacroOp::MulConj2                || Op == MulMacroOp::Add_MulConj2)             return MulMacroOp::Add_MulConj2;
     else if constexpr (Op == MulMacroOp::MulConj1Conj2           || Op == MulMacroOp::Add_MulConj1Conj2)        return MulMacroOp::Add_MulConj1Conj2;
@@ -614,7 +615,7 @@ static constexpr auto get_scalar_mul_op()
         return [](const auto &m1, const auto &m2, const auto &a, const auto &acc) { return acc - a * std::min(m1, m2); };
     else if constexpr (MulOp == MulMacroOp::Sub_MulMin)
         return [](const auto &m1, const auto &m2, const auto &a, const auto &acc) { return acc + a * std::min(m1, m2); };
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
     else if constexpr (MulOp == MulMacroOp::MulConj1)
         return [](const auto &_a, const auto &b)                   { auto a = { _a.real, (decltype(_a.imag))-_a.imag }; return a * b; };
     else if constexpr (MulOp == MulMacroOp::MulConj1Conj2)
@@ -991,6 +992,9 @@ struct sliding_mul_sym_uct_bits
 
 template <typename CoeffType, unsigned CoeffBits, typename DataType, unsigned DataBits> struct sliding_mul_ch_accum_tag;
 template <typename CoeffType,                     typename DataType>                    struct sliding_mul_ch_accum_tag<CoeffType,  8, DataType,  8> { using type = acc32; };
+#if __AIE_ARCH__ == 21
+template <typename CoeffType,                     typename DataType>                    struct sliding_mul_ch_accum_tag<CoeffType, 16, DataType, 16> { using type = acc64; };
+#endif
 
 template <typename CoeffType, typename DataType>
 using sliding_mul_ch_accum_tag_t = typename sliding_mul_ch_accum_tag<CoeffType, type_bits_v<CoeffType>, DataType, type_bits_v<DataType>>::type;
@@ -1027,7 +1031,7 @@ struct sliding_mul_ch_bits
     }
 };
 
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ >= 20
 
 // Helpers for complex sliding muls
 namespace {
@@ -1087,7 +1091,7 @@ static std::pair<remove_complex_t<AccIn>, remove_complex_t<AccIn>> unzip_complex
 // into a single complex accumulator
 template <Accum AccIn>
     requires(AccIn::value_class() == AccumClass::Int)
-__aie_inline 
+__aie_inline
 static auto combine_into_complex(const AccIn &real, const AccIn &imag) ->
     accum<accum_tag_t<AccumClass::CInt, AccIn::accum_min_bits()>, AccIn::size()>
 {
@@ -1129,7 +1133,7 @@ auto grow_all(const std::pair<AccIn, AccIn> in) {
 }
 
 
-// AIE2 has limited support for permute patterns. These specializations handle patterns in
+// AIE2 and later architectures have limited support for permute patterns. These specializations handle patterns in
 // which the DataStep is 2. They are implemented by unzipping data first and then calling sliding_mul with DataStep = 1
 
 template <unsigned OutElems, unsigned Points, int CoeffStep, unsigned AccumBits, unsigned CoeffTypeBits, unsigned DataTypeBits, typename CoeffType, typename DataType>
@@ -1184,13 +1188,13 @@ struct sliding_mul_bits_impl<OutElems, Points, 2, 1, 1, AccumBits, CoeffTypeBits
     using  data_type = typename impl_type::data_type;
     using coeff_type = typename impl_type::coeff_type;
     using accum_type = typename impl_type::accum_type;
-    
+
     static constexpr unsigned columns_per_mul = impl_type::columns_per_mul;
     static constexpr unsigned   lanes_per_mul = impl_type::lanes_per_mul;
     static constexpr unsigned         num_mul = impl_type::num_mul;
     static constexpr unsigned           lanes = OutElems;
     static constexpr unsigned          points = Points;
-    
+
     template <MulMacroOp Op, unsigned N_Coeff, unsigned N_Data, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static auto run(const vector<CoeffType, N_Coeff> &coeff,
@@ -1205,18 +1209,18 @@ struct sliding_mul_bits_impl<OutElems, Points, 2, 1, 1, AccumBits, CoeffTypeBits
 
         constexpr unsigned native_coeff_elems = native_vector_length_v<CoeffType>;
         constexpr unsigned coeff_elems = std::max(N_Coeff, native_coeff_elems);
-        
+
         vector<coeff_type, native_coeff_elems> coeff2;
-        
+
         vector<coeff_type, coeff_elems> tmp;
-        
+
         coeff_start = coeff_start % coeff_elems;
-        
+
         tmp = shuffle_down_rotate<coeff_type, coeff_elems>::run(coeff.template grow_replicate<coeff_elems>(),
                 coeff_start);
-        
+
         coeff2 = filter<CoeffType, coeff_elems, FilterOp::Even>::run(tmp, 1).template grow_replicate<native_coeff_elems>();
-        
+
         return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, acc...);
     }
 };
@@ -1274,14 +1278,14 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, 2, 1, 1, AccumBits, C
     using  data_type = typename impl_type::data_type;
     using coeff_type = typename impl_type::coeff_type;
     using accum_type = typename impl_type::accum_type;
-    
+
     static constexpr unsigned columns_per_mul = impl_type::columns_per_mul;
     static constexpr unsigned   lanes_per_mul = impl_type::lanes_per_mul;
     static constexpr unsigned         num_mul = impl_type::num_mul;
     static constexpr unsigned           lanes = Outputs * Channels;
     static constexpr unsigned          points = Points;
     static constexpr unsigned        channels = Channels;
-    
+
     template <MulMacroOp Op, unsigned N_Coeff, unsigned N_Data, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static auto run(const vector<CoeffType, N_Coeff> &coeff,
@@ -1296,18 +1300,18 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, 2, 1, 1, AccumBits, C
 
         constexpr unsigned native_coeff_elems = native_vector_length_v<DataType>;
         constexpr unsigned coeff_elems = std::max(N_Coeff, native_coeff_elems);
-        
+
         vector<coeff_type, native_coeff_elems> coeff2;
-        
+
         vector<coeff_type, coeff_elems> tmp;
-        
+
         coeff_start = coeff_start % coeff_elems;
-        
+
         tmp = shuffle_down_rotate<coeff_type, coeff_elems>::run(coeff.template grow_replicate<coeff_elems>(),
                 coeff_start * Channels);
-        
+
         coeff2 = filter<CoeffType, coeff_elems, FilterOp::Even>::run(tmp, Channels).template grow_replicate<native_coeff_elems>();
-        
+
         return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, acc...);
     }
 };
@@ -1335,6 +1339,13 @@ using sliding_mul_sym_uct = sliding_mul_sym_uct_bits<OutElems, Points, CoeffStep
 template <unsigned Outputs, unsigned Channels, unsigned Points, int CoeffStep, int DataStepX, int DataStepY, unsigned AccumBits, typename CoeffType, typename DataType>
 using   sliding_mul_ch = sliding_mul_ch_bits  <Outputs, Channels, Points, CoeffStep, DataStepX, DataStepY, AccumBits, type_bits_v<CoeffType>, type_bits_v<DataType>, CoeffType, DataType>;
 
+template <unsigned N, typename T>
+__aie_inline
+auto mul_vector_or_scalar(T scalar)
+{
+    return broadcast<T, N>::run(scalar);
+}
+
 }
 
 #if __AIE_ARCH__ == 10
@@ -1349,6 +1360,12 @@ using   sliding_mul_ch = sliding_mul_ch_bits  <Outputs, Channels, Points, CoeffS
 #include "aie2/mul.hpp"
 #include "aie2/mul_reduce.hpp"
 #include "aie2/sliding_mul.hpp"
+
+#elif __AIE_ARCH__ == 21
+
+#include "aie2p/mul.hpp"
+#include "aie2/mul_reduce.hpp"
+#include "aie2p/sliding_mul.hpp"
 
 #endif
 

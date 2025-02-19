@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -231,7 +231,7 @@ struct shuffle_up_replicate_bits
     __aie_inline
     static vector_type run(const vector_type &v, unsigned n)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         return shuffle_up_fill_bits_impl<TypeBits, T, Elems>::run(v, broadcast<T, Elems>::run(v[0]),  n);
 #else
         return shuffle_up_replicate_bits_impl<TypeBits, T, Elems>::run(v, n);
@@ -295,7 +295,7 @@ struct shuffle_down_replicate_bits
     __aie_inline
     static vector_type run(const vector_type &v, unsigned n)
     {
-#if __AIE_ARCH__ == 20
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
         return shuffle_down_fill_bits_impl<TypeBits, T, Elems>::run(v, broadcast<T, Elems>::run(v[Elems - 1]), n);
 #else
         return shuffle_down_replicate_bits_impl<TypeBits, T, Elems>::run(v, n);
@@ -334,7 +334,7 @@ using shuffle_down_replicate = shuffle_down_replicate_bits<type_bits_v<T>, T, El
 #include "aie1/shuffle.hpp"
 #include "aie1/shuffle_replicate.hpp"
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 #include "aie2/shuffle.hpp"
 

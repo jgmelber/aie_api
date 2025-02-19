@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -224,8 +224,14 @@ public:
     }
 
 private:
+#if __AIE_ARCH__ == 20
     const int* LUT_ab_;
     const int* LUT_cd_;
+#elif __AIE_ARCH__ == 21
+    // TODO: CRVO-4468: compr and sparse functions should accept references to const pointers
+    int* LUT_ab_;
+    int* LUT_cd_;
+#endif
     int shift_addr_;
     vector<int32, 16> idx_max_vec_;
     vector<int32, 16> idx_min_vec_;

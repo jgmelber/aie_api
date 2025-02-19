@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -144,20 +144,32 @@ template <unsigned TypeBits, unsigned Elems>
 __aie_inline
 inline constexpr unsigned shuffle_mode<TypeBits, Elems>::zip_mode_low(unsigned step)
 {
-    constexpr unsigned base_shuffle_mode = INTLV_lo_8o16 - (utils::fls(TypeBits / 8)) * 2;
-    return is_bypass(step) ? bypass_sentinel
-           : is_swap(step) ? INTLV_lo_512o1024
-           : base_shuffle_mode - utils::fls(step) * 2;
+    REQUIRES_MSG(step > 0, "Sub-byte step is not allowed");
+    if constexpr (TypeBits < 8) {
+        return shuffle_mode<8, Elems * TypeBits / 8>::zip_mode_low(step * TypeBits / 8);
+    }
+    else {
+        constexpr unsigned base_shuffle_mode = INTLV_lo_8o16 - (utils::fls(TypeBits / 8)) * 2;
+        return is_bypass(step) ? bypass_sentinel
+               : is_swap(step) ? INTLV_lo_512o1024
+               : base_shuffle_mode - utils::fls(step) * 2;
+    }
 }
 
 template <unsigned TypeBits, unsigned Elems>
 __aie_inline
 inline constexpr unsigned shuffle_mode<TypeBits, Elems>::unzip_mode_low(unsigned step)
 {
-    constexpr unsigned base_shuffle_mode = DINTLV_lo_8o16 + (utils::fls(TypeBits / 8)) * 2;
-    return is_bypass(step) ? bypass_sentinel
-           : is_swap(step) ? INTLV_lo_512o1024
-           : base_shuffle_mode + utils::fls(step) * 2;
+    REQUIRES_MSG(step > 0, "Sub-byte step is not allowed");
+    if constexpr (TypeBits < 8) {
+        return shuffle_mode<8, Elems * TypeBits / 8>::unzip_mode_low(step * TypeBits / 8);
+    }
+    else {
+        constexpr unsigned base_shuffle_mode = DINTLV_lo_8o16 + (utils::fls(TypeBits / 8)) * 2;
+        return is_bypass(step) ? bypass_sentinel
+               : is_swap(step) ? INTLV_lo_512o1024
+               : base_shuffle_mode + utils::fls(step) * 2;
+    }
 }
 
 } // namespace aie::detail

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -64,7 +64,7 @@ using abs_square = abs_square_bits<T, TR, Elems>;
 
 #include "aie1/abs_square.hpp"
 
-#elif __AIE_ARCH__ == 20
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
 
 //TODO: Implement abs_square on AIE2
 //#include "aie2/abs.hpp"
