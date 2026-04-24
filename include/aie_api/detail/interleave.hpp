@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -89,7 +89,7 @@ static std::pair<vector<T, Elems>, vector<T, Elems>> unzip_serial(const vector<T
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_zip
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static std::pair<vector_type, vector_type> run(const vector_type &v1, const vector_type &v2, unsigned step)
@@ -102,7 +102,7 @@ struct interleave_bits_zip
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_unzip
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static std::pair<vector_type, vector_type> run(const vector_type &v1, const vector_type &v2, unsigned step)
@@ -119,7 +119,7 @@ struct interleave_bits;
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_custom
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     template <typename... Select>
@@ -157,7 +157,7 @@ struct interleave_bits_custom
 template <unsigned TypeBits, typename T, unsigned Elems, unsigned... Select>
 struct interleave_bits_custom_static
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static_assert(sizeof...(Select) == Elems * 2);
@@ -172,7 +172,7 @@ struct interleave_bits_custom_static
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_butterfly
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static std::pair<vector_type, vector_type> run(const vector_type &a, const vector_type &b, unsigned radix)
@@ -208,7 +208,7 @@ struct interleave_bits_butterfly
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_butterfly_half
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static std::pair<vector_type, vector_type> run(const vector_type &a, const vector_type &b, unsigned radix)
@@ -244,7 +244,7 @@ struct interleave_bits_butterfly_half
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct interleave_bits_crossover
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static std::pair<vector_type, vector_type> run(const vector_type &a, const vector_type &b, unsigned radix)
@@ -307,7 +307,7 @@ using interleave_custom_static = interleave_bits_custom_static<type_bits_v<T>, T
 
 #include "aie1/interleave.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/interleave.hpp"
 

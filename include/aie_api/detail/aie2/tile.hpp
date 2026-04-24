@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -8,6 +8,7 @@
 #define __AIE_API_DETAIL_AIE2_TILE__HPP__
 
 #include "../../aie_types.hpp"
+#include "../config.hpp"
 
 namespace aie::detail {
 
@@ -30,8 +31,13 @@ struct tile_id_hw
 class tile
 {
 private:
-    //FIXME: CRVO-11006
-    static constexpr uint16_t compute_row_offset = 3;
+#if defined(__AIE_DEVICE_MEM_TILE_ROWS__) && defined(__AIE_DEVICE_SHIM_ROWS__)
+    static constexpr uint16_t compute_row_offset = __AIE_DEVICE_MEM_TILE_ROWS__ + __AIE_DEVICE_SHIM_ROWS__;
+#else
+    // CRVO-11006: Legacy fallback — assumes a fixed layout per architecture.
+    // Will be removed once aiecompiler injects __AIE_DEVICE_MEM_TILE_ROWS__ and __AIE_DEVICE_SHIM_ROWS__.
+    static constexpr uint16_t compute_row_offset = arch::is(arch::XDNA2) ? 2 : 3;
+#endif
 
     __aie_inline
     constexpr tile() {}
@@ -90,6 +96,7 @@ public:
     {
         return (rounding_mode)::get_rnd();
     }
+
 };
 
 }

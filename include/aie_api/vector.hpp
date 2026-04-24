@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -11,6 +11,7 @@
 
 #include "concepts.hpp"
 
+#include "detail/complex_traits.hpp"
 #include "detail/utils.hpp"
 #include "detail/vector.hpp"
 #include "vector_elem_ref.hpp"
@@ -25,6 +26,11 @@
 #include "detail/aie2/vector.hpp"
 
 #elif __AIE_ARCH__ == 21
+
+#include "detail/aie2/vector_native_types.hpp"
+#include "detail/aie2/vector.hpp"
+
+#elif __AIE_ARCH__ == 22
 
 #include "detail/aie2/vector_native_types.hpp"
 #include "detail/aie2/vector.hpp"
@@ -59,10 +65,6 @@ concept SupportsPackSign = requires (V v) {
 template <typename V, typename R>
 concept SupportsUnpack  = requires (V v) {
     { v.template unpack<R>() } -> BaseOf<vector_base<R, V::size()>>;
-};
-
-template <typename V, typename R>
-concept SupportsUnpackSign = requires (V v) {
     { v.template unpack_sign<R>(true) } -> BaseOf<vector_base<R, V::size()>>;
 };
 
@@ -282,6 +284,9 @@ public:
     /**
      * \brief Returns a constant reference object to the element on the given index.
      *
+     * \note This returns a proxy object that is implicitly convertible to the underlying element type.
+     *       To eagerly retrieve the element value please use \ref get.
+     *
      * @param idx Index of the element.
      */
     constexpr __aie_inline vector_elem_const_ref<value_type, Elems> operator[](unsigned idx) const
@@ -292,6 +297,9 @@ public:
 
     /**
      * \brief Returns a reference object to the element on the given index.
+     *
+     * \note This returns a proxy object that is implicitly convertible to the underlying element type.
+     * @sa vector::get to retrieve the element value immediately.
      *
      * @param idx Index of the element.
      */
@@ -607,8 +615,8 @@ inline auto vector<T, Elems>::unpack() const -> vector<T2, Elems>
     }
     else if constexpr (detail::type_bits_v<T2> == 2 * detail::type_bits_v<T>) {
         if constexpr (detail::is_complex_v<T>) {
-            using real_type1 = detail::utils::get_complex_component_type_t<T>;
-            using real_type2 = detail::utils::get_complex_component_type_t<T2>;
+            using real_type1 = detail::remove_complex_t<T>;
+            using real_type2 = detail::remove_complex_t<T2>;
             return (*this).template cast_to<real_type1>()
                           .template unpack<real_type2>()
                           .template cast_to<T2>();
@@ -624,7 +632,8 @@ inline auto vector<T, Elems>::unpack() const -> vector<T2, Elems>
         }
     }
     else {
-        using accum_tag = detail::accum_tag_for_type<T2>;
+        constexpr unsigned accum_bits = detail::type_bits_v<T2> == 32 ? 32u : detail::default_accum_bits<T2, T2>();
+        using accum_tag = detail::accum_tag_for_type<T2, accum_bits>;
         accum<accum_tag, Elems> a{*this};
         return a.template to_vector<T2>();
     }
@@ -635,13 +644,13 @@ template <UnpackableFrom<T> T2>
 __aie_inline
 inline auto vector<T, Elems>::unpack_sign(bool sign) const -> vector<T2, Elems>
 {
-    if constexpr(detail::SupportsUnpackSign<base_type, T2>) {
+    if constexpr(detail::SupportsUnpack<base_type, T2>) {
         return base_type::template unpack_sign<T2>(sign);
     }
     else if constexpr (detail::type_bits_v<T2> == 2 * detail::type_bits_v<T>) {
         if constexpr (detail::is_complex_v<T>) {
-            using real_type1 = detail::utils::get_complex_component_type_t<T>;
-            using real_type2 = detail::utils::get_complex_component_type_t<T2>;
+            using real_type1 = detail::remove_complex_t<T>;
+            using real_type2 = detail::remove_complex_t<T2>;
             return (*this).template cast_to<real_type1>()
                           .template unpack_sign<real_type2>(sign)
                           .template cast_to<T2>();
@@ -657,7 +666,8 @@ inline auto vector<T, Elems>::unpack_sign(bool sign) const -> vector<T2, Elems>
         }
     }
     else {
-        using accum_tag = detail::accum_tag_for_type<T2>;
+        constexpr unsigned accum_bits = detail::type_bits_v<T2> == 32 ? 32u : detail::default_accum_bits<T2, T2>();
+        using accum_tag = detail::accum_tag_for_type<T2, accum_bits>;
         accum<accum_tag, Elems> a;
         a.from_vector_sign(*this, sign);
         return a.template to_vector_sign<T2>(sign);
@@ -672,7 +682,8 @@ inline auto vector<T, Elems>::pack() const -> vector<T2, Elems>
     if constexpr(detail::SupportsPack<base_type, T2>)
         return base_type::template pack<T2>();
     else {
-        using accum_tag = detail::accum_tag_for_type<T>;
+        constexpr unsigned accum_bits = detail::type_bits_v<T> == 32 ? 32u : detail::default_accum_bits<T, T>();
+        using accum_tag = detail::accum_tag_for_type<T, accum_bits>;
         accum<accum_tag, Elems> a{*this};
         return a.template to_vector<T2>();
     }
@@ -687,7 +698,8 @@ inline auto vector<T, Elems>::pack_sign(bool sign) const -> vector<T2, Elems>
         return base_type::template pack_sign<T2>(sign);
     }
     else {
-        using accum_tag = detail::accum_tag_for_type<T>;
+        constexpr unsigned accum_bits = detail::type_bits_v<T> == 32 ? 32u : detail::default_accum_bits<T, T>();
+        using accum_tag = detail::accum_tag_for_type<T, accum_bits>;
         accum<accum_tag, Elems> a = from_vector<accum_tag>(op_sign(*this, sign));
         return a.template to_vector_sign<T2>(sign);
     }

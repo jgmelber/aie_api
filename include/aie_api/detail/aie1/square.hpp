@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -32,14 +32,14 @@ struct square_bits_impl<MulOp, 48, 8, T>
             accum_type<64> tmp1, tmp2;
 
             tmp1 = square<MulOp, 48, int16>::run(  v.template extract<64>(0).unpack(),
-                                                 acc.template extract<64>(0)...);
+                                                 false, acc.template extract<64>(0)...);
             tmp2 = square<MulOp, 48, int16>::run(  v.template extract<64>(1).unpack(),
-                                                 acc.template extract<64>(1)...);
+                                                 false, acc.template extract<64>(1)...);
 
             return concat_accum(tmp1, tmp2);
         }
         else {
-            return square<MulOp, 48, int16>::run(v.unpack(), acc...);
+            return square<MulOp, 48, int16>::run(v.unpack(), false, acc...);
         }
     }
 };
@@ -88,14 +88,14 @@ struct square_bits_impl<MulOp, 48, 16, int16>
                                                                                     0, 0x73727170, 0x77767574, 0x3120);
         }
         else if constexpr (Elems == 32) {
-            return concat_accum(square<MulOp, 48, T>::run(v.template extract<16>(0), acc.template extract<16>(0)...),
-                                square<MulOp, 48, T>::run(v.template extract<16>(1), acc.template extract<16>(1)...));
+            return concat_accum(square<MulOp, 48, T>::run(v.template extract<16>(0), false, acc.template extract<16>(0)...),
+                                square<MulOp, 48, T>::run(v.template extract<16>(1), false, acc.template extract<16>(1)...));
         }
         else if constexpr (Elems == 64) {
-            return concat_accum(square<MulOp, 48, T>::run(v.template extract<16>(0), acc.template extract<16>(0)...),
-                                square<MulOp, 48, T>::run(v.template extract<16>(1), acc.template extract<16>(1)...),
-                                square<MulOp, 48, T>::run(v.template extract<16>(2), acc.template extract<16>(2)...),
-                                square<MulOp, 48, T>::run(v.template extract<16>(3), acc.template extract<16>(3)...));
+            return concat_accum(square<MulOp, 48, T>::run(v.template extract<16>(0), false, acc.template extract<16>(0)...),
+                                square<MulOp, 48, T>::run(v.template extract<16>(1), false, acc.template extract<16>(1)...),
+                                square<MulOp, 48, T>::run(v.template extract<16>(2), false, acc.template extract<16>(2)...),
+                                square<MulOp, 48, T>::run(v.template extract<16>(3), false, acc.template extract<16>(3)...));
         }
     }
 };
@@ -142,14 +142,14 @@ struct square_bits_impl<MulOp, 48, 32, cint16>
             return mul_op(acc.template grow<8>()..., v.template grow<16>(), 0, 0x76543210, 0, 0x76543210);
         }
         else if constexpr (Elems == 16) {
-            return concat_accum(square<MulOp, 48, T>::run(v.template extract<8>(0), acc.template extract<8>(0)...),
-                                square<MulOp, 48, T>::run(v.template extract<8>(1), acc.template extract<8>(1)...));
+            return concat_accum(square<MulOp, 48, T>::run(v.template extract<8>(0), false, acc.template extract<8>(0)...),
+                                square<MulOp, 48, T>::run(v.template extract<8>(1), false, acc.template extract<8>(1)...));
         }
         else if constexpr (Elems == 32) {
-            return concat_accum(square<MulOp, 48, T>::run(v.template extract<8>(0), acc.template extract<8>(0)...),
-                                square<MulOp, 48, T>::run(v.template extract<8>(1), acc.template extract<8>(1)...),
-                                square<MulOp, 48, T>::run(v.template extract<8>(2), acc.template extract<8>(2)...),
-                                square<MulOp, 48, T>::run(v.template extract<8>(3), acc.template extract<8>(3)...));
+            return concat_accum(square<MulOp, 48, T>::run(v.template extract<8>(0), false, acc.template extract<8>(0)...),
+                                square<MulOp, 48, T>::run(v.template extract<8>(1), false, acc.template extract<8>(1)...),
+                                square<MulOp, 48, T>::run(v.template extract<8>(2), false, acc.template extract<8>(2)...),
+                                square<MulOp, 48, T>::run(v.template extract<8>(3), false, acc.template extract<8>(3)...));
         }
     }
 };

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -20,9 +20,6 @@ class unaligned_vector_input_buffer_stream;
 
 template <DecoratedElemBaseType T, unsigned Elems, aie_dm_resource Resource>
 class unaligned_vector_output_buffer_stream;
-
-#if (AIE_API_NATIVE == 0 || __AIE_API_NATIVE_FIFO__)
-// TODO: CRVO-4309: fifo instructions not implemented on Native
 
 // Specialization for 512b/1024b input buffer streams, which can leverage the FIFO instructions
 
@@ -145,6 +142,7 @@ class fifo_buffer_stream property(keep_in_registers)
 public:
     using         vector_type = Vector;
     using           elem_type = typename vector_type::value_type;
+    using          accum_type = accum<accum_tag_for_type<elem_type>, vector_type::size()>;
     using native_pointer_type = typename vector_type::native_pointer_type;
     using          value_type = vector_type;
 
@@ -168,8 +166,6 @@ public:
         load_count_ = 0;
         state_.pos = 0;
     }
-
-#if __AIE_API_DIMS_STRUCTS__
 
     __aie_inline
     void seek(dims_2d_t &pattern)
@@ -199,7 +195,6 @@ public:
         load_count_ = 0;
         state_.pos = 0;
     }
-#endif
 
     __aie_inline
     void seek_byte(int inc)
@@ -208,8 +203,6 @@ public:
         load_count_ = 0;
         state_.pos = 0;
     }
-
-#if __AIE_API_DIMS_STRUCTS__
 
     __aie_inline
     void seek_byte(dims_2d_t &pattern)
@@ -226,8 +219,6 @@ public:
         load_count_ = 0;
         state_.pos = 0;
     }
-
-#endif
 
     value_type pop()
     {
@@ -275,8 +266,6 @@ public:
 
         return ret;
     }
-
-#if __AIE_API_DIMS_STRUCTS__
 
     __aie_inline
     value_type pop_seek(dims_2d_t &pattern) requires(Direction == FifoDirection::In)
@@ -355,8 +344,6 @@ public:
         return ret;
     }
 
-#endif
-
     __aie_inline
     void push(const value_type &v) requires(Direction == FifoDirection::Out)
     {
@@ -377,8 +364,6 @@ public:
         ::fifo_st_push(ptr_, v, state_);
         ::fifo_st_flush_1d_byte(ptr_, state_, inc);
     }
-
-#if __AIE_API_DIMS_STRUCTS__
 
     __aie_inline
     void push_seek(const value_type &v, dims_2d_t &pattern) requires(Direction == FifoDirection::Out)
@@ -421,7 +406,25 @@ public:
         ::fifo_st_flush_3d_byte(ptr_, state_, pattern.inc3, pattern.num1, pattern.count1, pattern.inc1, pattern.num2, pattern.count2, pattern.inc2);
     }
 
-#endif
+    __aie_inline
+    void push(const accum_type &acc, int shift) requires(Direction == FifoDirection::Out)
+    {
+        push(acc.template to_vector<elem_type>(shift));
+    }
+
+    template <typename T>
+    __aie_inline
+    void push_seek(const accum_type &acc, int shift, T& pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_seek(acc.template to_vector<elem_type>(shift), pattern);
+    }
+
+    template <typename T>
+    __aie_inline
+    void push_seek_byte(const accum_type &acc, int shift, T& pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_seek_byte(acc.template to_vector<elem_type>(shift), pattern);
+    }
 
 protected:
     __aie_inline
@@ -448,6 +451,11 @@ private:
                                         native_pointer_type *>;
 #endif
 
+#if __AIE_ARCH__ == 22
+    __aie_inline
+    void fill(ptr_type &ptr, fifo_state_t &state) requires(std::is_same_v<typename vector_type::value_type, mx4>) {}
+#endif
+
     __aie_inline
     void fill(ptr_type &ptr, fifo_state_t &state) {
         ::fifo_ld_fill(ptr, state);
@@ -457,6 +465,387 @@ private:
     ptr_type ptr_;
     fifo_state_t state_;
 };
+
+#if __AIE_ARCH__ == 22 && !__AIE_API_EMULATED_MX_LOADS__
+template <typename T, unsigned M, template <typename T_, unsigned M_> class Vec, aie_dm_resource Resource, FifoDirection Direction, bool Restrict>
+    requires (utils::is_one_of_v<T, mx4, mx6, mx9>)
+class fifo_buffer_stream<Vec<T, M>, Resource, Direction, Restrict> property(keep_in_registers)
+{
+public:
+    using         vector_type = Vec<T, M>;
+    using           elem_type = typename vector_type::value_type;
+    using native_pointer_type = typename vector_type::native_pointer_type;
+
+    using          value_type = vector_type;
+
+    static constexpr unsigned    native_ld_bits = 512;
+    static constexpr unsigned native_load_elems = std::min(M, native_block_vector_length_v<T>);
+    static constexpr unsigned         num_loads = vector_type::size() / native_load_elems;
+    static constexpr bool             need_fill = vector_type::memory_bits() % native_ld_bits;
+    static constexpr unsigned     ld_fill_ratio = native_ld_bits / (vector_type::memory_bits() % native_ld_bits);
+
+    __aie_inline
+    void seek(int inc)
+    {
+        // Struct sizes for sparse vectors don't match the actual storage in memory, so we compute it manually
+        ptr_ = ::byte_incr(ptr_, inc * vector_type::memory_bytes());
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    void seek(dims_2d_t &pattern)
+    {
+        // Struct sizes for sparse vectors don't match the actual storage in memory, so we compute it manually
+        ptr_ = ::add_2d_byte(ptr_,
+                             pattern.inc2 * vector_type::memory_bytes(),
+                             pattern.num1,
+                             pattern.count1,
+                             pattern.inc1 * vector_type::memory_bytes());
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    void seek(dims_3d_t &pattern)
+    {
+        // Struct sizes for sparse vectors don't match the actual storage in memory, so we compute it manually
+        ptr_ = ::add_3d_byte(ptr_,
+                             pattern.inc3 * vector_type::memory_bytes(),
+                             pattern.num1,
+                             pattern.count1,
+                             pattern.inc1 * vector_type::memory_bytes(),
+                             pattern.num2,
+                             pattern.count2,
+                             pattern.inc2 * vector_type::memory_bytes());
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    void seek_byte(int inc)
+    {
+        ptr_ = ::byte_incr(ptr_, inc);
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    void seek_byte(dims_2d_t &pattern)
+    {
+        ptr_ = ::add_2d_byte(ptr_, pattern);
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    void seek_byte(dims_3d_t &pattern)
+    {
+        ptr_ = ::add_3d_byte(ptr_, pattern);
+        load_count_ = 0;
+        state_.pos = 0;
+    }
+
+    value_type pop()
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek(int inc) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_1d_byte(ptr_, state_, inc * vector_type::memory_bytes()));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek_byte(int inc) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_1d_byte(ptr_, state_, inc));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek(dims_2d_t &pattern) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_2d_byte(ptr_,
+                                                                     state_,
+                                                                     pattern.inc2 * vector_type::memory_bytes(),
+                                                                     pattern.num1,
+                                                                     pattern.count1,
+                                                                     pattern.inc1 * vector_type::memory_bytes()));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek_byte(dims_2d_t &pattern) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_2d_byte(ptr_, state_, pattern.inc2, pattern.num1, pattern.count1, pattern.inc1));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek(dims_3d_t &pattern) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_3d_byte(ptr_,
+                                                                     state_,
+                                                                     pattern.inc3 * vector_type::memory_bytes(),
+                                                                     pattern.num1,
+                                                                     pattern.count1,
+                                                                     pattern.inc1 * vector_type::memory_bytes(),
+                                                                     pattern.num2,
+                                                                     pattern.count2,
+                                                                     pattern.inc2 * vector_type::memory_bytes()));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    value_type pop_seek_byte(dims_3d_t &pattern) requires(Direction == FifoDirection::In)
+    {
+        value_type ret;
+
+        utils::unroll_times<num_loads - 1>([&](unsigned idx) __aie_inline {
+            // sparse / block vectors are larger than 512b, which is the native memory interface width
+            if (!chess_manifest(load_count_ != 0))
+                ::fifo_ld_fill(ptr_, state_);
+
+            ret.template insert<native_load_elems>(idx, ::fifo_ld_pop(ptr_, state_));
+
+            update_load_count();
+        });
+
+        // sparse / block vectors are larger than 512b, which is the native memory interface width
+        if (!chess_manifest(load_count_ != 0))
+            ::fifo_ld_fill(ptr_, state_);
+
+        ret.template insert<native_load_elems>(num_loads - 1,
+                                               ::fifo_ld_pop_3d_byte(ptr_, state_, pattern.inc3,
+                                                                     pattern.num1, pattern.count1, pattern.inc1,
+                                                                     pattern.num2, pattern.count2, pattern.inc2));
+
+        load_count_ = 0;
+
+        return ret;
+    }
+
+    __aie_inline
+    void push(const value_type &v) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush(ptr_, state_);
+    }
+
+    __aie_inline
+    void push_seek(const value_type &v, int inc) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_1d_byte(ptr_, state_, inc * vector_type::memory_bytes());
+    }
+
+    __aie_inline
+    void push_seek_byte(const value_type &v, int inc) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_1d_byte(ptr_, state_, inc);
+    }
+
+    __aie_inline
+    void push_seek(const value_type &v, dims_2d_t &pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_2d_byte(ptr_,
+                                state_,
+                                pattern.inc2 * vector_type::memory_bytes(),
+                                pattern.num1,
+                                pattern.count1,
+                                pattern.inc1 * vector_type::memory_bytes());
+    }
+
+    __aie_inline
+    void push_seek_byte(const value_type &v, dims_2d_t &pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_2d_byte(ptr_, state_, pattern.inc2, pattern.num1, pattern.count1, pattern.inc1);
+    }
+
+    __aie_inline
+    void push_seek(const value_type &v, dims_3d_t &pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_3d_byte(ptr_,
+                                state_,
+                                pattern.inc3 * vector_type::memory_bytes(),
+                                pattern.num1,
+                                pattern.count1,
+                                pattern.inc1 * vector_type::memory_bytes(),
+                                pattern.num2,
+                                pattern.count2,
+                                pattern.inc2 * vector_type::memory_bytes());
+    }
+
+    __aie_inline
+    void push_seek_byte(const value_type &v, dims_3d_t &pattern) requires(Direction == FifoDirection::Out)
+    {
+        push_common(v);
+        ::fifo_st_flush_3d_byte(ptr_, state_, pattern.inc3, pattern.num1, pattern.count1, pattern.inc1, pattern.num2, pattern.count2, pattern.inc2);
+    }
+
+protected:
+    __aie_inline
+    fifo_buffer_stream(const elem_type *ptr) requires(Direction == FifoDirection::In) :
+        load_count_(0),
+        ptr_((ptr_type)ptr)
+    {
+        state_.pos = 0;
+    }
+
+    __aie_inline
+    fifo_buffer_stream(elem_type *ptr) requires(Direction == FifoDirection::Out) :
+        ptr_((ptr_type)ptr)
+    {
+        state_.pos = 0;
+    }
+
+private:
+
+    __aie_inline
+    void push_common(const value_type &v) {
+        utils::unroll_times<num_loads>([&](unsigned idx) __aie_inline {
+            ::fifo_st_push(ptr_, v.template extract<native_load_elems>(idx), state_);
+        });
+    }
+
+    __aie_inline
+    void update_load_count() {
+        if constexpr (need_fill) load_count_ = (load_count_ + 1) % ld_fill_ratio;
+        else                     load_count_ = 1u;
+    }
+
+#if AIE_API_NATIVE
+    using ptr_type = native_pointer_type *;
+#else
+    using ptr_type = std::conditional_t<Restrict,
+                                        native_pointer_type * __restrict,
+                                        native_pointer_type *>;
+#endif
+
+    unsigned load_count_;
+    ptr_type ptr_;
+    fifo_state_t state_;
+};
+#endif
 
 template <typename T, unsigned Elems, typename IterDescriptor, aie_dm_resource Resource>
     requires (arch::is(arch::Gen2))
@@ -498,7 +887,7 @@ public:
             vector<elem_type, native_elems> ret = ::fifo_ld_popx(ptr_, state_, step_, 63);
 
             increment();
-            
+
             return ret.template extract<Elems>(0);
         }
         else {
@@ -521,7 +910,7 @@ public:
     constexpr bool operator!=(const sliding_window_buffer_stream& rhs) { return ptr_ != rhs.ptr_; }
 
 private:
-    static constexpr unsigned subbyte_elems = type_bits_v<elem_type> == 4 ? 2 : 1;
+    static constexpr unsigned subbyte_elems = std::max(1u, 8 / type_bits_v<elem_type>);
     static constexpr unsigned native_elems  = native_vector_length_v<elem_type>;
     using native_vector_type = add_memory_bank_t<Resource, aie_dm_resource_set_t<vector<elem_type, native_elems>, aie_dm_resource_get_v<T>>>;
     using native_type        = typename native_vector_type::native_type;
@@ -560,8 +949,6 @@ private:
 };
 
 } // namespace detail
-
-#endif
 
 } // namespace aie
 

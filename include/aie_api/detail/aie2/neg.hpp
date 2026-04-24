@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -36,7 +36,7 @@ struct neg_bits_impl_common
 
     static_assert(vector_type::is_signed());
 
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     using native_op = neg_bits_impl_common<T, native_elems>;
 
     static vector_type run(const vector_type &v)
@@ -103,7 +103,7 @@ struct neg_bits_impl<16, bfloat16, Elems>
     }
 };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <unsigned Elems>
 struct neg_bits_impl<32, float, Elems>
 {
@@ -203,7 +203,7 @@ struct neg_acc_common_impl
         }
         else {
             utils::unroll_times<Elems / NativeNegElems>([&](auto idx){
-                ret.insert(idx, ::neg(acc.template extract<NativeNegElems>(idx))); 
+                ret.insert(idx, ::neg(acc.template extract<NativeNegElems>(idx)));
             });
         }
 
@@ -219,13 +219,17 @@ template <unsigned Elems> struct neg_acc_bits_impl<32,  accfloat, Elems> : publi
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 template <unsigned Elems> struct neg_acc_bits_impl<32, caccfloat, Elems> : public neg_acc_common_impl<32, caccfloat, Elems,  8> {};
 #endif
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 template <unsigned Elems> struct neg_acc_bits_impl<32,     acc32, Elems> : public neg_acc_common_impl<32,     acc32, Elems, 64> {};
 template <unsigned Elems> struct neg_acc_bits_impl<64,     acc64, Elems> : public neg_acc_common_impl<64,     acc64, Elems, 32> {};
 template <unsigned Elems> struct neg_acc_bits_impl<64,    cacc64, Elems> : public neg_acc_common_impl<64,    cacc64, Elems, 16> {};
 template <unsigned Elems> struct neg_acc_bits_impl<32,  accfloat, Elems> : public neg_acc_common_impl<32,  accfloat, Elems, 32> {};
 #if __AIE_API_COMPLEX_FP32_EMULATION__
+#if __AIE_ARCH__ == 21
 template <unsigned Elems> struct neg_acc_bits_impl<32, caccfloat, Elems> : public neg_acc_common_impl<32, caccfloat, Elems, 16> {};
+#elif __AIE_ARCH__ == 22
+template <unsigned Elems> struct neg_acc_bits_impl<32, caccfloat, Elems> : public neg_acc_common_impl<32, caccfloat, Elems,  8> {};
+#endif
 #endif
 #endif
 

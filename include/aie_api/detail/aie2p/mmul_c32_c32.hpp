@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_MMUL_C32_C32__HPP__
 #define __AIE_API_DETAIL_AIE2P_MMUL_C32_C32__HPP__
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 
 #include "../broadcast.hpp"
 
@@ -28,8 +30,8 @@ struct mmul_c32_c32<1, 2, 8, 64> : public C_block<cint32, cint32, 64, 8, 1>
     __aie_inline void mac(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
         vector<TypeA, 16> tmp;
-        tmp.template insert(0, broadcast<TypeA, 8>::run(a[0]));
-        tmp.template insert(1, broadcast<TypeA, 8>::run(a[1]));
+        tmp.insert(0, broadcast<TypeA, 8>::run(a[0]));
+        tmp.insert(1, broadcast<TypeA, 8>::run(a[1]));
 
         accum<cacc64, 16> acc;
 
@@ -48,8 +50,8 @@ struct mmul_c32_c32<1, 2, 8, 64> : public C_block<cint32, cint32, 64, 8, 1>
     __aie_inline void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
         vector<TypeA, 16> tmp;
-        tmp.template insert(0, broadcast<TypeA, 8>::run(a[0]));
-        tmp.template insert(1, broadcast<TypeA, 8>::run(a[1]));
+        tmp.insert(0, broadcast<TypeA, 8>::run(a[0]));
+        tmp.insert(1, broadcast<TypeA, 8>::run(a[1]));
 
         accum<cacc64, 16> acc;
 
@@ -71,4 +73,5 @@ struct mmul<M, K, N, cint32, cint32, 64> : public mmul_c32_c32<M, K, N, 64> { us
 
 }
 
-#endif
+#endif // __AIE_API_COMPLEX_VECTOR_SUPPORT__
+#endif // __AIE_API_DETAIL_AIE2P_MMUL_C32_C32__HPP__

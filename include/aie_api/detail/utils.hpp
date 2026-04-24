@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -106,7 +106,9 @@ template <> struct get_next_integer_type<uint8_t>  { using type = uint16_t; };
 template <> struct get_next_integer_type<uint16_t> { using type = uint32_t; };
 template <> struct get_next_integer_type<uint32_t> { using type = uint64_t; };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct get_next_integer_type<cint16>   { using type = cint32;   };
+#endif
 
 #if AIE_API_ML_VERSION >= 200
 template <> struct get_next_integer_type<int4_t>   { using type = int8_t;   };
@@ -134,7 +136,9 @@ template <> struct get_prev_integer_type<uint16_t> { using type = uint8_t;  };
 template <> struct get_prev_integer_type<uint32_t> { using type = uint16_t; };
 template <> struct get_prev_integer_type<uint64_t> { using type = uint32_t; };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct get_prev_integer_type<cint32>   { using type = cint16;   };
+#endif
 
 #if AIE_API_ML_VERSION >= 200
 template <> struct get_prev_integer_type<int8_t>   { using type = int4_t;   };
@@ -147,28 +151,6 @@ template <> struct get_prev_integer_type<uint8_t>  { using type = uint4_t;  };
  */
 template <typename T>
 using get_prev_integer_type_t = typename get_prev_integer_type<T>::type;
-
-template <typename T>
-struct get_complex_component_type
-{
-    using type = void;
-};
-
-template <> struct get_complex_component_type<cint16>  { using type = int16_t; };
-template <> struct get_complex_component_type<cint32>  { using type = int32_t; };
-
-#if AIE_API_MATH_VERSION >= 100 || __AIE_API_COMPLEX_FP32_EMULATION__
-#if __AIE_API_CBF16_SUPPORT__
-template <> struct get_complex_component_type<cbfloat16> { using type = bfloat16; };
-#endif
-template <> struct get_complex_component_type<cfloat>    { using type = float;    };
-#endif
-
-/*
- * Obtain the type of the real and imaginary components of a given complex type
- */
-template <typename T>
-using get_complex_component_type_t = typename get_complex_component_type<T>::type;
 
 template <typename T>
 struct num_elems
@@ -397,7 +379,7 @@ public:
     {
 #if __AIE_ARCH__ == 10
         idx_ = (unsigned)uintptr_t(::cyclic_add((char *)uintptr_t(idx_), 1, (char *)uintptr_t(0), max_));
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
         ::add_2d_ptr((char *)uintptr_t(0), -int(max_ - 1), max_ - 1, idx_, 1);
 #endif
         return *this;
@@ -414,7 +396,7 @@ public:
 private:
 #if __AIE_ARCH__ == 10
     unsigned idx_;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     addr_t idx_;
 #endif
     const unsigned max_;
@@ -465,7 +447,7 @@ public:
 private:
 #if __AIE_ARCH__ == 10
     unsigned idx_;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     addr_t idx_;
 #endif
 };
@@ -503,7 +485,7 @@ struct unroll_for_helper
 
     template <typename Fn>
     __aie_inline
-    static void execute(Fn && fn)
+    static constexpr void execute(Fn && fn)
     {
         if constexpr ((Step > 0 && It < End) || (Step < 0 && It > End)) {
             constexpr iteration_dim<T, Start, End, It> it{};
@@ -561,7 +543,7 @@ struct unroll_for_helper_2d
 
     template <typename Fn>
     __aie_inline
-    static void execute(Fn && fn)
+    static constexpr void execute(Fn && fn)
     {
 
         if constexpr (((StepY > 0 && ItY < EndY) || (StepY < 0 && ItY > EndY)) &&
@@ -598,7 +580,7 @@ struct unroll_for_helper_2d
  */
 template <typename T, T Start, T End, T Step = 1, typename Fn>
 __aie_inline
-void unroll_for(Fn &&fn)
+constexpr void unroll_for(Fn &&fn)
 {
     unroll_for_helper<T, Start, End, Start, Step>::execute(std::forward<Fn>(fn));
 }
@@ -609,7 +591,7 @@ void unroll_for(Fn &&fn)
  */
 template <typename T, T StartY, T EndY, T StepY, T StartX, T EndX, T StepX, typename Fn>
 __aie_inline
-void unroll_for_2d(Fn &&fn)
+constexpr void unroll_for_2d(Fn &&fn)
 {
     unroll_for_helper_2d<T, StartY, EndY, StartY, StepY, StartX, EndX, StartX, StepX>::execute(std::forward<Fn>(fn));
 }
@@ -620,7 +602,7 @@ void unroll_for_2d(Fn &&fn)
  */
 template <unsigned Times, typename Fn>
 __aie_inline
-void unroll_times(Fn &&fn)
+constexpr void unroll_times(Fn &&fn)
 {
     unroll_for<unsigned, 0, Times, 1>(std::forward<Fn>(fn));
 }
@@ -631,7 +613,7 @@ void unroll_times(Fn &&fn)
  */
 template <unsigned TimesY, unsigned TimesX, typename Fn>
 __aie_inline
-void unroll_times_2d(Fn &&fn)
+constexpr void unroll_times_2d(Fn &&fn)
 {
     unroll_for_2d<unsigned, 0, TimesY, 1, 0, TimesX, 1>(std::forward<Fn>(fn));
 }
@@ -652,39 +634,12 @@ auto make_array(Callable&& callable, Args... args)
     return make_array_helper(std::forward<Callable&&>(callable), seq{}, std::forward<Args&&>(args)...);
 }
 
-#if !__AIE_API_BUILTIN_CLZ__
-__aie_inline
-static constexpr unsigned clz_impl(unsigned n)
-{
-    unsigned ret = 0;
-
-    for (int i = 31; i >= 0; --i) {
-        if ((1 << i) & n) break;
-        ++ret;
-    }
-
-    return ret;
-}
-#endif
-
 // Helper to compute the number of leading zeros of a value. When the input value is known at compile time it calls a
 // constexpr function. Otherwise, it uses the intrinc functions for AIE.
 __aie_inline
 static constexpr inline unsigned clz(unsigned n)
 {
-#if __AIE_API_BUILTIN_CLZ__
     return __builtin_clz(n);
-#else
-    if (std::is_constant_evaluated()) {
-        return clz_impl(n);
-    }
-    else {
-        if (chess_const(n) && chess_const(0))
-            return clz_impl(n);
-        else
-            return ::clb(n);
-    }
-#endif
 }
 
 // Helper to the index of the last set bit in the given a value. When the input value is known at compile time it calls
@@ -752,19 +707,23 @@ static constexpr inline unsigned ceildiv(unsigned num, unsigned div)
 // Run-time assertion to check that an expression evaluates to true. This check is *disabled* on LLVM. Instead, an
 // annotation is given for the compiler to assume that the exression evaluates to true. The compiler can use
 // this information to introduce more optimizations.
-#define RUNTIME_ASSERT(e, m)           __builtin_assume(e)
+#define RUNTIME_ASSERT(e, m)    \
+    do {                        \
+        bool cond = (e);        \
+        __builtin_assume(cond); \
+    } while(0)
 
 // Same as RUNTIME_ASSERT, but no annotation is given to the compiler
 #define RUNTIME_ASSERT_NO_ASSUME(e, m)
 
 // Assertions to check that an expression evaluates to true. If possible, the expresion is evaluated at compile time.
-#define REQUIRES_MSG(a, m)                           \
-    do {                                             \
-        if (chess_const(a)) {                        \
-            STATIC_ASSERT_CONSTANT_EXPRESSION(a, m); \
-        } else {                                     \
-            __builtin_assume(a);                     \
-        }                                            \
+#define REQUIRES_MSG(a, m)                              \
+    do {                                                \
+        if (const bool cond = (a); chess_const(cond)) { \
+            STATIC_ASSERT_CONSTANT_EXPRESSION(a, m);    \
+        } else {                                        \
+            __builtin_assume(cond);                     \
+        }                                               \
     } while (0)
 
 #define REQUIRES(a)                 REQUIRES_MSG(a, "Requirement " STRINGIFY(a) " not met")
@@ -805,7 +764,7 @@ auto apply_tuple(Function &&f, TupleLike &&t)
 
 #if __AIE_ARCH__ == 10
 #include "aie1/utils.hpp"
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 #include "aie2/utils.hpp"
 #endif
 
@@ -863,7 +822,11 @@ namespace std {
         static constexpr bool has_infinity             = true;
         static constexpr bool has_quiet_NaN            = true;
         static constexpr bool has_signaling_NaN        = false;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        // Deprecated since C++23
         static constexpr float_denorm_style has_denorm = denorm_absent;
+#pragma GCC diagnostic pop
         static constexpr bool has_denorm_loss          = false;
         static constexpr bool is_iec559                = false;
         static constexpr bool is_bounded               = false;

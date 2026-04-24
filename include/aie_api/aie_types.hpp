@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -26,6 +26,11 @@
  */
 namespace aie {
 
+/**
+ * @ingroup group_config
+ *
+ * Saturation modes
+ */
 enum class saturation_mode : unsigned {
     none      = 0, //!< Allows values to overflow.
     truncate  [[deprecated("Use saturate instead")]] = 1, //!< Deprecated: use saturate instead.
@@ -33,18 +38,23 @@ enum class saturation_mode : unsigned {
     symmetric = 3  //!< Retain maximum/minimum value on positive/negative overflow (signed types only). Max and min limits have exactly the same absolute value.
 };
 
+/**
+ * @ingroup group_config
+ *
+ * Rounding modes
+ */
 enum class rounding_mode : unsigned {
-  floor           = rnd_floor,     /**< Always round towards negative infinity. */
-  ceil            = rnd_ceil,      /**< Always round towards positive infinity. */
-  positive_inf    = rnd_pos_inf,   /**< Round to nearest integer, with preference to positive infinity at half-way. */
-  negative_inf    = rnd_neg_inf,   /**< Round to nearest integer, with preference to negative infinity at half-way. */
-  symmetric_inf   = rnd_sym_inf,   /**< Round to nearest integer, with preference away from zero at half-way. */
-  symmetric_zero  = rnd_sym_zero,  /**< Round to nearest integer, with preference towards zero at half-way. */
-  conv_even       = rnd_conv_even, /**< Round to nearest integer, with preference to even numbers. */
-  conv_odd        = rnd_conv_odd,  /**< Round to nearest integer, with preference to odd  numbers. */
+    floor           = rnd_floor,     /**< Always round towards negative infinity. */
+    ceil            = rnd_ceil,      /**< Always round towards positive infinity. */
+    positive_inf    = rnd_pos_inf,   /**< Round to nearest integer, with preference to positive infinity at half-way. */
+    negative_inf    = rnd_neg_inf,   /**< Round to nearest integer, with preference to negative infinity at half-way. */
+    symmetric_inf   = rnd_sym_inf,   /**< Round to nearest integer, with preference away from zero at half-way. */
+    symmetric_zero  = rnd_sym_zero,  /**< Round to nearest integer, with preference towards zero at half-way. */
+    conv_even       = rnd_conv_even, /**< Round to nearest integer, with preference to even numbers. */
+    conv_odd        = rnd_conv_odd,  /**< Round to nearest integer, with preference to odd  numbers. */
 #if AIE_API_PLATFORM_VERSION >= 200
-  symmetric_floor = rnd_sym_floor, /**< Always round towards zero. */
-  symmetric_ceil  = rnd_sym_ceil,  /**< Always round away from zero. */
+    symmetric_floor = rnd_sym_floor, /**< Always round towards zero. Available from AIE-ML/XDNA1 onwards. */
+    symmetric_ceil  = rnd_sym_ceil,  /**< Always round away from zero. Available from AIE-ML/XDNA1 onwards. */
 #endif
 };
 
@@ -160,8 +170,10 @@ class sparse_vector;
 template <BlockType T, unsigned Elems>
 class block_vector;
 
+#if __AIE_ARCH__ == 21
 template <BlockType T, unsigned Elems>
 using bfp_vector [[deprecated("Use block_vector<T, Elems> instead")]] = block_vector<T, Elems>;
+#endif
 
 #endif
 /**

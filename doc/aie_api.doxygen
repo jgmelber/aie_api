@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2022 Xilinx, Inc.
-# Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+# Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 # Doxyfile 1.13.2
 
@@ -52,7 +52,7 @@ PROJECT_NAME           = "AI Engine API User Guide"
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = "(AIE-API)           2025.1"
+PROJECT_NUMBER         = "(AIE-API) 2026.1"
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewers a
@@ -1044,7 +1044,8 @@ RECURSIVE              = YES
 EXCLUDE                = ../include/aie_api/aie_declaration.hpp \
                          ../include/aie_api/detail/aie1 \
                          ../include/aie_api/detail/aie2 \
-                         ../include/aie_api/detail/aie2p
+                         ../include/aie_api/detail/aie2p \
+                         ../include/aie_api/detail/aie2ps
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
@@ -1415,7 +1416,8 @@ HTML_STYLESHEET        =
 # documentation.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_EXTRA_STYLESHEET  = ./html_extra/tables.css
+HTML_EXTRA_STYLESHEET  = ./html_extra/tables.css \
+                         ./html_extra/dark.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1826,7 +1828,7 @@ OBFUSCATE_EMAILS       = YES
 # The default value is: png.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_FORMULA_FORMAT    = svg
+HTML_FORMULA_FORMAT    = png
 
 # Use this tag to change the font size of LaTeX formulas included as images in
 # the HTML documentation. When you change the font size after a successful
@@ -1835,7 +1837,7 @@ HTML_FORMULA_FORMAT    = svg
 # Minimum value: 8, maximum value: 50, default value: 10.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-FORMULA_FONTSIZE       = 12
+FORMULA_FONTSIZE       = 10
 
 # The FORMULA_MACROFILE can contain LaTeX \newcommand and \renewcommand commands
 # to create new LaTeX commands to be used in formulas as building blocks. See
@@ -1852,7 +1854,7 @@ FORMULA_MACROFILE      =
 # The default value is: NO.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-USE_MATHJAX            = NO
+USE_MATHJAX            = YES
 
 # With MATHJAX_VERSION it is possible to specify the MathJax version to be used.
 # Note that the different versions of MathJax have different requirements with

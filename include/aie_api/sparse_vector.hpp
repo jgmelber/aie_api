@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -16,6 +16,10 @@
 #include "detail/aie2/sparse_vector_native_types.hpp"
 
 #elif __AIE_ARCH__ == 21
+
+#include "detail/aie2/sparse_vector_native_types.hpp"
+
+#elif __AIE_ARCH__ == 22
 
 #include "detail/aie2/sparse_vector_native_types.hpp"
 
@@ -271,13 +275,20 @@ public:
         if constexpr (detail::utils::num_elems_v<storage_t> == 2) {
             return data[idx];
         }
-#if __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
         else if constexpr (bytes() == 256) {
             constexpr auto extract_op = []() {
                 if      constexpr (std::is_same_v<value_type, int8>)     return [](auto&& v, int idx) { return ::extract_v128int8_sparse(v,    idx); };
                 else if constexpr (std::is_same_v<value_type, uint8>)    return [](auto&& v, int idx) { return ::extract_v128uint8_sparse(v,   idx); };
                 else if constexpr (std::is_same_v<value_type, int16>)    return [](auto&& v, int idx) { return ::extract_v64int16_sparse(v,    idx); };
                 else if constexpr (std::is_same_v<value_type, uint16>)   return [](auto&& v, int idx) { return ::extract_v64uint16_sparse(v,   idx); };
+#if __AIE_ARCH__ == 22
+                else if constexpr (std::is_same_v<value_type, bfloat16>) return [](auto&& v, int idx) { return ::extract_v64bfloat16_sparse(v, idx); };
+                else if constexpr (std::is_same_v<value_type, float16>)  return [](auto&& v, int idx) { return ::extract_v64float16_sparse(v,  idx); };
+                //TODO: Enable when type support is added
+                //else if constexpr (std::is_same_v<value_type, bfloat8>)  return [](auto&& v, int idx) { return ::extract_v128bfloat8_sparse(v, idx); };
+                //else if constexpr (std::is_same_v<value_type, float8>)   return [](auto&& v, int idx) { return ::extract_v128float8_sparse(v,  idx); };
+#endif
             }();
 
             return extract_op(data, idx);
@@ -293,7 +304,7 @@ public:
     vector<T, Elems / 2> extract_data() const
     // Even though this type won't be instantiate in unsupported architectures,
     // ::extract_sparse_data does not exist in AIE1 and will trigger a compiler error. 
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     {
         if constexpr (detail::utils::num_elems_v<storage_t> == 2 || bytes() == 256) {
             vector<T, Elems / 2> ret;

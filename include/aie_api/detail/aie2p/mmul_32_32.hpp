@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -22,6 +22,8 @@ namespace aie::detail {
 
 template <unsigned M, unsigned K, unsigned N, typename TypeA, typename TypeB, unsigned AccumBits>
 struct mmul_32_32;
+
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 template <typename TypeA, typename TypeB>
 struct mmul_32_32<4, 2, 8, TypeA, TypeB, 64> : public C_block<TypeA, TypeB, 64, 32, 1>
@@ -97,14 +99,14 @@ public:
     {
     }
 
-    __aie_inline 
+    __aie_inline
     void mac(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
         const auto b_4x8 = wide_vec(b);
         impl.mac(a, a_sign, b_4x8, b_sign);
     }
 
-    __aie_inline 
+    __aie_inline
     void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
         const auto b_4x8 = concat(interleave_zip<TypeB, 16>::run(b, {}, 4));
@@ -200,17 +202,26 @@ struct mmul_32_32<4, 1, 8, TypeA, TypeB, 64> : public C_block<TypeA, TypeB, 64, 
         //      a2,  0,       0,  0,  0,  0,  0,  0,  0,  0}     a2*b0, a2*b1, a2*b2, a2*b3, a2*b4, a2*b5, a2*b6, a2*b7,
         //      a3,  0}                                          a3*b0, a3*b1, a3*b2, a3*b3, a3*b4, a3*b5, a3*b6, a3*b7,
         vector<TypeA, 16> ai = ::shuffle(a.template grow<16>(), zeros<TypeA, 16>::run(), T32_2x16_lo);
-        this->data = ::mac_4x2_2x8_conf(ai.template grow<32>(), a_sign, b.template grow<16>(), b_sign, this->data, this->zero, 0, 0);
+        vector<uint16, 32> lo = (v32uint16)::shuffle(b.template grow<16>(), T16_32x2_lo);
+        vector< int16, 32> hi =  (v32int16)::shuffle(b.template grow<16>(), T16_32x2_hi);
+        accum<acc64, 32> acc = ::mul_4x2_2x8(ai.template grow<16>(), a_sign, hi, b_sign);
+                         acc = ::mac_4x2_2x8_conf(ai.template grow<16>(), a_sign, lo, false, acc, 0, 1, 0, 0);
+        this->data = ::add_conf(this->data, acc, this->zero, 0, 0, 0);
         this->zero = false;
     }
 
     __aie_inline void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
         vector<TypeA, 16> ai = ::shuffle(a.template grow<16>(), zeros<TypeA, 16>::run(), T32_2x16_lo);
-        this->data = ::mul_4x2_2x8(ai.template grow<32>(), a_sign, b.template grow<16>(), b_sign);
+        vector<uint16, 32> lo = (v32uint16)::shuffle(b.template grow<16>(), T16_32x2_lo);
+        vector< int16, 32> hi =  (v32int16)::shuffle(b.template grow<16>(), T16_32x2_hi);
+        accum<acc64, 32> acc = ::mul_4x2_2x8(ai.template grow<16>(), a_sign, hi, b_sign);
+        this->data = ::mac_4x2_2x8_conf(ai.template grow<16>(), a_sign, lo, false, acc, 0, 1, 0, 0);
         this->zero = false;
     }
 };
+
+#endif
 
 template <unsigned M, unsigned K, unsigned N>
 struct mmul<M, K, N, int32, int32, 64>   : public mmul_32_32<M, K, N, int32,  int32, 64>  { using mmul_32_32<M, K, N, int32,  int32, 64>::mmul_32_32; };
@@ -223,85 +234,6 @@ struct mmul<M, K, N, int32, uint32, 64>  : public mmul_32_32<M, K, N, int32,  ui
 
 template <unsigned M, unsigned K, unsigned N>
 struct mmul<M, K, N, uint32, int32, 64>  : public mmul_32_32<M, K, N, uint32, int32, 64>  { using mmul_32_32<M, K, N, uint32, int32, 64>::mmul_32_32; };
-
-
-#if __AIE_API_FP32_EMULATION__
-template <>
-struct mmul_32_32<4, 8, 4, float, float, 32> : public C_block<float, float, 32, 16, 1>
-{
-    using vector_A_type = vector<float, 32>;
-    using vector_B_type = vector<float, 32>;
-
-    using C_block<float, float, 32, 16, 1>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        this->data = ::mac_4x8_8x4_fp32(a, b, this->data, this->zero);
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        this->data = ::mul_4x8_8x4_fp32(a, b);
-        this->zero = false;
-    }
-};
-
-template <>
-struct mmul_32_32<4, 1, 4, float, float, 32> : public C_block<float, float, 32, 16, 1>
-{
-    using vector_A_type = vector<float, 4>;
-    using vector_B_type = vector<float, 4>;
-
-    using C_block<float, float, 32, 16, 1>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-#if __AIE_API_EMULATED_FP32_ZEROIZATION__
-        this->data = ::mac_elem_16_conf(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>(), this->data, this->zero, 0, 0);
-#else
-        this->data = ::mac_elem_16(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>(), this->data);
-#endif
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        this->data = ::mul_elem_16(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>());
-        this->zero = false;
-    }
-};
-
-template <>
-struct mmul_32_32<4, 1, 8, float, float, 32> : public C_block<float, float, 32, 32, 1>
-{
-    using vector_A_type = vector<float, 4>;
-    using vector_B_type = vector<float, 8>;
-
-    using C_block<float, float, 32, 32, 1>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        auto ai = transpose<float, 32>::run(a.template grow_replicate<32>(), 8, 4);
-#if __AIE_API_EMULATED_FP32_ZEROIZATION__
-        this->data = ::mac_elem_32_conf(ai, b.template grow_replicate<32>(), this->data, this->zero, 0, 0);
-#else
-        this->data = ::mac_elem_32(ai, b.template grow_replicate<32>(), this->data);
-#endif
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        auto ai = transpose<float, 32>::run(a.template grow_replicate<32>(), 8, 4);
-        this->data = ::mul_elem_32(ai, b.template grow_replicate<32>());
-        this->zero = false;
-    }
-};
-
-template <unsigned M, unsigned K, unsigned N>
-struct mmul<M, K, N, float, float, 32>  : public mmul_32_32<M, K, N, float, float, 32>  { using mmul_32_32<M, K, N, float, float, 32>::mmul_32_32; };
-#endif
 
 } // namespace aie::detail
 

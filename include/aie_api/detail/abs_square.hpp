@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -17,7 +17,7 @@ namespace aie::detail {
 template <typename T, typename TR, unsigned Elems>
 struct abs_square_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using return_type = vector<TR, Elems>;
     using vector_type = vector<T, Elems>;
 
@@ -64,10 +64,9 @@ using abs_square = abs_square_bits<T, TR, Elems>;
 
 #include "aie1/abs_square.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
-//TODO: Implement abs_square on AIE2
-//#include "aie2/abs.hpp"
+#include "aie2/abs_square.hpp"
 
 #endif
 

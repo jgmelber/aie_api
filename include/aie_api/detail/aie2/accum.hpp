@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_ACCUM__HPP__
 #define __AIE_API_DETAIL_AIE2_ACCUM__HPP__
+
+#include <algorithm>
 
 #include "accum_native_types.hpp"
 
@@ -77,12 +79,14 @@ static __aie_inline accum_storage_t<Class, Bits, DstElems> accum_cast_helper(T &
         if constexpr (DstElems == 32)                return v32accfloat(from);
         if constexpr (DstElems >= 64)                return utils::make_array<Blocks>([](auto f) __aie_inline { return v32accfloat(f); }, from);
     }
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
     else if constexpr (Class == AccumClass::CInt) {
         if constexpr (DstElems == 2)                 return v2cacc64(from);
         if constexpr (DstElems == 4)                 return v4cacc64(from);
         if constexpr (DstElems == 8)                 return v8cacc64(from);
         if constexpr (DstElems >= 16)                return utils::make_array<Blocks>([](auto f) __aie_inline { return v8cacc64(f); }, from);
     }
+#endif
 #if __AIE_API_COMPLEX_FP32_EMULATION__
     else if constexpr (Class == AccumClass::CFP) {
         if constexpr (DstElems == 2)                 return v4caccfloat(from);
@@ -109,12 +113,14 @@ template <> inline __aie_inline auto accum_extract<8,   v8acc64>(const  v8acc64&
 template <> inline __aie_inline auto accum_extract<4,   v8acc64>(const  v8acc64& acc, unsigned idx) { return ::extract_v4acc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<4,   v4acc64>(const  v4acc64& acc, unsigned idx) { return acc; }
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> inline __aie_inline auto accum_extract<8,   v8cacc64>(const  v8cacc64& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<4,   v8cacc64>(const  v8cacc64& acc, unsigned idx) { return ::extract_v4cacc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<2,   v8cacc64>(const  v8cacc64& acc, unsigned idx) { return ::extract_v2cacc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<4,   v4cacc64>(const  v4cacc64& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<2,   v4cacc64>(const  v4cacc64& acc, unsigned idx) { return ::extract_v2cacc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<2,   v2cacc64>(const  v2cacc64& acc, unsigned idx) { return acc; }
+#endif
 
 template <> inline __aie_inline auto accum_extract<32, v32accfloat>(const v32accfloat& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<16, v32accfloat>(const v32accfloat& acc, unsigned idx) { return ::extract_v16accfloat(acc, idx); }
@@ -157,6 +163,9 @@ class accum_base
     template <AccumClass C2, unsigned MN2, unsigned E2>
     friend class accum_base;
 
+    // Returned when UPS/SRS argument type is not supported (e.g. acc32 for input complex vectors)
+    struct unsupported_ups {};
+    struct unsupported_srs {};
 public:
     using value_type = accum_tag_t<Class, MinBits>;
     using storage_t  = accum_storage_t<Class, Bits, Elems>;
@@ -826,6 +835,7 @@ private:
                     return [](const auto &v, int shift, bool sign) __aie_inline { REQUIRES(shift == 0); return (v16acc32)v; };
             }
         }
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
         else if constexpr (utils::is_one_of_v<T, cint16>) {
             if constexpr (Bits == 64) {
                 if constexpr (Elems2 == 4)
@@ -841,6 +851,10 @@ private:
                 return [](const auto &v, int shift, bool sign) __aie_inline { return ::ups_to_v4cacc64(v, shift, sign);  };
             else
                 return [](const auto &v, int shift, bool sign) __aie_inline { return ::ups_to_v8cacc64(v, shift, sign);  };
+        }
+#endif
+        else {
+            return unsupported_ups{};
         }
     }
 
@@ -973,6 +987,7 @@ private:
                     return [](const auto &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16uint32(acc, shift, sign);  };
             }
         }
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
         else if constexpr (std::is_same_v<T, cint16>) {
             if constexpr (Bits == 64) {
                 if constexpr (Elems == 4)
@@ -988,6 +1003,10 @@ private:
                 return [](const auto &acc, int shift, bool sign) __aie_inline { return ::srs_to_v4cint32(acc, shift, sign);  };
             else
                 return [](const auto &acc, int shift, bool sign) __aie_inline { return ::srs_to_v8cint32(acc, shift, sign);  };
+        }
+#endif
+        else {
+            return unsupported_srs{};
         }
     }
 

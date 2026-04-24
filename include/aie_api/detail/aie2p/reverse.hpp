@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -23,8 +23,8 @@ struct reverse_impl<4, T, Elems>
         vector_type ret;
 
         if constexpr (vector_type::bits() == 1024) {
-            ret.template insert(1, reverse_impl<8, next_type, Elems / 2>::run(v.template extract<Elems / 2>(0).unpack()).pack());
-            ret.template insert(0, reverse_impl<8, next_type, Elems / 2>::run(v.template extract<Elems / 2>(1).unpack()).pack());
+            ret.insert(1, reverse_impl<8, next_type, Elems / 2>::run(v.template extract<Elems / 2>(0).unpack()).pack());
+            ret.insert(0, reverse_impl<8, next_type, Elems / 2>::run(v.template extract<Elems / 2>(1).unpack()).pack());
         }
         else {
             return reverse_impl<8, next_type, Elems>::run(v.unpack()).pack();

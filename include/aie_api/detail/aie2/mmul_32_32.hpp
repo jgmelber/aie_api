@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -151,95 +151,6 @@ struct mmul<M, K, N, int32, uint32, 64>  : public mmul_32_32<M, K, N, int32,  ui
 
 template <unsigned M, unsigned K, unsigned N>
 struct mmul<M, K, N, uint32, int32, 64>  : public mmul_32_32<M, K, N, uint32, int32, 64>  { using mmul_32_32<M, K, N, uint32, int32, 64>::mmul_32_32; };
-
-template <>
-struct mmul_32_32<4, 8, 4, float, float, 32> : public C_block<float, float, 32, 16, 1>
-{
-    using vector_A_type = vector<float, 32>;
-    using vector_B_type = vector<float, 32>;
-
-    using C_block<float, float, 32, 16, 1>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-#if __AIE_API_EMULATED_FP32_ZEROIZATION__
-        this->data = ::mac_4x8_8x4_conf(a.template grow<32>(), b.template grow<32>(), this->data, this->zero, 0, 0);
-#else
-        this->data = ::mac_4x8_8x4(a.template grow<32>(), b.template grow<32>(), this->data);
-#endif
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        this->data = ::mul_4x8_8x4(a.template grow<32>(), b.template grow<32>());
-        this->zero = false;
-    }
-};
-
-template <>
-struct mmul_32_32<4, 1, 4, float, float, 32> : public C_block<float, float, 32, 16, 1>
-{
-    using vector_A_type = vector<float, 4>;
-    using vector_B_type = vector<float, 4>;
-
-    using C_block<float, float, 32, 16, 1>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-#if __AIE_API_EMULATED_FP32_ZEROIZATION__
-        this->data = ::mac_elem_16_conf(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>(), this->data, this->zero, 0, 0);
-#else
-        this->data = ::mac_elem_16(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>(), this->data);
-#endif
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        this->data = ::mul_elem_16(::shuffle(a.template grow_replicate<16>(), T32_4x4), b.template grow_replicate<16>());
-        this->zero = false;
-    }
-};
-
-template <>
-struct mmul_32_32<4, 1, 8, float, float, 32> : public C_block<float, float, 32, 32, 2>
-{
-    using vector_A_type = vector<float, 4>;
-    using vector_B_type = vector<float, 8>;
-
-    using C_block<float, float, 32, 32, 2>::C_block;
-
-    __aie_inline void mac(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        auto x0 = broadcast<float, 8>::run(a[0]);
-        auto x1 = broadcast<float, 8>::run(a[1]);
-        auto x2 = broadcast<float, 8>::run(a[2]);
-        auto x3 = broadcast<float, 8>::run(a[3]);
-#if __AIE_API_EMULATED_FP32_ZEROIZATION__
-        this->data[0] = ::mac_elem_16_conf(::concat(x0, x1), b.template grow_replicate<16>(), this->data[0], this->zero, 0, 0);
-        this->data[1] = ::mac_elem_16_conf(::concat(x2, x3), b.template grow_replicate<16>(), this->data[1], this->zero, 0, 0);
-#else
-        this->data[0] = ::mac_elem_16(::concat(x0, x1), b.template grow_replicate<16>(), this->data[0]);
-        this->data[1] = ::mac_elem_16(::concat(x2, x3), b.template grow_replicate<16>(), this->data[1]);
-#endif
-        this->zero = false;
-    }
-
-    __aie_inline void mul(const vector_A_type &a, const bool a_sign, const vector_B_type &b, const bool b_sign)
-    {
-        auto x0 = broadcast<float, 8>::run(a[0]);
-        auto x1 = broadcast<float, 8>::run(a[1]);
-        auto x2 = broadcast<float, 8>::run(a[2]);
-        auto x3 = broadcast<float, 8>::run(a[3]);
-        this->data[0] = ::mul_elem_16(::concat(x0, x1), b.template grow_replicate<16>());
-        this->data[1] = ::mul_elem_16(::concat(x2, x3), b.template grow_replicate<16>());
-        this->zero = false;
-    }
-};
-
-template <unsigned M, unsigned K, unsigned N>
-struct mmul<M, K, N, float, float, 32>  : public mmul_32_32<M, K, N, float, float, 32>  { using mmul_32_32<M, K, N, float, float, 32>::mmul_32_32; };
 
 }
 

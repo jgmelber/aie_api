@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -28,7 +28,7 @@ enum class FilterOp {
 template <unsigned TypeBits, typename T, unsigned Elems, FilterOp Op>
 struct filter_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using        vector_type = vector<T, Elems>;
     using return_vector_type = vector<T, Elems / 2>;
 
@@ -59,28 +59,7 @@ struct filter_bits_impl
 };
 
 template <unsigned TypeBits, typename T, unsigned Elems, FilterOp Op>
-struct filter_bits
-{
-    using        vector_type = vector<T, Elems>;
-    using return_vector_type = vector<T, Elems / 2>;
-
-    static return_vector_type run(const vector_type &v, unsigned n)
-    {
-        return filter_bits_impl<TypeBits, T, Elems, Op>::run(v, n);
-    }
-};
-
-template <unsigned TypeBits, typename T, unsigned Elems>
-struct filter_bits<TypeBits, T, Elems, FilterOp::Dynamic>
-{
-    using        vector_type = vector<T, Elems>;
-    using return_vector_type = vector<T, Elems / 2>;
-
-    static return_vector_type run(const vector_type &v, const filter_mode<TypeBits, Elems> &mode)
-    {
-        return filter_bits_impl<TypeBits, T, Elems, FilterOp::Dynamic>::run(v, mode);
-    }
-};
+using filter_bits = filter_bits_impl<TypeBits, T, Elems, Op>;
 
 template <typename T, unsigned Elems, FilterOp Op>
 using filter = filter_bits<type_bits_v<T>, T, Elems, Op>;
@@ -91,7 +70,7 @@ using filter = filter_bits<type_bits_v<T>, T, Elems, Op>;
 
 #include "aie1/filter.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/filter.hpp"
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -10,89 +10,146 @@
 #include "vector.hpp"
 #include "accum.hpp"
 #include "vector_accum_cast.hpp"
-
 /**
  * @ingroup group_mmul
  * @page group_mmul_page_supported_modes Matrix Multiplication Modes
  *
  * The following matrix multiplication shapes are supported.
  *
- * @paragraph group_mmul_page_supported_regular_modes Supported Matrix Multiplication Modes
+ * @section group_mmul_page_supported_regular_modes Supported Matrix Multiplication Modes
+ *
+ * @note
+ * In the following table, the following abbreviations are used to denote low precision floating point multiplications:
+ * - f8 is used to denote multiplication with 8 bit low precission floating point formats
+ * (%bfloat8 x %bfloat8, %bfloat8 x %float8, %float8 x %bfloat8, %float8 x %float8).
+ * - f16 is used to denote multiplication with 16 bit %floating point formats
+ * (%bfloat16 x %bfloat16, %bfloat16 x %float16, %float16 x %bfloat16, %float16 x %float16).
+ * If a multiplication mode is restricted to a specific combination, then the unabbreviated format name is used.
  *
  * <table>
  * <caption>Matrix multiplication modes for real types</caption>
  * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>8b x 16b<th>16b x 16b<th>32b x 16b<th>16b x 32b<th>32b x 32b<sup>c</sup>
+ * <th>%f8 x %f8
  * <th>%bfloat16 x %bfloat16
+ * <th>%f16 x %f16
  * <th>float x float<sup>d</sup>
- * <th>bfp16 x bfp16
- * <tr><td style="white-space: nowrap;">
+ * <th>bfp16 x bfp16 <th>%mx4 x %mx4 <th>%mx6 x %mx6 <th>%mx9 x %mx9
+ * <tr><td>
  *         AIE
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         4x8x4<br/> 4x16x4<sup>a</sup><br/> 8x8x4<sup>a</sup><br/> 2x8x8<br/> 4x8x8<sup>a</sup><br/> 1x16x8<br/> 2x16x8<sup>a</sup><br/> 4x16x8<sup>a</sup>
+ *         4x8x4<br> 4x16x4<sup>a</sup><br> 8x8x4<sup>a</sup><br> 2x8x8<br> 4x8x8<sup>a</sup><br> 1x16x8<br> 2x16x8<sup>a</sup><br> 4x16x8<sup>a</sup>
  *     <td style="vertical-align:top">
- *         4x4x4<br/> 8x4x4<sup>a</sup><br/>  4x8x4<sup>a</sup><br/> 4x4x8<sup>a</sup>
+ *         4x4x4<br> 8x4x4<sup>a</sup><br>  4x8x4<sup>a</sup><br> 4x4x8<sup>a</sup>
  *     <td style="vertical-align:top">
- *         4x4x8<sup>a</sup><br/> 4x4x4<sup>a</sup><br/> 8x8x1<sup>ab</sup>
+ *         4x4x8<sup>a</sup><br> 4x4x4<sup>a</sup><br> 8x8x1<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x4x4<sup>a</sup><br/> 2x4x8<sup>a</sup><br/> 4x4x8<sup>a</sup><br/> 4x2x8<sup>a</sup><br/> 8x8x1<sup>ab</sup>
+ *         4x4x4<sup>a</sup><br> 2x4x8<sup>a</sup><br> 4x4x8<sup>a</sup><br> 4x2x8<sup>a</sup><br> 8x8x1<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         2x4x8<sup>a</sup><br/> 4x4x4<sup>a</sup><br/> 4x2x4<sup>a</sup><br/> 2x2x4<br/> 2x4x4<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 2x2x8<sup>a</sup>
+ *         2x4x8<sup>a</sup><br> 4x4x4<sup>a</sup><br> 4x2x4<sup>a</sup><br> 2x2x4<br> 2x4x4<sup>a</sup><br> 4x4x2<sup>a</sup><br> 2x2x8<sup>a</sup>
  *     <td style="vertical-align:top">
- *         4x2x2<br/> 2x4x8<sup>a</sup><br/> 4x4x4<sup>a</sup>
+ *         4x2x2<br> 2x4x8<sup>a</sup><br> 4x4x4<sup>a</sup>
  *     <td style="vertical-align:top">
- *         4x2x4<sup>a</sup><br/> 2x2x2<br/> 2x4x2<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         4x2x4<sup>a</sup><br> 2x2x2<br> 2x4x2<sup>a</sup><br> 2x8x2<sup>a</sup><br> 4x2x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         4x2x4<sup>a</sup><br/> 2x2x2<sup>a</sup><br/> 2x4x2<sup>ab</sup><br/> 2x8x2<sup>ab</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x4x1<sup>ab</sup>
  *     <td style="vertical-align:top">
- * <tr><td style="white-space: nowrap;">
- *         AIE-ML/XDNA 1
  *     <td style="vertical-align:top">
- *         4x16x8<br/>8x16x8<sup>a</sup><br/>4x32x8<sup>ab</sup>
+ *         4x2x4<sup>a</sup><br> 2x2x2<sup>a</sup><br> 2x4x2<sup>ab</sup><br> 2x8x2<sup>ab</sup><br> 4x2x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x4x1<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x8x4<sup>ab</sup><br/> 4x16x4<sup>ab</sup><br/> 8x8x4<sup>ab</sup><br/> 2x8x8<br/> 4x8x8<br/> 8x8x8<sup>a</sup><br/> 1x16x8<sup>ab</sup><br/> 2x16x8<sup>ab</sup><br/> 4x16x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x4x4<sup>ab</sup><br/> 8x4x4<sup>ab</sup><br/>  4x8x4<br/> 4x4x8 <br/> 8x4x8<sup>ab</sup><br/> 2x8x8
  *     <td style="vertical-align:top">
- *         4x4x8<sup>ab</sup><br/> 4x4x4<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x4x4<br/> 2x4x8<br/> 4x4x8<sup>ab</sup><br/> 4x2x8<br/> 8x2x8<sup>a</sup><br/> 8x1x8<sup>ab</sup>
+ * <tr><td>
+ *         AIE-ML/XDNA1
  *     <td style="vertical-align:top">
- *         2x4x8<br/> 4x4x8<sup>ab</sup><br/> 4x4x4<br/> 4x2x4<br/> 4x1x8<sup>ab</sup>
+ *         4x16x8<br>8x16x8<sup>a</sup><br>4x32x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         2x4x8<br/> 4x4x4
+ *         4x8x4<sup>ab</sup><br> 4x16x4<sup>ab</sup><br> 8x8x4<sup>ab</sup><br> 2x8x8<br> 4x8x8<br> 8x8x8<sup>a</sup><br> 1x16x8<sup>ab</sup><br> 2x16x8<sup>ab</sup><br> 4x16x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x2x4<sup>a</sup><br/> 4x4x4<sup>ab</sup><br/> 8x2x4<sup>a</sup><br/> 4x1x8<sup>ab</sup><br/> 8x1x8<sup>ab</sup>
+ *         4x4x4<sup>ab</sup><br> 8x4x4<sup>ab</sup><br>  4x8x4<br> 4x4x8 <br> 8x4x8<sup>ab</sup><br> 2x8x8
  *     <td style="vertical-align:top">
- *         4x8x4<br/> 8x8x4<sup>a</sup><br/> 4x16x8<sup>ab</sup><br/> 8x8x8<sup>ab</sup>
+ *         4x4x8<sup>ab</sup><br> 4x4x4<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x8x4<br/> 4x1x4<sup>b</sup><br/> 4x1x8<sup>ab</sup>
+ *         4x4x4<br> 2x4x8<br> 4x4x8<sup>ab</sup><br> 4x2x8<br> 8x2x8<sup>a</sup><br> 8x1x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- * <tr><td style="white-space: nowrap;">
- *         XDNA 2
+ *         2x4x8<br> 4x4x8<sup>ab</sup><br> 4x4x4<br> 4x2x4<br> 4x1x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         2x4x8<br> 4x4x4
+ *     <td style="vertical-align:top">
+ *         4x2x4<sup>a</sup><br> 4x4x4<sup>ab</sup><br> 8x2x4<sup>a</sup><br> 4x1x8<sup>ab</sup><br> 8x1x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x8x4<br> 8x8x4<sup>a</sup><br> 4x16x8<sup>ab</sup><br> 8x8x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x8x4<br> 4x1x4<sup>b</sup><br> 4x1x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ * <tr><td>
+ *         XDNA2
  *     <td style="vertical-align:top">
  *         4x16x16
  *     <td style="vertical-align:top">
- *         4x8x8<br/> 8x8x8
+ *         4x8x8<br> 8x8x8
  *     <td style="vertical-align:top">
  *         4x4x8<br> 8x4x8<br> 4x8x8<br> 2x8x8<sup>b</sup>
  *     <td style="vertical-align:top">
- *         8x2x8<sup>b</sup><br/> 4x4x8<sup>b</sup>
+ *         8x2x8<sup>b</sup><br> 4x4x8<sup>b</sup>
  *     <td style="vertical-align:top">
- *         4x2x8<br> 8x2x8<br> 2x4x8<br> 4x4x8<br/> 8x1x8<sup>b</sup>
+ *         4x2x8<sup>32</sup><br> 8x2x8<sup>32</sup><br> 2x4x8<sup>64</sup><br> 4x4x8<sup>64</sup><br> 8x1x8<sup>b, 32</sup>
  *     <td style="vertical-align:top">
- *         4x2x8<br/> 2x4x8<sup>ab</sup><br/> 4x4x8<sup>ab</sup><br/> 4x1x8<sup>b</sup>
+ *         4x2x8<br> 2x4x8<sup>ab</sup><br> 4x4x8<sup>ab</sup><br> 4x1x8<sup>b</sup>
  *     <td style="vertical-align:top">
  *         4x4x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x2x8<sup>ab</sup><br/> 4x4x4<sup>ab</sup><br/> 4x4x8<sup>ab</sup><br/> 8x2x8<sup>ab</sup><br/> 4x1x8<sup>b</sup>
+ *         4x2x8<sup>ab</sup><br> 4x4x4<sup>ab</sup><br> 4x4x8<sup>ab</sup><br> 8x2x8<sup>ab</sup><br> 4x1x8<sup>b</sup>
  *     <td style="vertical-align:top">
- *         8x8x4<sup>ab</sup><br/> 4x8x8<sup>abc</sup><br/> 4x8x4<sup>ab</sup><br/> 8x8x8<sup>e</sup><br/> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         8x8x4<sup>ab</sup><br> 4x8x8<sup>abc</sup><br> 4x8x4<sup>ab</sup><br> 8x8x8<sup>e</sup><br> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *         4x8x4<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         8x8x8<br/> 8x8x16<sup>ab</sup>
+ *         8x8x8<br> 8x8x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ * <tr><td>
+ *         AIE-MLv2
+ *     <td style="vertical-align:top">
+ *         4x16x16<sup>ab</sup><br> 8x8x8
+ *     <td style="vertical-align:top">
+ *         4x8x8<br> 8x8x8
+ *     <td style="vertical-align:top">
+ *         8x2x8<sup>b</sup><br> 8x4x8<sup>ab</sup><br> 4x4x8<sup>b</sup> <br> 4x8x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         8x2x8<sup>b</sup><br> 4x4x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<sup>c, 32</sup><br> 8x2x8<sup>32</sup><br> 2x4x8<sup>64</sup><br> 4x4x8<sup>64</sup><br> 8x1x8<sup>b, 32</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<br> 2x4x8<sup>ab</sup><br> 4x4x8<sup>ab</sup><br> 4x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x4x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x8<sup>ab</sup><br> 4x4x4<sup>ab</sup><br> 4x4x8<sup>ab</sup><br> 8x2x8<sup>ab</sup><br> 4x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         8x8x8
+ *     <td style="vertical-align:top">
+ *         4x8x4<sup>ab</sup><br> 4x8x8<br> 8x8x8<sup>a</sup><br> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x8x4<sup>ab</sup><br> 4x8x8<br> 8x8x8<sup>a</sup><br> 8x1x8<sup>b</sup>
+ *     <td style="vertical-align:top">
+ *         4x8x4<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x16x16<br> 8x16x16<sup>a</sup>
+ *     <td style="vertical-align:top">
+ *         4x16x16<br> 8x16x16<sup>a</sup>
+ *     <td style="vertical-align:top">
+ *         4x16x16<sup>b</sup>
  * </table>
  *
  * <table>
@@ -102,57 +159,60 @@
  *     <th>c32b x 32b<sup>c</sup><th>c32b x c32b<sup>c</sup>
  *     <th>%bfloat16 x %cbfloat16<th>%cbfloat16 x %bfloat16<th>%cbfloat16 x %cbfloat16
  *     <th>float x cfloat<sup>d</sup><th>cfloat x float<sup>d</sup><th>cfloat x cfloat<sup>d</sup>
- * <tr><td style="white-space: nowrap;">
+ * <tr><td>
  *         AIE
  *     <td style="vertical-align:top">
- *         4x2x2<br/> 4x4x4<sup>a</sup><br/> 4x4x1
+ *         4x2x2<br> 4x4x4<sup>a</sup><br> 4x4x1
  *     <td style="vertical-align:top">
- *         2x4x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         2x4x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 2x8x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x4<br/> 2x2x8<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 2x4x8<sup>a</sup><br/> 4x2x4<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 4x4x4<sup>a</sup>
+ *         2x2x4<br> 2x2x8<sup>a</sup><br> 2x4x4<sup>a</sup><br> 2x4x8<sup>a</sup><br> 4x2x4<sup>a</sup><br> 4x4x2<sup>a</sup><br> 4x4x4<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<br/> 2x4x2<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 4x2x4<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         2x2x2<br> 2x4x2<sup>a</sup><br> 2x8x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x2x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 4x2x4<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<br/> 2x4x2<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 4x2x4<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         2x2x2<br> 2x4x2<sup>a</sup><br> 2x8x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x2x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 4x2x4<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
+ *         2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x2x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<br/> 2x4x2<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x4x2<sup>a</sup><br/> 4x2x4<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         2x2x2<br> 2x4x2<sup>a</sup><br> 2x8x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x2x2<sup>a</sup><br> 4x4x2<sup>a</sup><br> 4x2x4<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
+ *         2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x2x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x4x2<sup>a</sup><br/> 2x8x2<sup>a</sup><br/> 2x4x4<sup>a</sup><br/> 4x4x2<sup>a</sup>
+ *         2x4x2<sup>a</sup><br> 2x8x2<sup>a</sup><br> 2x4x4<sup>a</sup><br> 4x4x2<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         1x2x2<br/> 2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x4x1<sup>a</sup>
+ *         1x2x2<br> 2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x4x1<sup>a</sup>
  *     <td style="vertical-align:top">
- *         1x2x2<sup>a</sup><br/> 2x2x1<sup>a</sup><br/> 2x2x1
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
- *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x4x1<sup>a</sup><br/> 2x4x1<sup>ab</sup>
- *     <td style="vertical-align:top">
- *         2x2x2<sup>a</sup><br/> 2x2x4<sup>a</sup><br/> 2x4x2<sup>a</sup><br/> 4x2x2<sup>a</sup><br/> 4x2x1<sup>a</sup>
- * <tr><td style="white-space: nowrap;">
- *         AIE-ML/XDNA 1
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
- *         2x4x8<sup>ab</sup><br/> 4x4x4<sup>ab</sup>
- *     <td style="vertical-align:top">
- *         1x4x8<sup>ab</sup><br/> 2x4x8<sup>ab</sup>
+ *         1x2x2<sup>a</sup><br> 2x2x1<sup>a</sup><br> 2x2x1
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
+ *         2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x2x1<sup>a</sup>
+ *     <td style="vertical-align:top">
+ *         2x2x2<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x4x1<sup>a</sup><br> 2x4x1<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         2x2x2<sup>a</sup><br> 2x2x4<sup>a</sup><br> 2x4x2<sup>a</sup><br> 4x2x2<sup>a</sup><br> 4x2x1<sup>a</sup>
+ * <tr><td>
+ *         AIE-ML/XDNA1
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         1x2x4<sup>ab</sup><br/> 1x2x8<sup>ab</sup><br/> 2x2x8<sup>ab</sup><br/> 1x4x8<sup>ab</sup><br/> 2x4x8<sup>ab</sup>
  *     <td style="vertical-align:top">
+ *         2x4x8<sup>ab</sup><br> 4x4x4<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         1x4x8<sup>ab</sup><br> 2x4x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         4x4x4<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x2x4<sup>ab</sup><br> 4x4x4<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         1x2x4<sup>ab</sup><br> 1x2x8<sup>ab</sup><br> 2x2x8<sup>ab</sup><br> 1x4x8<sup>ab</sup><br> 2x4x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *         4x2x4<sup>ab</sup>
  *     <td style="vertical-align:top">
  *         1x2x8<sup>ab</sup>
  *     <td style="vertical-align:top">
@@ -164,21 +224,45 @@
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- * <tr><td style="white-space: nowrap;">
- *         XDNA 2
+ * <tr><td>
+ *         XDNA2
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         4x4x8<sup>ab</sup><br/> 2x4x8<sup>ab</sup>
+ *         4x4x8<sup>ab</sup><br> 2x4x8<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         1x4x8<sup>ab</sup><br/> 2x2x16<sup>ab</sup>
- *     <td style="vertical-align:top">
- *     <td style="vertical-align:top">
+ *         1x4x8<sup>ab</sup><br> 2x2x16<sup>ab</sup>
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         1x2x4<sup>ab</sup><br/> 1x2x8<sup>ab</sup><br/> 1x2x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         1x2x4<sup>ab</sup><br> 1x2x8<sup>ab</sup><br> 1x2x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         1x2x8<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ * <tr><td>
+ *         AIE-MLv2
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x4x8<sup>abd</sup><br> 2x4x8<sup>abd</sup>
+ *     <td style="vertical-align:top">
+ *         1x4x8<sup>ab</sup><br> 2x2x16<sup>ab</sup>
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         1x2x4<sup>ab</sup><br> 1x2x8<sup>ab</sup><br> 1x2x16<sup>ab</sup>
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
  *         1x2x8<sup>ab</sup>
@@ -191,15 +275,19 @@
  * </table>
  *
  * \note
- * <sup>a</sup> - Emulated using multiple intrinsic calls.<br/>
- * <sup>b</sup> - Require additional data manipulation.<br/>
- * <sup>c</sup> - 32b * 16b multiplications are emulated on AIE-ML/XDNA 1 and XDNA 2.<br/>
- * <sup>d</sup> - float multiplications are emulated on AIE-ML/XDNA 1 and XDNA 2 using native %bfloat16 multiplications.<br/>
- * <sup>e</sup> - Mode available through block-floating-point emulation to increase throughput at the cost of accuracy. Enabled by defining AIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16 at compile time.
+ * <dl class="footnote">
+ * <dt>a</dt><dd>Emulated using multiple intrinsic calls.</dd>
+ * <dt>b</dt><dd>Require additional data manipulation.</dd>
+ * <dt>c</dt><dd>32b * 16b multiplications are emulated on AIE-ML/XDNA1, XDNA2, and AIE-MLv2.</dd>
+ * <dt>d</dt><dd>float multiplications are emulated on AIE-ML/XDNA1, XDNA2, and AIE-MLv2 using native %bfloat16 multiplications.</dd>
+ * <dt>e</dt><dd>Mode available through block-floating-point emulation to increase throughput at the cost of accuracy. Enabled by defining AIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16 at compile time.</dd>
+ * <dt>32</dt><dd>Supported for %acc32 accumulators only.</dd>
+ * <dt>64</dt><dd>Supported for %acc64 accumulators only.</dd>
+ * </dl>
  *
- * @paragraph group_mmul_page_multidim_gemm GEMM leveraging multidimensional addressing
+ * @section group_mmul_page_multidim_gemm GEMM leveraging multidimensional addressing
  *
- * \note Multi-dimensional addressing and the corresponding tensor buffer streams were introduced with AIE-ML/XDNA 1
+ * \note Multi-dimensional addressing and the corresponding tensor buffer streams were introduced with AIE-ML/XDNA1
  *
  * Below is an example of an optimized bfloat16 GEMM kernel in which both input matrices, A and B, are addressed in the following 4D patterns (see \ref tensor_buffer_streams):
  *
@@ -207,79 +295,11 @@
  *
  * It is assumed that the data for both input matrices are pre-tiled and that the tiles are laid out in column-major order in memory.
  *
- * @code
- * void gemm_bf16xbf16(bfloat16 * matA, bfloat16 * matB, bfloat16 *__restrict matC,
- *                     int rowsA, int inner, int colsB)
- * {
- *     using MMUL = aie::mmul<4, 8, 4, bfloat16, bfloat16, accauto>;
+ * @snippet gemm_bf16xbf16.cpp Matrix multiplication
  *
- *     auto a_desc =  aie::make_tensor_descriptor<bfloat16, 32>(
- *                                                aie::tensor_dim(rowsA / 4 / 4, 4),
- *                                                aie::tensor_dim(colsB / 4 / 4, 0),
- *                                                aie::tensor_dim(inner / 8, rowsA / 4),
- *                                                aie::tensor_dim(4u, 1));
+ * @section group_mmul_page_supported_sparse_modes Supported Sparse Matrix Multiplication Modes
  *
- *     auto b_desc = aie::make_tensor_descriptor<bfloat16, 32>(
- *                                                aie::tensor_dim(colsB / 4 / 4, 0),
- *                                                aie::tensor_dim(colsB / 4 / 4, inner / 8 * 4),
- *                                                aie::tensor_dim(inner / 8, 1),
- *                                                aie::tensor_dim(4u, inner / 8));
- *
- *     auto c_desc = aie::make_tensor_descriptor<bfloat16, 16>(
- *                                                aie::tensor_dim(rowsA / 4 / 4, 4),
- *                                                aie::tensor_dim(colsB / 4, rowsA / 4),
- *                                                aie::tensor_dim(4u, 1));
- *
- *     auto tsA = aie::make_tensor_buffer_stream(matA, a_desc);
- *     auto tsB = aie::make_tensor_buffer_stream(matB, b_desc);
- *     auto tsC = aie::make_restrict_tensor_buffer_stream(matC, c_desc);
- *
- *     for (int j = 0; j < rowsA * colsB / (16 * 16); ++j)
- *     {
- *         MMUL C00, C01, C02, C03;
- *         MMUL C10, C11, C12, C13;
- *         MMUL C20, C21, C22, C23;
- *         MMUL C30, C31, C32, C33;
- *
- *         for (int i = 0; i < inner / 8; ++i)
- *         {
- *             // The following pop calls are required to access the inner leaf stream.
- *             // As tsA and tsB are 4D streams, the returned inner stream will be 1D.
- *             //
- *             // Note that these calls advance the outer stream
- *             auto tsA_inner = tsA.pop();
- *             auto tsB_inner = tsB.pop();
- *
- *             aie::vector<bfloat16,32> Xbuff0, Xbuff1, Xbuff2, Xbuff3;
- *             tsA_inner >> Xbuff0 >> Xbuff1 >> Xbuff2 >> Xbuff3;
- *
- *             aie::vector<bfloat16,32> Ybuff0, Ybuff1;
- *             tsB_inner >> Ybuff0 >> Ybuff1;
- *
- *             C00.mac(Xbuff0, Ybuff0); C01.mac(Xbuff0, Ybuff1);
- *             C10.mac(Xbuff1, Ybuff0); C11.mac(Xbuff1, Ybuff1);
- *             C20.mac(Xbuff2, Ybuff0); C21.mac(Xbuff2, Ybuff1);
- *             C30.mac(Xbuff3, Ybuff0); C31.mac(Xbuff3, Ybuff1);
- *
- *             tsB_inner >> Ybuff0 >> Ybuff1;
- *
- *             C02.mac(Xbuff0, Ybuff0); C03.mac(Xbuff0, Ybuff1);
- *             C12.mac(Xbuff1, Ybuff0); C13.mac(Xbuff1, Ybuff1);
- *             C22.mac(Xbuff2, Ybuff0); C23.mac(Xbuff2, Ybuff1);
- *             C32.mac(Xbuff3, Ybuff0); C33.mac(Xbuff3, Ybuff1);
- *         }
- *
- *         tsC << C00.to_vector<bfloat16>() << C10.to_vector<bfloat16>() << C20.to_vector<bfloat16>() << C30.to_vector<bfloat16>()
- *             << C01.to_vector<bfloat16>() << C11.to_vector<bfloat16>() << C21.to_vector<bfloat16>() << C31.to_vector<bfloat16>()
- *             << C02.to_vector<bfloat16>() << C12.to_vector<bfloat16>() << C22.to_vector<bfloat16>() << C32.to_vector<bfloat16>()
- *             << C03.to_vector<bfloat16>() << C13.to_vector<bfloat16>() << C23.to_vector<bfloat16>() << C33.to_vector<bfloat16>();
- *     }
- * }
- * @endcode
- *
- * @paragraph group_mmul_page_supported_sparse_modes Supported Sparse Matrix Multiplication Modes
- *
- * AIE-ML/XDNA 1 introduced hardware support for sparse matrix multiplication. For an M x K x N matrix multiplication with
+ * AIE-ML/XDNA1 introduced hardware support for sparse matrix multiplication. For an M x K x N matrix multiplication with
  * A being M x K, B being K x N, and C being M x N, a sparse B matrix may be stored in memory using a data layout
  * which avoids storing zero values.
  *
@@ -290,95 +310,59 @@
  * <table>
  * <caption>Matrix multiplication modes for real types (sparse B matrix)</caption>
  * <tr><th>Arch.<th>8b x 4b<th>8b x 8b<th>16b x 8b<th>16b x 16b<th>%bfloat16 x %bfloat16
- * <tr><td style="white-space: nowrap;">
- *         AIE-ML/XDNA 1
+ * <tr><td>
+ *         AIE-ML/XDNA1
  *     <td style="vertical-align:top">
  *         4x32x8
  *     <td style="vertical-align:top">
- *         4x16x8<br/> 8x16x8<sup>a</sup><br/> 4x16x16<sup>ab</sup>
+ *         4x16x8<br> 8x16x8<sup>a</sup><br> 4x16x16<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         2x16x8<br/> 4x16x8<sup>a</sup>
+ *         2x16x8<br> 4x16x8<sup>a</sup>
  *     <td style="vertical-align:top">
- *         2x8x8<br/> 4x8x8<sup>a</sup><br/> 2x8x16<sup>ab</sup>
+ *         2x8x8<br> 4x8x8<sup>a</sup><br> 2x8x16<sup>ab</sup>
  *     <td style="vertical-align:top">
- *         4x16x4<br/> 4x16x8<sup>ab</sup>
- * <tr><td style="white-space: nowrap;">
- *         XDNA 2
+ *         4x16x4<br> 4x16x8<sup>ab</sup>
+ * <tr><td>
+ *         XDNA2
  *     <td style="vertical-align:top">
  *     <td style="vertical-align:top">
- *         4x16x8<br/> 8x16x8
+ *         4x16x8<br> 8x16x8
  *     <td style="vertical-align:top">
- *         2x16x8<br/> 4x16x8
+ *         2x16x8<br> 4x16x8
  *     <td style="vertical-align:top">
- *         2x8x8<br/> 4x8x8
+ *         2x8x8<br> 4x8x8
  *     <td style="vertical-align:top">
+ * <tr><td>
+ *         AIE-MLv2
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         4x16x8<br> 8x16x8
+ *     <td style="vertical-align:top">
+ *     <td style="vertical-align:top">
+ *         2x8x8<br> 4x8x8
+ *     <td style="vertical-align:top">
+ *         4x16x8
  * </table>
  *
  * \note
- * <sup>a</sup> - Emulated using multiple intrinsic calls <br/>
- * <sup>b</sup> - Require additional data manipulation
+ * <dl class="footnote">
+ * <dt>a</dt><dd>Emulated using multiple intrinsic calls</dd>
+ * <dt>b</dt><dd>Require additional data manipulation</dd>
+ * </dl>
  *
  * The following example shows an optimized `int8 * sparse int8` GEMM:
- *
- * @code
- * void gemm_int8xint8_sparse(int8 * matA, int8 * matB, int8 *__restrict matC,
- *                            int rowsA, int inner, int colsB)
- * {
- *     using MMUL = aie::mmul<4, 16, 8, int8, int8, accauto>;
- *
- *     auto a_desc = aie::make_tensor_descriptor<int8, 64>(aie::tensor_dim(rowsA / 4 / 4, 2),
- *                                                         aie::tensor_dim(colsB / 4 / 4, 0),
- *                                                         aie::tensor_dim(inner / 8, rowsA / 8),
- *                                                         aie::tensor_dim(2u, 1));
- *
- *     auto c_desc = aie::make_tensor_descriptor<int8, 32>(aie::tensor_dim(rowsA / 4 / 4, 4),
- *                                                         aie::tensor_dim(colsB / 8, rowsA / 4),
- *                                                         aie::tensor_dim(4u, 1));
- *
- *     auto tsA = aie::make_tensor_buffer_stream<aie_dm_resource::a>(matA, a_desc);
- *     auto tsC = aie::make_restrict_tensor_buffer_stream(matC, c_desc);
- *
- *     for (int j = 0; j < rowsA / 16; j++)
- *         chess_loop_range(2,)
- *     {
- *         auto tsB = aie::sparse_vector_input_buffer_stream<int8, 128, aie_dm_resource::a>(matB);
- *
- *         for (int b = 0; b < colsB / 16; b++)
- *             chess_prepare_for_pipelining
- *             chess_loop_range(2,)
- *         {
- *             MMUL C00, C01;
- *             MMUL C10, C11;
- *             MMUL C20, C21;
- *             MMUL C30, C31;
- *
- *             for (int i = 0; i < inner / 16; i++)
- *                 chess_prepare_for_pipelining
- *                 chess_loop_range(4,)
- *             {
- *                 aie::vector<int8,64> Sbuff0, Sbuff1, Sbuff2, Sbuff3;
- *                 tsA.pop() >> Sbuff0 >> Sbuff1;
- *                 tsA.pop() >> Sbuff2 >> Sbuff3;
- *
- *                 auto [Xbuff0, Xbuff1] = aie::interleave_zip(Sbuff0, Sbuff2, 8);
- *                 auto [Xbuff2, Xbuff3] = aie::interleave_zip(Sbuff1, Sbuff3, 8);
- *
- *                 aie::sparse_vector<int8,128> Ybuff0, Ybuff1;
- *                 tsB >> Ybuff0 >> Ybuff1;
- *
- *                 C00.mac(Xbuff0, Ybuff0); C01.mac(Xbuff0, Ybuff1);
- *                 C10.mac(Xbuff1, Ybuff0); C11.mac(Xbuff1, Ybuff1);
- *                 C20.mac(Xbuff2, Ybuff0); C21.mac(Xbuff2, Ybuff1);
- *                 C30.mac(Xbuff3, Ybuff0); C31.mac(Xbuff3, Ybuff1);
- *             }
- *
- *             tsC << C00.to_vector<int8>() << C10.to_vector<int8>() << C20.to_vector<int8>() << C30.to_vector<int8>()
- *                 << C01.to_vector<int8>() << C11.to_vector<int8>() << C21.to_vector<int8>() << C31.to_vector<int8>();
- *         }
- *     }
- * }
- * @endcode
+ * 
+ * @snippet gemm_int8xint8_sparse.cpp Sparse matrix multiplication
  */
+
+namespace aie {
+
+enum class accum_ownership {
+    owned,
+    ref
+};
+
+}
 
 namespace aie::detail {
 
@@ -393,14 +377,14 @@ template <> struct compute_C_type<uint8, uint8> { using type = uint8; };
 template <typename TypeA, typename TypeB>
 using compute_C_type_t = typename compute_C_type<TypeA, TypeB>::type;
 
-template <unsigned M, unsigned K, unsigned N, typename TypeA, typename TypeB, unsigned AccumBits>
+template <unsigned M, unsigned K, unsigned N, typename TypeA, typename TypeB, unsigned AccumBits, accum_ownership Ownership = accum_ownership::owned>
 struct mmul;
 
-template <typename TypeA, typename TypeB, unsigned AccumBits, unsigned Elems, unsigned NumAccum>
+template <typename TypeA, typename TypeB, unsigned AccumBits, unsigned Elems, unsigned NumAccum, accum_ownership Ownership = accum_ownership::owned>
 struct C_block;
 
 template <typename TypeA, typename TypeB, unsigned AccumBits, unsigned Elems>
-struct C_block<TypeA, TypeB, AccumBits, Elems, 1>
+struct C_block<TypeA, TypeB, AccumBits, Elems, 1, accum_ownership::owned>
 {
     using  accum_tag = accum_tag_for_mul_types<TypeA, TypeB, AccumBits>;
     using accum_type = accum<accum_tag, Elems>;
@@ -582,7 +566,7 @@ struct C_block_interleave_cols<TypeA, TypeB, AccumBits, Elems, NumCols, 1>
         accum_type ret;
         zero = to_zero;
 
-        constexpr unsigned factor = AccumBits == 64 ? 2 : 1; 
+        constexpr unsigned factor = AccumBits == 64 ? 2 : 1;
 
         const auto [tmp1, tmp2] = interleave_unzip<interleave_t, Elems / 2>::run(acc_to_vec::run(acc.template extract<Elems / 2>(0)),
                                                                                  acc_to_vec::run(acc.template extract<Elems / 2>(1)),
@@ -672,7 +656,7 @@ struct C_block_interleave_cols<TypeA, TypeB, AccumBits, Elems, NumCols, NumAccum
         accum_type ret;
         zero = to_zero;
 
-        constexpr unsigned factor = AccumBits == 64 ? 2 : 1; 
+        constexpr unsigned factor = AccumBits == 64 ? 2 : 1;
 
         utils::unroll_times<NumAccums>([&](unsigned idx) __aie_inline {
             const auto [tmp1, tmp2] = interleave_unzip<interleave_t, lanes_per_shuffled_acc>::run(
@@ -760,7 +744,7 @@ private:
 
 #include "aie2/mmul.hpp"
 
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2p/mmul.hpp"
 

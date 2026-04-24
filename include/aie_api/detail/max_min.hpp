@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -26,7 +26,7 @@ enum class MaxMinOperation
 template <unsigned TypeBits, typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v1, const vector_type &v2)
@@ -66,7 +66,7 @@ struct max_min_bits_impl
 template <unsigned TypeBits, typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_cmp_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static auto run(const vector_type &v1, const vector_type &v2)
@@ -103,7 +103,7 @@ struct max_min_cmp_bits_impl
 template <unsigned TypeBits, typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_bits_reduce_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static T run(const vector_type &v)
@@ -214,6 +214,12 @@ struct max_min_reduce_bits
     {
         return max_min_bits_reduce_impl<TypeBits, T, Elems, Op>::run(v);
     }
+
+    __aie_inline
+    static T run(const T &partial, const vector_type &v)
+    {
+        return max_min_bits_reduce_impl<TypeBits, T, Elems, Op>::run(partial, v);
+    }
 };
 
 template <typename T, unsigned Elems>
@@ -245,7 +251,7 @@ using min_reduce = max_min_reduce_bits<type_bits_v<T>, T, Elems, MaxMinOperation
 #include "aie1/max_min_cmp.hpp"
 #include "aie1/max_min_reduce.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/max_min.hpp"
 #include "aie2/max_min_cmp.hpp"

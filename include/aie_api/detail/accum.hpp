@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -33,8 +33,42 @@ static constexpr bool is_floating_point_class(AccumClass c) {
     return c == AccumClass::FP || c == AccumClass::CFP;
 }
 
-static constexpr bool is_complex_class(AccumClass c) {
+static constexpr bool is_complex_class(AccumClass c)
+{
     return c == AccumClass::CInt || c == AccumClass::CFP;
+}
+
+static constexpr AccumClass make_complex_class(AccumClass c)
+{
+    using enum AccumClass;
+    switch (c) {
+        case Int: return CInt;
+        case FP:  return CFP;
+        default:  return c;
+    }
+}
+
+static constexpr AccumClass remove_complex_class(AccumClass c)
+{
+    using enum AccumClass;
+    switch (c) {
+        case CInt: return Int;
+        case CFP:  return FP;
+        default:  return c;
+    }
+}
+
+static constexpr AccumClass accum_class_for_mul(AccumClass a, AccumClass b)
+{
+    using enum AccumClass;
+    if (a == b)
+        return a;
+    bool complex_result = is_complex_class(a) || is_complex_class(b);
+    bool fp_result = is_floating_point_class(a) || is_floating_point_class(b);
+    if (fp_result)
+        return complex_result? CFP: FP;
+    else
+        return complex_result? CInt: Int;
 }
 
 template <typename T>
@@ -58,6 +92,9 @@ template <> struct accum_class_for_tag<acc72>        { static constexpr AccumCla
 template <> struct accum_class_for_tag<acc80>        { static constexpr AccumClass value() { return AccumClass::Int;  } };
 #endif
 
+template <> struct accum_class_for_tag<accfloat>     { static constexpr AccumClass value() { return AccumClass::FP;   } };
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct accum_class_for_tag<cacc16>       { static constexpr AccumClass value() { return AccumClass::CInt; } };
 template <> struct accum_class_for_tag<cacc24>       { static constexpr AccumClass value() { return AccumClass::CInt; } };
 template <> struct accum_class_for_tag<cacc32>       { static constexpr AccumClass value() { return AccumClass::CInt; } };
@@ -70,9 +107,9 @@ template <> struct accum_class_for_tag<cacc72>       { static constexpr AccumCla
 template <> struct accum_class_for_tag<cacc80>       { static constexpr AccumClass value() { return AccumClass::CInt; } };
 #endif
 
-template <> struct accum_class_for_tag<accfloat>     { static constexpr AccumClass value() { return AccumClass::FP;   } };
 #if __AIE_ARCH__ == 10 || __AIE_API_COMPLEX_FP32_EMULATION__
 template <> struct accum_class_for_tag<caccfloat>    { static constexpr AccumClass value() { return AccumClass::CFP;  } };
+#endif
 #endif
 
 template <typename T>
@@ -93,6 +130,9 @@ template <> struct accum_bits_for_tag<acc72>         { static constexpr unsigned
 template <> struct accum_bits_for_tag<acc80>         { static constexpr unsigned value() { return 80; } };
 #endif
 
+template <> struct accum_bits_for_tag< accfloat>     { static constexpr unsigned value() { return 32; } };
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct accum_bits_for_tag<cacc16>        { static constexpr unsigned value() { return 16; } };
 template <> struct accum_bits_for_tag<cacc24>        { static constexpr unsigned value() { return 24; } };
 template <> struct accum_bits_for_tag<cacc32>        { static constexpr unsigned value() { return 32; } };
@@ -105,9 +145,9 @@ template <> struct accum_bits_for_tag<cacc72>        { static constexpr unsigned
 template <> struct accum_bits_for_tag<cacc80>        { static constexpr unsigned value() { return 80; } };
 #endif
 
-template <> struct accum_bits_for_tag< accfloat>     { static constexpr unsigned value() { return 32; } };
 #if __AIE_ARCH__ == 10 || __AIE_API_COMPLEX_FP32_EMULATION__
 template <> struct accum_bits_for_tag<caccfloat>     { static constexpr unsigned value() { return 32; } };
+#endif
 #endif
 
 template <typename T>
@@ -119,8 +159,15 @@ struct accum_class_for_type;
 template <typename T>
 static constexpr AccumClass accum_class_for_type_v = accum_class_for_type<T>::value();
 
-template <typename T1, typename T2>
-struct accum_class_for_mul_types;
+template <typename T, typename U>
+struct accum_class_for_mul_types {
+    static constexpr AccumClass value()
+    {
+        return accum_class_for_mul(accum_class_for_type_v<T>,
+                                   accum_class_for_type_v<U>);
+    }
+};
+
 
 template <typename T1, typename T2>
 static constexpr AccumClass accum_class_for_mul_types_v = accum_class_for_mul_types<T1, T2>::value();
@@ -128,17 +175,21 @@ static constexpr AccumClass accum_class_for_mul_types_v = accum_class_for_mul_ty
 template <typename T>
 struct is_valid_accum_type
 {
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-    static constexpr bool value = utils::is_one_of_v<T,  acc16,  acc24,  acc32,  acc40,  acc48,  acc56,  acc64, accfloat> ||
-                                  utils::is_one_of_v<T, cacc16, cacc24, cacc32, cacc40, cacc48, cacc56, cacc64
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-                                                     , caccfloat
+#if __AIE_ARCH__ == 10
+    static constexpr bool value = utils::is_one_of_v<T,  acc16,  acc24,  acc32,  acc40,  acc48,  acc56,  acc64,  acc72,  acc80, accfloat>
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
+                                  || utils::is_one_of_v<T, cacc16, cacc24, cacc32, cacc40, cacc48, cacc56, cacc64, cacc72, cacc80, caccfloat>
 #endif
-                                                     >;
-#elif __AIE_ARCH__ == 10
-    static constexpr bool value = utils::is_one_of_v<T,  acc16,  acc24,  acc32,  acc40,  acc48,  acc56,  acc64,  acc72,  acc80> ||
-                                  utils::is_one_of_v<T, cacc16, cacc24, cacc32, cacc40, cacc48, cacc56, cacc64, cacc72, cacc80> ||
-                                  utils::is_one_of_v<T, accfloat, caccfloat>;
+                                  ;
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+    static constexpr bool value = utils::is_one_of_v<T,  acc16,  acc24,  acc32,  acc40,  acc48,  acc56,  acc64, accfloat>
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
+                                  || utils::is_one_of_v<T, cacc16, cacc24, cacc32, cacc40, cacc48, cacc56, cacc64>
+#endif
+#if __AIE_API_COMPLEX_FP32_EMULATION__
+                                  || utils::is_one_of_v<T, caccfloat>
+#endif
+                                  ;
 #endif
 };
 
@@ -160,6 +211,7 @@ template <> struct accum_tag<AccumClass::Int,  64> { using type = acc64;     };
 template <> struct accum_tag<AccumClass::Int,  72> { using type = acc72;     };
 template <> struct accum_tag<AccumClass::Int,  80> { using type = acc80;     };
 #endif
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct accum_tag<AccumClass::CInt, 16> { using type = cacc16;    };
 template <> struct accum_tag<AccumClass::CInt, 24> { using type = cacc24;    };
 template <> struct accum_tag<AccumClass::CInt, 32> { using type = cacc32;    };
@@ -170,6 +222,7 @@ template <> struct accum_tag<AccumClass::CInt, 64> { using type = cacc64;    };
 #if __AIE_ARCH__ == 10
 template <> struct accum_tag<AccumClass::CInt, 72> { using type = cacc72;    };
 template <> struct accum_tag<AccumClass::CInt, 80> { using type = cacc80;    };
+#endif
 #endif
 
 template <AccumClass Class, unsigned Bits>
@@ -232,11 +285,12 @@ static constexpr unsigned default_accum_bits()
     if constexpr (is_floating_point_v<A> || is_floating_point_v<B>)
         return 32;
 
-#if __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     if constexpr (is_block_floating_point_v<A>)
         return 32;
 #endif
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 // TODO: replace with AIE_API_MATH_VERSION when it is supported
 #if __AIE_ARCH__ == 10
     else if constexpr (is_complex_v<A> && is_complex_v<B>) {
@@ -250,7 +304,7 @@ static constexpr unsigned default_accum_bits()
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, int16>) return 48;
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, int32>) return 64;
     }
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     else if constexpr (is_complex_v<A> && is_complex_v<B>) {
         if      constexpr (std::is_same_v<A, cint16> && std::is_same_v<B, cint16>) return 48; // TODO: check discrepancy with AIE1
         else if constexpr (std::is_same_v<A, cint32> && std::is_same_v<B, cint16>) return 48;
@@ -266,6 +320,7 @@ static constexpr unsigned default_accum_bits()
     else if constexpr (is_complex_v<B>) {
         return default_accum_bits<B, A>();
     }
+#endif
     else {
         if      constexpr (type_bits_v<A> ==  8 && type_bits_v<B> ==  8) return 32;
         else if constexpr (type_bits_v<A> ==  8 && type_bits_v<B> == 16) return 32;
@@ -280,40 +335,20 @@ static constexpr unsigned default_accum_bits()
     }
 }
 
-template <unsigned SumBits, bool is_float = false> struct default_accum_tag_helper;
-
-// TODO: replace with AIE_API_MATH_VERSION when it is supported
-#if __AIE_ARCH__ == 10
-template <> struct default_accum_tag_helper<32, true>  { using type = accfloat; using ctype = caccfloat; };
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-template <> struct default_accum_tag_helper<32, true>  { using type = accfloat; using ctype = caccfloat; };
-#else
-template <> struct default_accum_tag_helper<32, true>  { using type = accfloat; using ctype = void; };
-#endif
-#endif
-
-template <> struct default_accum_tag_helper<32, false> { using type = acc32;    using ctype = cacc32; };
-
-template <> struct default_accum_tag_helper<48>        { using type = acc48;    using ctype = cacc48; };
-
-template <> struct default_accum_tag_helper<64>        { using type = acc64;    using ctype = cacc64; };
-
-template <typename A, typename B> struct default_accum_tag
-{
-    using type = std::conditional_t<is_complex_v<A> || is_complex_v<B>,
-                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A> || is_floating_point_v<B>>::ctype,
-                                    typename default_accum_tag_helper<default_accum_bits<A, B>(), is_floating_point_v<A> || is_floating_point_v<B>>::type>;
-};
-
-template <typename A, typename B>
-using default_accum_tag_t = typename default_accum_tag<A, B>::type;
-
 template <typename T1, typename T2, unsigned Bits = default_accum_bits<T1, T2>()>
 using accum_tag_for_mul_types = accum_tag_t<accum_class_for_mul_types_v<T1, T2>, Bits>;
 
 template <typename T, unsigned Bits = default_accum_bits<T, T>()>
 using accum_tag_for_type = accum_tag_t<accum_class_for_type<T>::value(), Bits>;
+
+template <typename A, typename B>
+struct default_accum_tag
+{
+    using type = accum_tag_for_mul_types<A, B>;
+};
+
+template <typename A, typename B>
+using default_accum_tag_t = typename default_accum_tag<A, B>::type;
 
 template <AccumClass Class, unsigned MinBits>
 static constexpr unsigned to_native_accum_bits();
@@ -351,6 +386,16 @@ template <typename AccumTag, typename ...Tags>
 using accum_tag_or_default_t = std::conditional_t<std::is_same_v<AccumTag, accauto>,
                                                   typename deduce_accauto_helper<Tags...>::type,
                                                   AccumTag>;
+
+template <AccumElemBaseType Tag>
+struct is_floating_point<Tag> {
+    static constexpr bool value = is_floating_point_class(accum_class_for_tag_v<Tag>);
+};
+
+template <AccumElemBaseType Tag>
+struct is_complex<Tag> {
+    static constexpr bool value = is_complex_class(accum_class_for_tag_v<Tag>);
+};
 
 } // namespace detail
 } // namespace aie

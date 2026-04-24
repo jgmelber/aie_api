@@ -1,24 +1,136 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_MUL__HPP__
 #define __AIE_API_DETAIL_MUL__HPP__
 
+#include <algorithm>
+#include <cstdlib>
+#include <cmath>
+#include <climits>
+
 #include "broadcast.hpp"
 #include "filter.hpp"
 #include "interleave.hpp"
 #include "shuffle.hpp"
+#include "complex_traits.hpp"
 
 #include "../accum.hpp"
 #include "../expr.hpp"
 #include "../vector.hpp"
 
-#include <cstdlib>
-#include <cmath>
-#include <climits>
+namespace aie {
+
+template <typename T1, typename T2>
+struct is_valid_mul_op
+{
+    using type1 = operand_base_type_t<T1>;
+    using type2 = operand_base_type_t<T2>;
+
+    static constexpr bool value()
+    {
+        using namespace detail::utils;
+        bool result = false;
+#if __AIE_ARCH__ == 10
+        if constexpr (is_one_of_v<type2, int8, uint8>)
+            result = result || is_one_of_v<type1, int8, uint8, int16>;
+        if constexpr (std::is_same_v<type2, int16>)
+            result = result || is_one_of_v<type1, int8, uint8, int16, int32, cint16, cint32>;
+        if constexpr (std::is_same_v<type2, int32>)
+            result = result || is_one_of_v<type1, int16, int32, cint16, cint32>;
+        if constexpr (is_one_of_v<type2, float, cfloat>)
+            result = result || is_one_of_v<type1, float, cfloat>;
+        if constexpr (std::is_same_v<type2, cint16>)
+            result = result || is_one_of_v<type1, int16, int32, cint16, cint32>;
+        if constexpr (std::is_same_v<type2, cint32>)
+            result = result || is_one_of_v<type1, int16, int32, cint16, cint32>;
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if constexpr (is_one_of_v<type2, int4, uint4>)
+            result = result || is_one_of_v<type1, int4, uint4, int8, uint8>;
+        if constexpr (is_one_of_v<type2, int8, uint8>)
+            result = result || is_one_of_v<type1, int4, uint4, int8, uint8, int16, uint16>;
+        if constexpr (is_one_of_v<type2, int16, uint16>)
+            result = result || is_one_of_v<type1, int8, uint8, int16, uint16, int32, uint32, cint16, cint32>;
+        if constexpr (is_one_of_v<type2, int32, uint32>)
+            result = result || is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
+#if __AIE_API_COMPLEX_FP32_EMULATION__
+#if __AIE_API_CBF16_SUPPORT__
+        if constexpr (is_one_of_v<type2, bfloat16, cbfloat16>)
+            result = result || is_one_of_v<type1, bfloat16, cbfloat16>;
+#endif
+        if constexpr (is_one_of_v<type2, float, cfloat>)
+            result = result || is_one_of_v<type1, float, cfloat>;
+#endif
+        if constexpr (std::is_same_v<type2, float>)
+            result = result || std::is_same_v<type1, float>;
+        if constexpr (std::is_same_v<type2, cint16>)
+            result = result || is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
+        if constexpr (std::is_same_v<type2, cint32>)
+            result = result || is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
+#if __AIE_API_BF8_SUPPORT__
+        if constexpr (std::is_same_v<type2, bfloat8>)
+            result = result || std::is_same_v<type1, bfloat8>;
+#endif
+#if __AIE_API_FP8_SUPPORT__
+        if constexpr (std::is_same_v<type2, float8>)
+            result = result || std::is_same_v<type1, float8>;
+#endif
+#if __AIE_API_FP16_SUPPORT__
+#if __AIE_API_MIXED_BF16_FP16_SUPPORT__
+        if constexpr (is_one_of_v<type2, bfloat16, float16>)
+            result = result || is_one_of_v<type1, bfloat16, float16>;
+#endif
+        if constexpr (std::is_same_v<type2, float16>)
+            result = result || std::is_same_v<type1, float16>;
+#endif
+        if constexpr (std::is_same_v<type2, bfloat16>)
+            result = result || std::is_same_v<type1, bfloat16>;
+#endif
+        return result;
+    }
+};
+
+template <typename Parent, Operation Op, typename T2>
+struct is_valid_mul_op<unary_op<Parent, Op>, T2>
+{
+    static constexpr bool value()
+    {
+        return is_valid_mul_op<typename unary_op<Parent, Op>::value_type, T2>::value();
+    }
+};
+
+template <typename T, typename Parent, Operation Op>
+struct is_valid_mul_op<T, unary_op<Parent, Op>>
+{
+    static constexpr bool value()
+    {
+        return is_valid_mul_op<T, typename unary_op<Parent, Op>::value_type>::value();
+    }
+};
+
+template <typename Parent1, typename Parent2, Operation Op, typename T2>
+struct is_valid_mul_op<binary_op<Parent1, Parent2, Op>, T2>
+{
+    static constexpr bool value()
+    {
+        return is_valid_mul_op<typename binary_op<Parent1, Parent2, Op>::value_type, T2>::value();
+    }
+};
+
+template <typename T, typename Parent1, typename Parent2, Operation Op>
+struct is_valid_mul_op<T, binary_op<Parent1, Parent2, Op>>
+{
+    static constexpr bool value()
+    {
+        return is_valid_mul_op<T, typename binary_op<Parent1, Parent2, Op>::value_type>::value();
+    }
+};
+
+
+} // namespace aie
 
 namespace aie::detail {
 
@@ -101,7 +213,7 @@ enum class MulMacroOp
     Add_MulMin,
     Sub_MulMax,
     Sub_MulMin,
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     MulConj1,
     MulConj1Conj2,
     MulConj2,
@@ -152,7 +264,7 @@ static constexpr MulMacroOp swap_conjugate_order()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1) return MulMacroOp::Sub_MulAntisymConj2;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj2) return MulMacroOp::Sub_MulAntisymConj1;
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     if      constexpr (MulOp == MulMacroOp::MulConj1)            return MulMacroOp::MulConj2;
     else if constexpr (MulOp == MulMacroOp::MulConj2)            return MulMacroOp::MulConj1;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1)         return MulMacroOp::NegMulConj2;
@@ -200,7 +312,7 @@ static constexpr MulMacroOp remove_conj1()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1)      return MulMacroOp::Sub_MulAntisym;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj2;
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     if      constexpr (MulOp == MulMacroOp::MulConj1)                 return MulMacroOp::Mul;
     else if constexpr (MulOp == MulMacroOp::MulConj1Conj2)            return MulMacroOp::MulConj2;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1)              return MulMacroOp::NegMul;
@@ -252,7 +364,7 @@ static constexpr MulMacroOp remove_conj2()
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj1;
     else if constexpr (MulOp == MulMacroOp::Sub_MulAntisymConj2)      return MulMacroOp::Sub_MulAntisym;
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     if      constexpr (MulOp == MulMacroOp::MulConj1Conj2)            return MulMacroOp::MulConj1;
     else if constexpr (MulOp == MulMacroOp::MulConj2)                 return MulMacroOp::Mul;
     else if constexpr (MulOp == MulMacroOp::NegMulConj1Conj2)         return MulMacroOp::NegMulConj1;
@@ -278,7 +390,7 @@ constexpr bool has_abs()
             Op == MulMacroOp::Add_MulAbs1Conj2 ||
             Op == MulMacroOp::Sub_MulAbs1      ||
             Op == MulMacroOp::Sub_MulAbs1Conj2);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return false;
 #endif
 }
@@ -311,7 +423,7 @@ constexpr bool has_conj1()
             Op == MulMacroOp::Sub_MulSymConj1Conj2     ||
             Op == MulMacroOp::Sub_MulAntisymConj1      ||
             Op == MulMacroOp::Sub_MulAntisymConj1Conj2;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return (Op == MulMacroOp::MulConj1          ||
             Op == MulMacroOp::MulConj1Conj2     ||
             Op == MulMacroOp::NegMulConj1       ||
@@ -351,7 +463,7 @@ constexpr bool has_conj2()
             Op == MulMacroOp::Sub_MulSymConj1Conj2     ||
             Op == MulMacroOp::Sub_MulAntisymConj2      ||
             Op == MulMacroOp::Sub_MulAntisymConj1Conj2;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return (Op == MulMacroOp::MulConj2          ||
             Op == MulMacroOp::MulConj1Conj2     ||
             Op == MulMacroOp::NegMulConj2       ||
@@ -375,7 +487,7 @@ constexpr MulMacroOp to_mul_macro_op()
     else if constexpr (Op1 == Operation::Max  && Op2 == Operation::None) return MulMacroOp::MulMax;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return MulMacroOp::MulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return MulMacroOp::Mul;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -398,7 +510,7 @@ constexpr MulMacroOp to_mul_macro_op()
     else if constexpr (Op1 == Operation::Max  && Op2 == Operation::None) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_MulMax        : MulMacroOp::Sub_MulMax;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_MulConj2      : MulMacroOp::Sub_MulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return (AccOp == Operation::Acc_Add)? MulMacroOp::Add_Mul           : MulMacroOp::Sub_Mul;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -475,7 +587,7 @@ constexpr MulMacroOp to_negmul_macro_op()
     else if constexpr (Op1 == Operation::Conj && Op2 == Operation::Conj) return MulMacroOp::NegMulConj1Conj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::Conj) return MulMacroOp::NegMulConj2;
     else if constexpr (Op1 == Operation::None && Op2 == Operation::None) return MulMacroOp::NegMul;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static_assert(Op1 == Operation::None || Op1 == Operation::Conj);
     static_assert(Op2 == Operation::None || Op2 == Operation::Conj);
 
@@ -548,7 +660,7 @@ constexpr MulMacroOp add_to_op()
     else if constexpr (Op == MulMacroOp::NegMulAntisymConj1Conj2 || Op == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::Sub_MulAntisymConj1Conj2;
     else if constexpr (Op == MulMacroOp::MulMax                  || Op == MulMacroOp::Add_MulMax)               return MulMacroOp::Add_MulMax;
     else if constexpr (Op == MulMacroOp::MulMin                  || Op == MulMacroOp::Add_MulMin)               return MulMacroOp::Add_MulMin;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     else if constexpr (Op == MulMacroOp::MulConj1                || Op == MulMacroOp::Add_MulConj1)             return MulMacroOp::Add_MulConj1;
     else if constexpr (Op == MulMacroOp::MulConj2                || Op == MulMacroOp::Add_MulConj2)             return MulMacroOp::Add_MulConj2;
     else if constexpr (Op == MulMacroOp::MulConj1Conj2           || Op == MulMacroOp::Add_MulConj1Conj2)        return MulMacroOp::Add_MulConj1Conj2;
@@ -558,7 +670,52 @@ constexpr MulMacroOp add_to_op()
 #endif
 }
 
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+template <MulMacroOp Op>
+constexpr MulMacroOp remove_acc_from_op()
+{
+    if      constexpr (Op == MulMacroOp::Add_Mul)                  return MulMacroOp::Mul;
+    else if constexpr (Op == MulMacroOp::Add_NegMul)               return MulMacroOp::NegMul;
+#if __AIE_ARCH__ == 10
+    else if constexpr (Op == MulMacroOp::Add_MulSym)               return MulMacroOp::MulSym;
+    else if constexpr (Op == MulMacroOp::Add_NegMulSym)            return MulMacroOp::NegMulSym;
+    else if constexpr (Op == MulMacroOp::Add_MulAntisym)           return MulMacroOp::MulAntisym;
+    else if constexpr (Op == MulMacroOp::Add_NegMulAntisym)        return MulMacroOp::NegMulAntisym;
+    else if constexpr (Op == MulMacroOp::Add_MulAbs1)              return MulMacroOp::MulAbs1;
+    else if constexpr (Op == MulMacroOp::Add_MulAbs1Conj2)         return MulMacroOp::MulAbs1Conj2;
+    else if constexpr (Op == MulMacroOp::Add_MulConj1)             return MulMacroOp::MulConj1;
+    else if constexpr (Op == MulMacroOp::Add_MulConj2)             return MulMacroOp::MulConj2;
+    else if constexpr (Op == MulMacroOp::Add_MulConj1Conj2)        return MulMacroOp::MulConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Add_MulSymConj1)          return MulMacroOp::MulSymConj1;
+    else if constexpr (Op == MulMacroOp::Add_MulSymConj2)          return MulMacroOp::MulSymConj2;
+    else if constexpr (Op == MulMacroOp::Add_MulSymConj1Conj2)     return MulMacroOp::MulSymConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Add_MulAntisymConj1)      return MulMacroOp::MulAntisymConj1;
+    else if constexpr (Op == MulMacroOp::Add_MulAntisymConj2)      return MulMacroOp::MulAntisymConj2;
+    else if constexpr (Op == MulMacroOp::Add_MulAntisymConj1Conj2) return MulMacroOp::MulAntisymConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulAbs1)              return MulMacroOp::MulAbs1;
+    else if constexpr (Op == MulMacroOp::Sub_MulAbs1Conj2)         return MulMacroOp::MulAbs1Conj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj1)             return MulMacroOp::MulConj1;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj2)             return MulMacroOp::MulConj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj1Conj2)        return MulMacroOp::MulConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulSymConj1)          return MulMacroOp::MulSymConj1;
+    else if constexpr (Op == MulMacroOp::Sub_MulSymConj2)          return MulMacroOp::MulSymConj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulSymConj1Conj2)     return MulMacroOp::MulSymConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulAntisymConj1)      return MulMacroOp::MulAntisymConj1;
+    else if constexpr (Op == MulMacroOp::Sub_MulAntisymConj2)      return MulMacroOp::MulAntisymConj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulAntisymConj1Conj2) return MulMacroOp::MulAntisymConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Add_MulMax)               return MulMacroOp::MulMax;
+    else if constexpr (Op == MulMacroOp::Add_MulMin)               return MulMacroOp::MulMin;
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+    else if constexpr (Op == MulMacroOp::Add_MulConj1)             return MulMacroOp::MulConj1;
+    else if constexpr (Op == MulMacroOp::Add_MulConj2)             return MulMacroOp::MulConj2;
+    else if constexpr (Op == MulMacroOp::Add_MulConj1Conj2)        return MulMacroOp::MulConj1Conj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj1)             return MulMacroOp::MulConj1;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj2)             return MulMacroOp::MulConj2;
+    else if constexpr (Op == MulMacroOp::Sub_MulConj1Conj2)        return MulMacroOp::MulConj1Conj2;
+#endif
+    else return Op;
+}
+
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
 template <MulMacroOp MulOp>
 static constexpr auto get_scalar_mul_op()
 {
@@ -615,7 +772,7 @@ static constexpr auto get_scalar_mul_op()
         return [](const auto &m1, const auto &m2, const auto &a, const auto &acc) { return acc - a * std::min(m1, m2); };
     else if constexpr (MulOp == MulMacroOp::Sub_MulMin)
         return [](const auto &m1, const auto &m2, const auto &a, const auto &acc) { return acc + a * std::min(m1, m2); };
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     else if constexpr (MulOp == MulMacroOp::MulConj1)
         return [](const auto &_a, const auto &b)                   { auto a = { _a.real, (decltype(_a.imag))-_a.imag }; return a * b; };
     else if constexpr (MulOp == MulMacroOp::MulConj1Conj2)
@@ -642,8 +799,21 @@ constexpr bool get_mul_sign(T v)
 {
         if constexpr (is_op_v<T> && T::is_operation(Operation::Sign))
             return v.parent2();
+        else if constexpr (is_tbs_op_v<T>)
+            return detail::is_signed_v<typename T::elem_type>; 
         else
             return detail::is_signed_v<typename T::value_type>;
+}
+
+template <typename T1, typename T2>
+__aie_inline
+constexpr bool eval_sub_mul(T1 v1, T2 v2)
+{
+        if      constexpr ((is_op_v<T1> && T1::is_operation(Operation::Neg)) &&
+                           (is_op_v<T2> && T2::is_operation(Operation::Neg)))   return v1.parent2() != v2.parent2();
+        else if constexpr (is_op_v<T1> && T1::is_operation(Operation::Neg))     return v1.parent2();
+        else if constexpr (is_op_v<T2> && T2::is_operation(Operation::Neg))     return v2.parent2();
+        else                                                                    return false;
 }
 
 template <typename T>
@@ -651,7 +821,7 @@ __aie_inline
 constexpr Operation evaluate_mul_operation()
 {
     //TODO: Simplify based on evaluating on parent ops if parent isn't a vector
-    if constexpr (T::is_operation(Operation::Sign))
+    if constexpr (T::is_operation(Operation::Sign, Operation::Neg))
         return Operation::None;
     else
         return T::operation;
@@ -660,7 +830,7 @@ constexpr Operation evaluate_mul_operation()
 template <MulMacroOp MulOp, unsigned AccumBits, unsigned Type1Bits, typename T1, unsigned Type2Bits, typename T2>
 struct mul_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     template <unsigned Elems>
     using vector_type1 = vector<T1, Elems>;
 
@@ -672,7 +842,13 @@ struct mul_bits_impl
     using   accum_type = accum<accum_tag, Elems>;
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
-    static accum_type<Elems> run(const vector_type1<Elems> &v1, bool v1_sign, const vector_type2<Elems> &v2, bool v2_sign, const Acc &... acc)
+    static accum_type<Elems> run(const vector_type1<Elems> &v1, bool v1_sign,
+                                 const vector_type2<Elems> &v2, bool v2_sign,
+#if __AIE_ARCH__ != 10
+                                 bool sub_mul, bool sub_acc,
+                                 bool zero_acc,
+#endif
+                                 const Acc &... acc)
     {
         // Add subscript operator for accumulators
         accum_type<Elems> ret;
@@ -685,7 +861,13 @@ struct mul_bits_impl
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
-    static accum_type<Elems> run(T1 a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
+    static accum_type<Elems> run(T1 a,                         bool a_sign,
+                                 const vector_type2<Elems> &v, bool v_sign,
+#if __AIE_ARCH__ != 10
+                                 bool sub_mul, bool sub_acc,
+                                 bool zero_acc,
+#endif
+                                 const Acc &... acc)
     {
         accum_type<Elems> ret;
         auto mul_op = get_scalar_mul_op<MulOp>();
@@ -697,7 +879,13 @@ struct mul_bits_impl
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
-    static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign, T2 a, bool a_sign, const Acc &... acc)
+    static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign,
+                                 T2 a,                         bool a_sign,
+#if __AIE_ARCH__ != 10
+                                 bool sub_mul, bool sub_acc,
+                                 bool zero_acc,
+#endif
+                                 const Acc &... acc)
     {
         accum_type<Elems> ret;
         auto mul_op = get_scalar_mul_op<MulOp>();
@@ -713,7 +901,7 @@ struct mul_bits_impl
 template <MulMacroOp MulOp, unsigned AccumBits, unsigned Type1Bits, typename T1, unsigned Type2Bits, typename T2>
 struct mul_maxmin_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     template <unsigned Elems>
     using vector_type1 = vector<T1, Elems>;
 
@@ -745,7 +933,7 @@ struct mul_maxmin_bits_impl
 template <unsigned AccumBits, unsigned TypeBits, typename T, unsigned Elems>
 struct mul_reduce_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static T run(const vector_type &v)
@@ -783,42 +971,170 @@ struct mul_bits
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(const vector_type1<Elems> &v1, bool v1_sign, const vector_type2<Elems> &v2, bool v2_sign, const Acc &... acc)
+    static auto run(const vector_type1<Elems> &v1, bool v1_sign,
+                    const vector_type2<Elems> &v2, bool v2_sign,
+                    bool sub_mul, bool sub_acc,
+                    bool zero_acc, const Acc &... acc)
     {
+#if __AIE_ARCH__ == 10
         return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v1, v1_sign, v2, v2_sign, acc...);
+#else
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v1, v1_sign, v2, v2_sign, sub_mul, sub_acc, zero_acc, acc...);
+#endif
     }
 
-    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(vector_elem_const_ref<T1, Elems> a, bool a_sign, const vector_type2<Elems2> &v, bool v_sign, const Acc &... acc)
+    static auto run(const vector_type1<Elems> &v1, bool v1_sign,
+                    const vector_type2<Elems> &v2, bool v2_sign,
+                    const Acc &... acc)
     {
-        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(a, a_sign, v, v_sign, acc...);
+        return run(v1, v1_sign, v2, v2_sign, false, false, false, acc...);
+    }
+
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v1, bool v1_sign,
+                    const vector_type2<Elems> &v2, bool v2_sign,
+                    bool sub_mul,
+                    const Acc &... acc)
+    {
+        return run(v1, v1_sign, v2, v2_sign, sub_mul, false, false, acc...);
     }
 
     template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(const vector_type1<Elems> &v, bool v_sign, vector_elem_const_ref<T2, Elems2> a, bool a_sign, const Acc &... acc)
+    static auto run(vector_elem_const_ref<T1, Elems> a, bool a_sign,
+                    const vector_type2<Elems2> &v,      bool v_sign,
+                    bool sub_mul, bool sub_acc,
+                    bool zero_acc, const Acc &... acc)
+    {
+#if __AIE_ARCH__ == 10
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(a, a_sign, v, v_sign, acc...);
+#else
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(a, a_sign, v, v_sign, sub_mul, sub_acc, zero_acc, acc...);
+#endif
+    }
+
+    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(vector_elem_const_ref<T1, Elems> a, bool a_sign,
+                    const vector_type2<Elems2> &v,      bool v_sign,
+                    const Acc &... acc)
+    {
+        return run(a, a_sign, v, v_sign, false, false, false, acc...);
+    }
+
+    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(vector_elem_const_ref<T1, Elems> a, bool a_sign,
+                    const vector_type2<Elems2> &v,      bool v_sign,
+                    bool sub_mul,
+                    const Acc &... acc)
+    {
+        return run(a, a_sign, v, v_sign, sub_mul, false, false, acc...);
+    }
+
+    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v,        bool v_sign,
+                    vector_elem_const_ref<T2, Elems2> a, bool a_sign,
+                    bool sub_mul, bool sub_acc,
+                    bool zero_acc, const Acc &... acc)
     {
 #if __AIE_ARCH__ == 10
         if (!chess_const(a.offset))
             return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v, v_sign, a.get(), a_sign, acc...);
         else
-#endif
             return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v, v_sign, a, a_sign, acc...);
+#else
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v, v_sign, a, a_sign, sub_mul, sub_acc, zero_acc, acc...);
+#endif
+    }
+
+    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v,        bool v_sign,
+                    vector_elem_const_ref<T2, Elems2> a, bool a_sign,
+                    const Acc &... acc)
+    {
+        return run(v, v_sign, a, a_sign, false, false, false, acc...);
+    }
+
+    template <unsigned Elems, unsigned Elems2, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v,        bool v_sign,
+                    vector_elem_const_ref<T2, Elems2> a, bool a_sign,
+                    bool sub_mul,
+                    const Acc &... acc)
+    {
+        return run(v, v_sign, a, a_sign, sub_mul, false, false, acc...);
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(const T1 &a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
+    static auto run(const T1 &a,                  bool a_sign,
+                    const vector_type2<Elems> &v, bool v_sign,
+                    bool sub_mul, bool sub_acc,
+                    bool zero_acc, const Acc &... acc)
     {
+#if __AIE_ARCH__ == 10
         return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(a, a_sign, v, v_sign, acc...);
+#else
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(a, a_sign, v, v_sign, sub_mul, sub_acc, zero_acc, acc...);
+#endif
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(const vector_type1<Elems> &v, bool v_sign, const T2 &a, bool a_sign, const Acc &... acc)
+    static auto run(const T1 &a,                  bool a_sign,
+                    const vector_type2<Elems> &v, bool v_sign,
+                    const Acc &... acc)
     {
+        return run(a, a_sign, v, v_sign, false, false, false, acc...);
+    }
+
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const T1 &a,                  bool a_sign,
+                    const vector_type2<Elems> &v, bool v_sign,
+                    bool sub_mul,
+                    const Acc &... acc)
+    {
+        return run(a, a_sign, v, v_sign, sub_mul, false, false, acc...);
+    }
+
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v, bool v_sign,
+                    const T2 &a,                  bool a_sign,
+                    bool sub_mul, bool sub_acc,
+                    bool zero_acc, const Acc &... acc)
+    {
+#if __AIE_ARCH__ == 10
         return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v, v_sign, a, a_sign, acc...);
+#else
+        return mul_bits_impl<MulOp, AccumBits, Type1Bits, T1, Type2Bits, T2>::run(v, v_sign, a, a_sign, sub_mul, sub_acc, zero_acc, acc...);
+#endif
+    }
+
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v, bool v_sign,
+                    const T2 &a,                  bool a_sign,
+                    const Acc &... acc)
+    {
+        return run(v, v_sign, a, a_sign, false, false, false, acc...);
+    }
+
+    template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
+    static auto run(const vector_type1<Elems> &v, bool v_sign,
+                    const T2 &a,                  bool a_sign,
+                    bool sub_mul,
+                    const Acc &... acc)
+    {
+        return run(v, v_sign, a, a_sign, sub_mul, false, false, acc...);
     }
 };
 
@@ -875,11 +1191,16 @@ struct sliding_mul_bits
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
 
+#if __AIE_ARCH__ == 10
         return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data, data_start, data_sign, acc...);
+#else
+        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data, data_start, data_sign, zero_acc, acc...);
+#endif
     }
 };
 
@@ -904,6 +1225,7 @@ struct sliding_mul_sym_bits
                     unsigned coeff_start,
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
+                    bool /*zero_acc*/,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -921,6 +1243,7 @@ struct sliding_mul_sym_bits
                     const vector<DataType, N_Data> &data,
                     unsigned ldata_start,
                     unsigned rdata_start,
+                    bool /*zero_acc*/,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -936,6 +1259,7 @@ struct sliding_mul_sym_bits
                           unsigned ldata_start,
                           const vector<DataType, N_Data> &rdata,
                           unsigned rdata_start,
+                          bool /*zero_acc*/,
                           const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -966,6 +1290,7 @@ struct sliding_mul_sym_uct_bits
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
                     unsigned uct_shift,
+                    bool /*zero_acc*/,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -982,6 +1307,7 @@ struct sliding_mul_sym_uct_bits
                           const vector<DataType, N_Data> &rdata,
                           unsigned rdata_start,
                           unsigned uct_shift,
+                          bool /*zero_acc*/,
                           const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -992,7 +1318,7 @@ struct sliding_mul_sym_uct_bits
 
 template <typename CoeffType, unsigned CoeffBits, typename DataType, unsigned DataBits> struct sliding_mul_ch_accum_tag;
 template <typename CoeffType,                     typename DataType>                    struct sliding_mul_ch_accum_tag<CoeffType,  8, DataType,  8> { using type = acc32; };
-#if __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 template <typename CoeffType,                     typename DataType>                    struct sliding_mul_ch_accum_tag<CoeffType, 16, DataType, 16> { using type = acc64; };
 #endif
 
@@ -1023,50 +1349,26 @@ struct sliding_mul_ch_bits
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
 
-        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data, data_start, data_sign, acc...);
+        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data, data_start, data_sign, zero_acc, acc...);
     }
 };
 
 #if __AIE_ARCH__ >= 20
 
-// Helpers for complex sliding muls
-namespace {
-
-template <typename T>
-struct remove_complex;
-
-template <Accum A>
-    requires(A::value_class() == AccumClass::CInt)
-struct remove_complex<A> {
-    using value_type = accum_tag_t<AccumClass::Int, A::accum_min_bits()>;
-    using type = accum<value_type, A::size()>;
-};
-
-template <Vector V>
-    requires(V::is_complex())
-struct remove_complex<V> {
-    using value_type = utils::get_complex_component_type_t<typename V::value_type>;
-    using type = vector<value_type, V::size()>;
-};
-
-template <typename T>
-using remove_complex_t = typename remove_complex<T>::type;
-
-} // namespace
-
 // Distribute real and imaginary elements of a complex vector into two vectors
-template <Vector VecIn>
-  requires(VecIn::is_complex() && !VecIn::is_floating_point())
+template <ComplexVector VecIn>
 __aie_inline
-static std::pair<remove_complex_t<VecIn>, remove_complex_t<VecIn>> unzip_complex(const VecIn &in) {
+static std::array<remove_complex_t<VecIn>, 2> unzip_complex(const VecIn &in) {
     using real_type = typename remove_complex<VecIn>::value_type;
     constexpr unsigned elems = VecIn::size();
 
-    return interleave_unzip<real_type, 2 * elems>::run(in.template cast_to<real_type>(), 1);
+    auto [lo, hi] = interleave_unzip<real_type, 2 * elems>::run(in.template cast_to<real_type>(), 1);
+    return std::array{lo ,hi};
 }
 
 // Splits complex components and distribute accumulator halves into their own
@@ -1074,7 +1376,7 @@ static std::pair<remove_complex_t<VecIn>, remove_complex_t<VecIn>> unzip_complex
 template <Accum AccIn>
     requires(AccIn::value_class() == AccumClass::CInt)
 __aie_inline
-static std::pair<remove_complex_t<AccIn>, remove_complex_t<AccIn>> unzip_complex(const AccIn &in)
+static std::array<remove_complex_t<AccIn>, 2> unzip_complex(const AccIn &in)
 {
     using result_tag = typename remove_complex_t<AccIn>::value_type;
     constexpr unsigned elems = AccIn::size();
@@ -1084,7 +1386,8 @@ static std::pair<remove_complex_t<AccIn>, remove_complex_t<AccIn>> unzip_complex
     // Using different granularities and/or different input/output types (e.g. complex acc) may interfere with the
     // patterns of the optimization pass, limiting the efficiency of consecutive operations (zip followed by unzip can
     // sometimes be optimized away).
-    return interleave_unzip<result_tag, 2 * elems>::run(in.template cast_to<result_tag>(), 1);
+    auto [lo, hi] = interleave_unzip<result_tag, 2 * elems>::run(in.template cast_to<result_tag>(), 1);
+    return std::array{lo, hi};
 }
 
 // Combines two accumulators containing real and imaginary values respectively
@@ -1099,39 +1402,86 @@ static auto combine_into_complex(const AccIn &real, const AccIn &imag) ->
     using T          = typename AccIn::value_type;
 
     constexpr unsigned Elems       = AccIn::size();
+#if __AIE_ARCH__ == 20
     constexpr unsigned NativeElems = 512 / AccIn::value_bits();
 
     accum<result_tag, Elems> result;
-
     utils::unroll_times<std::max(1u, AccIn::bits() / 512)>([&](unsigned idx){
-        auto [low, high] = interleave_zip<T, NativeElems>::run(real.template grow_extract<NativeElems>(idx),
-                                                               imag.template grow_extract<NativeElems>(idx),
-                                                               1);
-        result.insert(idx, concat(low, high).template cast_to<result_tag>()
-                                            .template extract<std::min(Elems, NativeElems)>(0));
+        auto [lo, hi] = interleave_zip<T, NativeElems>::run(real.template grow_extract<NativeElems>(idx),
+                                                            imag.template grow_extract<NativeElems>(idx),
+                                                            1);
+        result.insert(idx, concat(lo, hi).template cast_to<result_tag>()
+                                         .template extract<std::min(Elems, NativeElems)>(0));
     });
-
-    return result;
+#else
+    auto [lo, hi] = interleave_zip<T, Elems>::run(real, imag, 1);
+    auto result = lo.template grow<2 * Elems>(); // Must use grow+insert here, if we replace with two inserts, the
+                                                 // compiler wont optimize correctly because the undef_*() type will not
+                                                 // match the component types.
+    result.insert(1, hi);
+#endif
+    return result.template cast_to<result_tag>();
 }
 
-template <unsigned ElemsOut, Vector VecIn>
-auto grow_all(const std::pair<VecIn, VecIn> in) {
-    auto do_grow = [](const auto &... v) {
-        return std::tuple{v.template grow_replicate<ElemsOut>()...};
+template <Vector VecIn>
+__aie_inline
+static auto combine_into_complex(const VecIn &real, const VecIn &imag) ->
+    vector<add_complex_t<typename VecIn::value_type>, VecIn::size()>
+{
+    using result_elem_t = add_complex_t<typename VecIn::value_type>;
+    using input_elem_t  = typename VecIn::value_type;
+
+    constexpr unsigned Elems       = VecIn::size();
+#if __AIE_ARCH__ == 20
+    constexpr unsigned NativeElems = 512 / VecIn::type_bits();
+
+    vector<result_elem_t, Elems> result;
+    utils::unroll_times<std::max(1u, VecIn::bits() / 512)>([&](unsigned idx){
+        using zip = interleave_zip<input_elem_t, NativeElems>;
+        auto [lo, hi] = zip::run(real.template grow_extract<NativeElems>(idx),
+                                 imag.template grow_extract<NativeElems>(idx),
+                                 1);
+        result.insert(idx, concat(lo, hi).template cast_to<result_elem_t>()
+                                         .template extract<std::min(Elems, NativeElems)>(0));
+    });
+#else
+    using zip = interleave_zip<input_elem_t, Elems>;
+    auto [lo, hi] = zip::run(real, imag, 1);
+    auto result = lo.template grow<2 * Elems>(); // Must use grow+insert here, if we replace with two inserts, the
+                                                 // compiler wont optimize correctly because the undef_*() type will not
+                                                 // match the component types.
+    result.insert(1, hi);
+#endif
+    return result.template cast_to<result_elem_t>();
+}
+
+template <typename T>
+    requires((Vector<T> || Accum<T>) && !T::is_complex())
+__aie_inline
+static auto combine_into_complex(const std::array<T, 2> &t)
+{
+    return combine_into_complex(t.front(), t.back());
+}
+
+template <unsigned ElemsOut, Vector VecIn, size_t N>
+__aie_inline
+static inline std::array<vector<typename VecIn::value_type, ElemsOut>, N> grow_all(const std::array<VecIn, N> &in) {
+    auto do_grow = [](const auto &... v) __aie_inline {
+        return std::array{v.template grow_replicate<ElemsOut>()...};
     };
 
     return utils::apply_tuple(do_grow, in);
 }
 
-template <unsigned ElemsOut, Accum AccIn>
-auto grow_all(const std::pair<AccIn, AccIn> in) {
-    auto do_grow = [](const auto &... v) {
-        return std::tuple{v.template grow<ElemsOut>()...};
+template <unsigned ElemsOut, Accum AccIn, size_t N>
+__aie_inline
+static inline std::array<accum<typename AccIn::value_type, ElemsOut>, N> grow_all(const std::array<AccIn, N> &in) {
+    auto do_grow = [](const auto &... v) __aie_inline {
+        return std::array{v.template grow<ElemsOut>()...};
     };
 
     return utils::apply_tuple(do_grow, in);
 }
-
 
 // AIE2 and later architectures have limited support for permute patterns. These specializations handle patterns in
 // which the DataStep is 2. They are implemented by unzipping data first and then calling sliding_mul with DataStep = 1
@@ -1159,6 +1509,7 @@ struct sliding_mul_bits_impl<OutElems, Points, CoeffStep, 2, 2, AccumBits, Coeff
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -1176,7 +1527,7 @@ struct sliding_mul_bits_impl<OutElems, Points, CoeffStep, 2, 2, AccumBits, Coeff
 
         data2 = filter<DataType, data_elems, FilterOp::Even>::run(tmp, 1).template grow_replicate<native_data_elems>();
 
-        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data2, 0, data_sign, acc...);
+        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data2, 0, data_sign, zero_acc, acc...);
     }
 };
 
@@ -1203,6 +1554,7 @@ struct sliding_mul_bits_impl<OutElems, Points, 2, 1, 1, AccumBits, CoeffTypeBits
             const vector<DataType, N_Data> &data,
             unsigned data_start,
             bool data_sign,
+            bool zero_acc,
             const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -1221,7 +1573,7 @@ struct sliding_mul_bits_impl<OutElems, Points, 2, 1, 1, AccumBits, CoeffTypeBits
 
         coeff2 = filter<CoeffType, coeff_elems, FilterOp::Even>::run(tmp, 1).template grow_replicate<native_coeff_elems>();
 
-        return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, acc...);
+        return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, zero_acc, acc...);
     }
 };
 
@@ -1249,6 +1601,7 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, CoeffStep, 2, 2, Accu
                     const vector<DataType, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -1266,7 +1619,7 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, CoeffStep, 2, 2, Accu
 
         data2 = filter<DataType, data_elems, FilterOp::Even>::run(tmp, Channels).template grow_replicate<native_data_elems>();
 
-        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data2, 0, data_sign, acc...);
+        return impl_type::template run<Op>(coeff, coeff_start, coeff_sign, data2, 0, data_sign, zero_acc, acc...);
     }
 };
 
@@ -1294,6 +1647,7 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, 2, 1, 1, AccumBits, C
             const vector<DataType, N_Data> &data,
             unsigned data_start,
             bool data_sign,
+            bool zero_acc,
             const Acc &... acc)
     {
         REQUIRES_CONSTANT_MSG(coeff_start, "coeff_start must be a compile-time constant");
@@ -1312,7 +1666,7 @@ struct sliding_mul_ch_bits_impl<Outputs, Channels, Points, 2, 1, 1, AccumBits, C
 
         coeff2 = filter<CoeffType, coeff_elems, FilterOp::Even>::run(tmp, Channels).template grow_replicate<native_coeff_elems>();
 
-        return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, acc...);
+        return impl_type::template run<Op>(coeff2, 0, coeff_sign, data, data_start, data_sign, zero_acc, acc...);
     }
 };
 
@@ -1343,10 +1697,159 @@ template <unsigned N, typename T>
 __aie_inline
 auto mul_vector_or_scalar(T scalar)
 {
+#if __AIE_ARCH__ == 22
+    // AIE2PS adds support for automatic broadcast of operand B in mul intrinsics to reduce vector register pressure
+    return scalar;
+#else
     return broadcast<T, N>::run(scalar);
+#endif
 }
 
-}
+template <typename ImplType>
+concept ComplexEmulationWithUnzip = requires {
+    typename ImplType::accum_type;       // The complex accumulator result
+    typename ImplType::partial_sum_type; // The accumulator result split in real and imaginary parts
+
+};
+
+template <unsigned Lanes, unsigned Points, int CoeffStep, int DataStepX, int DataStepY, typename CoeffType, typename DataType, AccumElemBaseType AccumTag>
+class partial_sliding_mul {
+public:
+    using accum_type      = accum<AccumTag, Lanes>;
+    using real_accum_type = remove_complex_t<accum_type>;
+
+    static constexpr bool split_complex_components()
+    {
+        return ComplexEmulationWithUnzip<partial_sliding_mul::impl_type>;
+    }
+
+    partial_sliding_mul() = default;
+    partial_sliding_mul(const partial_sliding_mul &) = default;
+
+    __aie_inline
+    explicit partial_sliding_mul(const accum_type &acc)
+        : sum()
+        , zero_acc(false)
+    {
+        if constexpr (split_complex_components()) {
+            sum = unzip_complex(acc);
+        }
+        else {
+            sum = acc;
+        }
+    }
+
+    __aie_inline
+    explicit partial_sliding_mul(const std::array<real_accum_type, 2> &acc)
+        requires(accum_type::is_complex())
+        : sum()
+        , zero_acc(false)
+    {
+        if constexpr (split_complex_components()) {
+            sum = acc;
+        }
+        else {
+            sum = combine_into_complex(acc);
+        }
+    }
+
+    template <unsigned N_Coeff, unsigned N_Data>
+    __aie_inline
+    void mul(const vector<CoeffType, N_Coeff> &coeff,
+             unsigned coeff_start,
+             const vector<DataType, N_Data>  &data,
+             unsigned data_start)
+    {
+        constexpr MulMacroOp Op = MulMacroOp::Mul;
+        if constexpr(split_complex_components()) {
+            // Must disambiguate return type when input accumulator is not passed as argument
+            std::array<real_accum_type, 0> in;
+            sum = impl_type::template run<Op>(coeff, coeff_start, coeff.is_signed(),
+                                              data, data_start, data.is_signed(),
+                                              true, in);
+        }
+        else {
+            sum = impl_type::template run<Op>(coeff, coeff_start, coeff.is_signed(),
+                                              data, data_start, data.is_signed(),
+                                              true);
+        }
+        zero_acc = false;
+    }
+
+
+    template <unsigned N_Coeff, unsigned N_Data>
+    __aie_inline
+    void mac(const vector<CoeffType, N_Coeff> &coeff,
+             unsigned coeff_start,
+             const vector<DataType, N_Data>  &data,
+             unsigned data_start)
+    {
+        constexpr MulMacroOp Op = MulMacroOp::Add_Mul;
+        sum = impl_type::template run<Op>(coeff, coeff_start, coeff.is_signed(),
+                                          data, data_start, data.is_signed(),
+                                          zero_acc,
+                                          sum);
+        zero_acc = false;
+    }
+
+    accum_type to_accum() const
+    {
+        if constexpr (split_complex_components()) {
+            return combine_into_complex(sum);
+        } else {
+            return sum;
+        }
+    }
+
+    std::array<real_accum_type, 2> to_accum_components() const
+        requires(accum_type::is_complex())
+    {
+        if constexpr (split_complex_components()) {
+            return sum;
+        } else {
+            return unzip_complex(sum);
+        }
+    }
+
+    template <ElemBaseType T>
+    vector<T, Lanes> to_vector(int shift) const
+        requires(accum_type::is_complex() == vector<T, Lanes>::is_complex())
+    {
+        // It is more efficient to perform SRS first, and then shuffle to get the desired result representation
+        if constexpr (split_complex_components()) {
+            using real_t = remove_complex_t<T>;
+            return combine_into_complex(to_vector_components<real_t>(shift));
+        } else {
+            return to_accum().template to_vector<T>(shift);
+        }
+    }
+
+    template <ElemBaseType T>
+    std::array<vector<T, Lanes>, 2> to_vector_components(int shift) const
+        requires(accum_type::is_complex() && !vector<T, Lanes>::is_complex())
+    {
+        // It is more efficient to perform SRS first, and then shuffle to get the desired result representation
+        if constexpr (split_complex_components()) {
+            return utils::apply_tuple(
+                        [shift] (auto &&... cs) __aie_inline {
+                            return std::array{cs.template to_vector<T>(shift)...};
+                        },
+                        to_accum_components());
+        } else {
+            using complex_t = add_complex_t<T>;
+            return unzip_complex(to_vector<complex_t>(shift));
+        }
+    }
+private:
+    static constexpr unsigned accum_bits = detail::to_native_accum_bits_for_mul_types_tag<CoeffType, DataType, AccumTag>();
+
+    using impl_type = sliding_mul_bits_impl<Lanes, Points, CoeffStep, DataStepX, DataStepY, accum_bits, type_bits_v<CoeffType>, type_bits_v<DataType>, CoeffType, DataType>;
+
+    std::conditional_t<split_complex_components(), std::array<real_accum_type, 2>, accum_type> sum;
+    bool zero_acc = true;
+};
+
+} // aie::detail
 
 #if __AIE_ARCH__ == 10
 
@@ -1361,11 +1864,15 @@ auto mul_vector_or_scalar(T scalar)
 #include "aie2/mul_reduce.hpp"
 #include "aie2/sliding_mul.hpp"
 
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2p/mul.hpp"
 #include "aie2/mul_reduce.hpp"
 #include "aie2p/sliding_mul.hpp"
+
+#if __AIE_ARCH__ == 22
+#include "aie2ps/mul.hpp"
+#endif
 
 #endif
 

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_ACCUM__HPP__
 #define __AIE_API_DETAIL_AIE1_ACCUM__HPP__
+
+#include <algorithm>
 
 #include "accum_native_types.hpp"
 
@@ -537,7 +539,7 @@ public:
 #endif
             const vector<float, ElemsIn> tmp_in = acc.data;
 
-            const accum_base acc_tmp(tmp.template insert(idx, tmp_in));
+            const accum_base acc_tmp(tmp.insert(idx, tmp_in));
 
             data = acc_tmp.data;
 
@@ -560,7 +562,7 @@ public:
 #endif
             const vector<cfloat, ElemsIn> tmp_in = acc.data;
 
-            const accum_base acc_tmp(tmp.template insert(idx, tmp_in));
+            const accum_base acc_tmp(tmp.insert(idx, tmp_in));
 
             data = acc_tmp.data;
 

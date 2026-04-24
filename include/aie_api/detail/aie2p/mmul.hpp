@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -15,8 +15,14 @@
 #include "mmul_16_32.hpp"
 #include "mmul_32_16.hpp"
 #include "mmul_32_32.hpp"
+#include "mmul_fp32_fp32.hpp"
+#if __AIE_ARCH__ == 21
 #include "mmul_bf16_bf16.hpp"
 #include "mmul_bfp16_bfp16.hpp"
+#elif __AIE_ARCH__ == 22
+#include "../aie2ps/mmul_fp_fp.hpp"
+#include "../aie2ps/mmul_mx_mx.hpp"
+#endif
 #include "mmul_c16_16.hpp"
 #include "mmul_c16_c16.hpp"
 #include "mmul_c32_c16.hpp"

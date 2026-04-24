@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -49,11 +49,11 @@ namespace aie {
  * aie::fft_dit_r2_stage<Vectorization>(x, tw, n, shift_tw, shift, inv, y);
  * @endcode
  *
- * @tparam Vectorization  Vectorization of the FFT stage
- * @tparam Radix Number which selects the FFT radix.
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Radix         FFT radix.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements. Defaults to input type.
+ * @tparam Twiddle       Type of twiddle factors. Defaults to cint16 for integral types and cfloat for floating point.
  *
  * @sa fft_dit_r2_stage, fft_dit_r3_stage, fft_dit_r4_stage, fft_dit_r5_stage
  */
@@ -75,10 +75,10 @@ using fft_dit [[deprecated("Use fft_r*_dit_stage function instead")]] =
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::Gen1, arch::Gen2))
@@ -118,13 +118,13 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE, arch::AIE_ML))
+    requires(arch::is(arch::Gen1, arch::Gen2))
 __aie_fft_inline
 void fft_dit_r3_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -164,10 +164,10 @@ void fft_dit_r3_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::Gen1, arch::Gen2))
@@ -213,13 +213,13 @@ void fft_dit_r4_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE, arch::AIE_ML))
+    requires(arch::is(arch::Gen1, arch::Gen2))
 __aie_fft_inline
 void fft_dit_r5_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -254,13 +254,13 @@ void fft_dit_r5_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE, arch::AIE_ML) && detail::is_floating_point_v<Input>)
+    requires(arch::is(arch::AIE, arch::AIE_ML, arch::AIE_MLv2) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r2_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw,
@@ -295,13 +295,13 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)
+    requires(arch::is(arch::AIE, arch::AIE_ML, arch::AIE_MLv2) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r3_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -340,13 +340,13 @@ void fft_dit_r3_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE_ML) && std::is_same_v<Input, cbfloat16>)
+    requires(arch::is(arch::AIE_ML, arch::AIE_MLv2) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r4_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -388,13 +388,13 @@ void fft_dit_r4_stage(const Input * __restrict x,
  * @param inv      Run inverse FFT stage
  * @param out      Output data pointer
  *
- * @tparam Vectorization Vectorization of the FFT stage
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Vectorization Number of independent butterfly units in the stage.
+ * @tparam Input         Type of the input elements.
+ * @tparam Output        Type of the output elements.
+ * @tparam Twiddle       Type of twiddle factors.
  */
 template <unsigned Vectorization, typename Input, typename Output, typename Twiddle>
-    requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)
+    requires(arch::is(arch::AIE, arch::AIE_ML, arch::AIE_MLv2) && detail::is_floating_point_v<Input>)
 __aie_fft_inline
 void fft_dit_r5_stage(const Input * __restrict x,
                       const Twiddle * __restrict tw0,
@@ -436,9 +436,9 @@ void fft_dit_r5_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE))
@@ -481,9 +481,9 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE))
@@ -529,9 +529,9 @@ void fft_dit_r3_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE))
@@ -580,9 +580,9 @@ void fft_dit_r4_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE))
@@ -623,9 +623,9 @@ void fft_dit_r5_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)
@@ -666,9 +666,9 @@ void fft_dit_r2_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)
@@ -713,9 +713,9 @@ void fft_dit_r3_stage(const Input * __restrict x,
  * @param inv           Run inverse FFT stage
  * @param out           Output data pointer
  *
- * @tparam Input   Type of the input elements.
- * @tparam Output  Type of the output elements, defaults to input type.
- * @tparam Twiddle Type of the twiddle elements, defaults to cint16 for integral types and cfloat for floating point.
+ * @tparam Input        Type of the input elements.
+ * @tparam Output       Type of the output elements.
+ * @tparam Twiddle      Type of twiddle factors.
  */
 template <typename Input, typename Output, typename Twiddle>
     requires(arch::is(arch::AIE) && detail::is_floating_point_v<Input>)

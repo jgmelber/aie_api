@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -21,6 +21,9 @@ class vector;
 
 template <AccumElemBaseType MinAccumTag, unsigned Elems>
 class accum;
+
+template <unsigned Elems>
+class mask;
 
 namespace detail::utils {
 
@@ -203,7 +206,7 @@ void locate_in_register_impl(Acc& v)
         else if constexpr(Reg == 8 ) { PIN(cm8,  v); }
         else                         { PIN( CM, v); }
     }
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     else if constexpr(accum_type::bits() == 512)
     {
         if      constexpr(Reg == 0 ) { PIN(bmll0, v); }
@@ -226,6 +229,20 @@ void locate_in_register_impl(Acc& v)
         else if constexpr(Reg == 17) { PIN(bmlh4, v); }
         else if constexpr(Reg == 18) { PIN(bmhl4, v); }
         else if constexpr(Reg == 19) { PIN(bmhh4, v); }
+#if __AIE_ARCH__ == 22
+        else if constexpr(Reg == 20) { PIN(bmll5, v); }
+        else if constexpr(Reg == 21) { PIN(bmlh5, v); }
+        else if constexpr(Reg == 22) { PIN(bmhl5, v); }
+        else if constexpr(Reg == 23) { PIN(bmhh5, v); }
+        else if constexpr(Reg == 24) { PIN(bmll6, v); }
+        else if constexpr(Reg == 25) { PIN(bmlh6, v); }
+        else if constexpr(Reg == 26) { PIN(bmhl6, v); }
+        else if constexpr(Reg == 27) { PIN(bmhh6, v); }
+        else if constexpr(Reg == 28) { PIN(bmll7, v); }
+        else if constexpr(Reg == 29) { PIN(bmlh7, v); }
+        else if constexpr(Reg == 30) { PIN(bmhl7, v); }
+        else if constexpr(Reg == 31) { PIN(bmhh7, v); }
+#endif
         else                         { PIN(   BM, v); }
     }
     else if constexpr(accum_type::bits() == 1024)
@@ -240,6 +257,14 @@ void locate_in_register_impl(Acc& v)
         else if constexpr(Reg == 7 ) { PIN(cmh3, v); }
         else if constexpr(Reg == 8 ) { PIN(cml4, v); }
         else if constexpr(Reg == 9 ) { PIN(cmh4, v); }
+#if __AIE_ARCH__ == 22
+        else if constexpr(Reg == 10) { PIN(cml5, v); }
+        else if constexpr(Reg == 11) { PIN(cmh5, v); }
+        else if constexpr(Reg == 12) { PIN(cml6, v); }
+        else if constexpr(Reg == 13) { PIN(cmh6, v); }
+        else if constexpr(Reg == 14) { PIN(cml7, v); }
+        else if constexpr(Reg == 15) { PIN(cmh7, v); }
+#endif
         else                         { PIN(  CM, v); }
     }
     else if constexpr(accum_type::bits() == 2048)
@@ -249,6 +274,11 @@ void locate_in_register_impl(Acc& v)
         else if constexpr(Reg == 2) { PIN(dm2, v); }
         else if constexpr(Reg == 3) { PIN(dm3, v); }
         else if constexpr(Reg == 4) { PIN(dm4, v); }
+#if __AIE_ARCH__ == 22
+        else if constexpr(Reg == 5) { PIN(dm5, v); }
+        else if constexpr(Reg == 6) { PIN(dm6, v); }
+        else if constexpr(Reg == 7) { PIN(dm7, v); }
+#endif
         else                        { PIN( DM, v); }
     }
 #endif
@@ -324,6 +354,60 @@ void locate_in_register_impl(T& val)
         else                         { PIN(  R, val); }
     }
 }
+
+template<unsigned Reg = ~0u, AIE_RegFile RegFile = AIE_RegFile::Default, typename T>
+    requires (is_one_of_v<T, uint64_t, mask64>)
+__aie_inline
+void locate_in_register_impl(T& val)
+{
+    static_assert(RegFile == AIE_RegFile::Default || RegFile == AIE_RegFile::R,
+                  "locate_in_register not yet implemented for this type and register file");
+
+    if constexpr(Reg == ~0u)
+    {
+        auto __aie_register_keep() tmp = val; val = __aie_copy(tmp);
+    }
+    else
+    {
+        if      constexpr(Reg == 0 ) { PIN(l0,  val); }
+        else if constexpr(Reg == 1 ) { PIN(l1,  val); }
+        else if constexpr(Reg == 2 ) { PIN(l2,  val); }
+        else if constexpr(Reg == 3 ) { PIN(l3,  val); }
+        else if constexpr(Reg == 4 ) { PIN(l4,  val); }
+        else if constexpr(Reg == 5 ) { PIN(l5,  val); }
+        else if constexpr(Reg == 6 ) { PIN(l6,  val); }
+        else if constexpr(Reg == 7 ) { PIN(l7,  val); }
+#if __AIE_ARCH__ > 20
+        else if constexpr(Reg == 8 ) { PIN(l8,  val); }
+        else if constexpr(Reg == 9 ) { PIN(l9,  val); }
+        else if constexpr(Reg == 10) { PIN(l10, val); }
+        else if constexpr(Reg == 11) { PIN(l11, val); }
+        else if constexpr(Reg == 12) { PIN(l12, val); }
+        else if constexpr(Reg == 13) { PIN(l13, val); }
+        else if constexpr(Reg == 14) { PIN(l14, val); }
+        else if constexpr(Reg == 15) { PIN(l15, val); }
+#endif
+        else                         { PIN(  L, val); }
+    }
+}
+
+template<unsigned Reg = ~0u, AIE_RegFile RegFile = AIE_RegFile::Default, unsigned N>
+__aie_inline
+void locate_in_register_impl(mask<N>& val)
+{
+    if constexpr (N <= 32) {
+        uint32_t m = val.to_uint32();
+        locate_in_register_impl<Reg, RegFile>(m);
+        val = mask<N>::from_uint32(m);
+    }
+    else if constexpr (N == 64) {
+        mask64 m = __builtin_bit_cast(mask64, val);
+        locate_in_register_impl<Reg == ~0u? Reg : Reg, RegFile>(m);
+        val = mask<N>::from_uint64(m);
+    }
+    static_assert(N <= 64, "Not implemented for large masks yet");
+}
+
 
 template<unsigned Reg = ~0u, AIE_RegFile RegFile = AIE_RegFile::Default, typename T>
 __aie_inline

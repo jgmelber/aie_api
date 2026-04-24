@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -12,16 +12,6 @@
 #include "../ld_st.hpp"
 
 namespace aie::detail {
-
-template <typename T>
-struct native_block_vector_length
-{
-    static constexpr unsigned value = 64;
-};
-
-template <typename T, unsigned Elems> struct block_vector_set;
-template <> struct block_vector_set<bfp16ebs8,  128> { static v128bfp16ebs8   run(const v64bfp16ebs8  &v, unsigned idx) { return ::set_v128bfp16ebs8(idx, v);  } };
-template <> struct block_vector_set<bfp16ebs16, 128> { static v128bfp16ebs16  run(const v64bfp16ebs16 &v, unsigned idx) { return ::set_v128bfp16ebs16(idx, v); } };
 
 /**
  * Architecture-specific implementation of the block_vector data type
@@ -35,11 +25,16 @@ class block_vector_base
     template <typename T2, unsigned E2> friend class block_vector_base;
 
     using vector_storage_type = block_vector_storage<T, Elems>;
+
+    static constexpr unsigned native_elems      = native_block_vector_length<T>::value;
+    static constexpr unsigned num_storage_elems = utils::num_elems_v<typename vector_storage_type::type>;
+    static constexpr bool is_compound_storage   = num_storage_elems > 1;
 public:
     using native_type         = typename vector_storage_type::type;
     using native_pointer_type = typename vector_storage_type::pointer_type;
     using value_type          = T;
     using storage_type        = typename vector_storage_type::type;
+    using chunk_type          = native_block_vector_type_t<T, Elems>;
 
     /**
      * \brief Returns the number of elements in the vector.
@@ -51,10 +46,17 @@ public:
      */
     static constexpr unsigned block_size()
     {
-        if      constexpr(std::is_same_v<T, bfp16ebs8>)
-            return 8;
-        else if constexpr(std::is_same_v<T, bfp16ebs16>)
-            return 16;
+#if __AIE_ARCH__ == 21
+        if      constexpr(std::is_same_v<T, bfp16ebs8>)  return 8;
+        else if constexpr(std::is_same_v<T, bfp16ebs16>) return 16;
+#elif __AIE_ARCH__ == 22
+        return 16;
+#else
+#if __AIE_API_MX6_SUPPORT__
+        if      constexpr(std::is_same_v<T, mx6>)  return 16;
+#endif
+        return 0;
+#endif
     }
 
     /**
@@ -70,7 +72,15 @@ public:
      */
     static constexpr unsigned mantissa_bits()
     {
+#if __AIE_ARCH__ == 21
         return 8;
+#elif __AIE_ARCH__ == 22
+        if      constexpr(std::is_same_v<T, mx4>) return 3;
+        else if constexpr(std::is_same_v<T, mx6>) return 5;
+        else if constexpr(std::is_same_v<T, mx9>) return 8;
+#else
+        return 0;
+#endif
     }
 
     /**
@@ -100,6 +110,11 @@ public:
 
         res += blocks() * exponent_bits();
 
+        // Account for prime bits - each two mantissas share a prime bit
+#if __AIE_ARCH__ == 22
+        res += size() / 2u;
+#endif
+
         return res;
     }
 
@@ -108,7 +123,9 @@ public:
      */
     static constexpr unsigned memory_bytes()
     {
-        return bytes();
+        static_assert(memory_bits() % 8 == 0);
+
+        return memory_bits() / 8;
     }
 
     /**
@@ -182,53 +199,86 @@ public:
     }
 
     __aie_inline
-    auto to_native() const
+    auto to_native() const requires (!is_compound_storage)
     {
         return data;
     }
 
     __aie_inline
-    operator native_type() const
+    operator native_type() const requires (!is_compound_storage)
     {
         return to_native();
     }
 
 private:
-    template <unsigned N>
+    template <unsigned ElemsOut>
     __aie_inline
-    block_vector_base<value_type, N> extract_helper(unsigned idx) const
+    block_vector_base<value_type, ElemsOut> extract_helper(unsigned idx) const
     {
-        static_assert(N <= Elems);
-        static_assert(N == 64 || N == 128);
+        static_assert(ElemsOut <= Elems && ElemsOut >= 64);
 
-        if constexpr (N == Elems) {
+        using ret_type = block_vector_base<value_type, ElemsOut>;
+        constexpr unsigned num_out_storage_elems = ret_type::num_storage_elems;
+
+        if constexpr (ElemsOut == Elems) {
             return *this;
         }
+        else if constexpr (num_storage_elems > 1) {
+            ret_type res;
+
+            utils::unroll_times<num_out_storage_elems>([&](unsigned idy) __aie_inline {
+                res.data[idy] = data[idx * num_out_storage_elems + idy];
+            });
+
+            return res;
+        }
         else {
-#if __AIE_API_HAS_EXTRACT_V64BFP16__
-            return detail::vector_extract<N>(data, idx);
-#else
-            return block_vector_base<value_type, N>();
-#endif
+            if constexpr (num_storage_elems > 1) {
+                constexpr unsigned ratio = native_vector_traits<chunk_type>::size / ElemsOut;
+                return detail::vector_extract<ElemsOut>(data[idx / ratio], idx % ratio);
+            }
+            else {
+                return detail::vector_extract<ElemsOut>(data, idx);
+            }
         }
     }
 
-    template <unsigned N>
+    template <unsigned ElemsIn>
     __aie_inline
-    void insert_helper(unsigned idx, const block_vector_base<T, N> &v)
+    void insert_helper(unsigned idx, const block_vector_base<T, ElemsIn> &v)
     {
-        static_assert(N <= Elems);
-        static_assert(N == 64 || N == 128);
+        static_assert(ElemsIn <= Elems);
 
-        if constexpr (N == Elems)
+        constexpr unsigned num_in_storage_elems = block_vector_base<T, ElemsIn>::num_storage_elems;
+
+        if constexpr (ElemsIn == Elems) {
             data = v;
-        else
-            data = ::insert(data, idx, v);
+        }
+        else if constexpr (is_compound_storage) {
+            if constexpr (num_in_storage_elems > 1) {
+                utils::unroll_times<num_in_storage_elems>([&](unsigned idy) __aie_inline {
+                    data[idx * num_in_storage_elems + idy] = v.data[idy];
+                });
+            }
+            else if constexpr (ElemsIn == native_vector_traits<chunk_type>::size) {
+                data[idx] = v;
+            }
+            else {
+                constexpr unsigned ratio = native_vector_traits<chunk_type>::size / ElemsIn;
+                data[idx / ratio] = ::insert(data[idx / ratio], idx % ratio, v);
+            }
+        }
+        else {
+#if __AIE_API_USE_MX_UPDATE__
+            if constexpr ((std::is_same_v<T, mx4> || std::is_same_v<T, mx6> || std::is_same_v<T, mx9>) && (Elems / native_elems == 2)) {
+                data = ::update(data, idx, v);
+            } else
+#endif
+            {
+                data = ::insert(data, idx, v);
+            }
+        }
     }
-
-    static constexpr unsigned native_elems      = native_block_vector_length<T>::value;
-    static constexpr unsigned num_storage_elems = utils::num_elems_v<storage_type>;
-    static constexpr bool is_compound_storage   = num_storage_elems > 1;
 
     storage_type data;
 };

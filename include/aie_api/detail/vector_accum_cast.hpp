@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -52,7 +52,7 @@ using accum_to_vector_cast = accum_to_vector_cast_bits<DstT,
 
 }
 
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 #include "aie2/vector_accum_cast.hpp"
 #endif
 

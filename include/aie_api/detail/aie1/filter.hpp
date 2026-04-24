@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -44,34 +44,13 @@ struct filter_bits_impl<16, T, Elems, Op>
     using        vector_type = vector<T, Elems>;
     using return_vector_type = vector<T, Elems / 2>;
 
-    static constexpr unsigned get_start(unsigned step)
-    {
-        if constexpr (Op == FilterOp::Even) return 0;
-        if constexpr (Op == FilterOp::Odd)  return step;
-    }
-
-    static constexpr unsigned get_offset(unsigned step)
-    {
-        unsigned offset = 0;
-        unsigned v = 0;
-
-        for (unsigned i = 0; i < 8; ) {
-            for (unsigned j = 0; j < std::min(step, 8u); ++j)
-                offset |= (v++ << (i++ * 4));
-
-            v += std::min(step, 8u);
-        }
-
-        return offset;
-    }
-
     static return_vector_type run(const vector_type &v, unsigned step)
     {
         if (step > 1)
             return filter_bits_impl<32, int32, Elems / 2, Op>::run(vector_cast<int32>(v), step / 2).template cast_to<T>();
 
-        constexpr unsigned square1 = Op == FilterOp::Even? 0x0020 : 0x0031;
-        constexpr unsigned square2 = Op == FilterOp::Even? 0x2000 : 0x3100;
+        constexpr unsigned square1 = Op == FilterOp::Even ? 0x0020 : 0x0031;
+        constexpr unsigned square2 = Op == FilterOp::Even ? 0x2000 : 0x3100;
 
         if constexpr (Elems <= 32) {
             const vector<T, 32> tmp = ::select32(0xcccccccc, v.template grow<32>(), 0, 0x0c080400, 0x00000000, square1,
@@ -81,7 +60,7 @@ struct filter_bits_impl<16, T, Elems, Op>
         }
         else if constexpr (Elems == 64) {
             return_vector_type ret;
-            vector<T, 32> tmp ;
+            vector<T, 32> tmp;
 
             tmp = ::select32(0xcccccccc, v.template extract<32>(0), 0, 0x0c080400, 0x00000000, square1,
                                                                     4, 0x0c080400, 0x00000000, square2);
@@ -113,27 +92,18 @@ struct filter_bits_impl<32, T, Elems, Op>
         if constexpr (Op == FilterOp::Odd)  return step;
     }
 
-    static constexpr unsigned get_offset(unsigned step)
-    {
-        unsigned offset = 0;
-        unsigned v = 0;
-
-        for (unsigned i = 0; i < 8; ) {
-            for (unsigned j = 0; j < std::min(step, 8u); ++j)
-                offset |= (v++ << (i++ * 4));
-
-            v += std::min(step, 8u);
-        }
-
-        return offset;
-    }
-
     static return_vector_type run(const vector_type &v, unsigned step)
     {
         constexpr auto op = get_op();
 
-        const unsigned  start = get_start(step);
-        const unsigned offset = get_offset(step);
+        const unsigned start = get_start(step);
+
+        unsigned offset;
+
+        if      (step == 1) offset = 0xeca86420;
+        else if (step == 2) offset = 0xdc985410;
+        else if (step == 4) offset = 0xba983210;
+        else                offset = 0x76543210;
 
         if constexpr (Elems <= 16) {
             const vector<T, 16> tmp = op(v.template grow<16>(), start, offset, 0x00000000);
@@ -178,27 +148,17 @@ struct filter_bits_impl<64, T, Elems, Op>
         if constexpr (Op == FilterOp::Odd)  return step;
     }
 
-    static constexpr unsigned get_offset(unsigned step)
-    {
-        unsigned offset = 0;
-        unsigned v = 0;
-
-        for (unsigned i = 0; i < 8; ) {
-            for (unsigned j = 0; j < std::min(step, 8u); ++j)
-                offset |= (v++ << (i++ * 4));
-
-            v += std::min(step, 8u);
-        }
-
-        return offset;
-    }
-
     static return_vector_type run(const vector_type &v, unsigned step)
     {
         constexpr auto op = get_op();
 
-        const unsigned  start = get_start(step);
-        const unsigned offset = get_offset(step);
+        const unsigned start = get_start(step);
+
+        unsigned offset;
+
+        if      (step == 1) offset = 0x75316420;
+        else if (step == 2) offset = 0x76325410;
+        else                offset = 0x76543210;
 
         if constexpr (Elems <= 8) {
             const vector<T, 8> tmp = op(v.template grow<8>(), start, offset);

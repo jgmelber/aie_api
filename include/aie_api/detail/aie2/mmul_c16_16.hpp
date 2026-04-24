@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_MMUL_C16_16__HPP__
 #define __AIE_API_DETAIL_AIE2_MMUL_C16_16__HPP__
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 
 #include "../accum.hpp"
 #include "../interleave.hpp"
@@ -36,15 +38,7 @@ struct C_block_c16_16_interleave
     C_block_c16_16_interleave(const accum_type &acc, bool to_zero = false)
     {
         zero = to_zero;
-        v4cacc64 acc1 = acc.template extract<4>(0);
-        v4cacc64 acc2 = acc.template extract<4>(1);
-        v4cacc64 acc3 = acc.template extract<4>(2);
-        v4cacc64 acc4 = acc.template extract<4>(3);
-
-        real.insert<8>(0, (v8acc64)::shuffle((v8cint32)acc1, (v8cint32)acc2, DINTLV_lo_64o128));
-        imag.insert<8>(0, (v8acc64)::shuffle((v8cint32)acc1, (v8cint32)acc2, DINTLV_hi_64o128));
-        real.insert<8>(1, (v8acc64)::shuffle((v8cint32)acc3, (v8cint32)acc4, DINTLV_lo_64o128));
-        imag.insert<8>(1, (v8acc64)::shuffle((v8cint32)acc3, (v8cint32)acc4, DINTLV_hi_64o128));
+        std::tie(real, imag) = unzip_complex(acc);
     }
 
     template <typename TR>
@@ -56,18 +50,7 @@ struct C_block_c16_16_interleave
     __aie_inline
     accum_type to_accum() const
     {
-        accum_type ret;
-
-        v8acc64 real1 = real.template extract<8>(0);
-        v8acc64 real2 = real.template extract<8>(1);
-        v8acc64 imag1 = imag.template extract<8>(0);
-        v8acc64 imag2 = imag.template extract<8>(1);
-
-        ret.template insert<4>(0, (v4cacc64)::shuffle((v8cint32)real1, (v8cint32)imag1, INTLV_lo_64o128));
-        ret.template insert<4>(1, (v4cacc64)::shuffle((v8cint32)real1, (v8cint32)imag1, INTLV_hi_64o128));
-        ret.template insert<4>(2, (v4cacc64)::shuffle((v8cint32)real2, (v8cint32)imag2, INTLV_lo_64o128));
-        ret.template insert<4>(3, (v4cacc64)::shuffle((v8cint32)real2, (v8cint32)imag2, INTLV_hi_64o128));
-
+        accum_type ret = combine_into_complex(real, imag);
         return ret;
     }
 
@@ -156,5 +139,5 @@ struct mmul<M, K, N, cint16, int16, 64>  : public mmul_c16_16<M, K, N,  int16, 6
 
 }
 
-
-#endif
+#endif // __AIE_API_COMPLEX_VECTOR_SUPPORT__
+#endif // __AIE_API_DETAIL_AIE2_MMUL_C16_16__HPP__

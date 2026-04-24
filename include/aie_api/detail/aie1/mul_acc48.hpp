@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -125,19 +125,21 @@ struct mul_bits_impl<MulOp, 48, 8, T1, 8, T2>
                                                     v1_sign,
                                                     v2.template extract<64>(0).unpack(),
                                                     v2_sign,
+                                                    false,
                                                     acc.template extract<64>(0)...);
             ret.insert(0, tmp);
             tmp = mul<MulOp, 48, int16, int16>::run(v1.template extract<64>(1).unpack(),
                                                     v1_sign,
                                                     v2.template extract<64>(1).unpack(),
                                                     v2_sign,
+                                                    false,
                                                     acc.template extract<64>(1)...);
             ret.insert(1, tmp);
 
             return ret;
         }
         else {
-            return mul<MulOp, 48, int16, int16>::run(v1.unpack(), v1_sign, v2.unpack(), v2_sign, acc...);
+            return mul<MulOp, 48, int16, int16>::run(v1.unpack(), v1_sign, v2.unpack(), v2_sign, false, acc...);
         }
     }
 
@@ -164,16 +166,16 @@ struct mul_bits_impl<MulOp, 48, 8, T1, 8, T2>
             accum_type<64> tmp;
 
             // T2 can only be int8 / uint8, so casting it to int16 is safe
-            tmp = mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.template extract<64>(0).unpack(), v_sign, acc.template extract<64>(0)...);
+            tmp = mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.template extract<64>(0).unpack(), v_sign, false, acc.template extract<64>(0)...);
             ret.insert(0, tmp);
-            tmp = mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.template extract<64>(1).unpack(), v_sign, acc.template extract<64>(1)...);
+            tmp = mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.template extract<64>(1).unpack(), v_sign, false, acc.template extract<64>(1)...);
             ret.insert(1, tmp);
 
             return ret;
         }
         else {
             // T2 can only be int8 / uint8, so casting it to int16 is safe
-            return mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.unpack(), v_sign, acc...);
+            return mul<MulOp, 48, int16, int16>::run((int16)a, a_sign, v.unpack(), v_sign, false, acc...);
         }
     }
 
@@ -186,16 +188,16 @@ struct mul_bits_impl<MulOp, 48, 8, T1, 8, T2>
             accum_type<64> tmp;
 
             // T2 can only be int8 / uint8, so casting it to int16 is safe
-            tmp = mul<MulOp, 48, int16, int16>::run(v.template extract<64>(0).unpack(), v_sign, (int16)a, a_sign, acc.template extract<64>(0)...);
+            tmp = mul<MulOp, 48, int16, int16>::run(v.template extract<64>(0).unpack(), v_sign, (int16)a, a_sign, false, acc.template extract<64>(0)...);
             ret.insert(0, tmp);
-            tmp = mul<MulOp, 48, int16, int16>::run(v.template extract<64>(1).unpack(), v_sign, (int16)a, a_sign, acc.template extract<64>(1)...);
+            tmp = mul<MulOp, 48, int16, int16>::run(v.template extract<64>(1).unpack(), v_sign, (int16)a, a_sign, false, acc.template extract<64>(1)...);
             ret.insert(1, tmp);
 
             return ret;
         }
         else {
             // T2 can only be int8 / uint8, so casting it to int16 is safe
-            return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, (int16)a, a_sign, acc...);
+            return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, (int16)a, a_sign, false, acc...);
         }
     }
 };
@@ -219,35 +221,35 @@ struct mul_bits_impl<MulOp, 48, 16, int16, 8, T2>
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v1, bool v1_sign, const vector_type2<Elems> &v2, bool v2_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v1, v1_sign, v2.unpack(), v2_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v1, v1_sign, v2.unpack(), v2_sign, false, acc...);
     }
 
     template <unsigned ElemsRef, unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(vector_elem_const_ref<T1, ElemsRef> a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v.unpack(), v_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v.unpack(), v_sign, false, acc...);
     }
 
     template <unsigned Elems, unsigned ElemsRef, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign, vector_elem_const_ref<T2, ElemsRef> a, bool a_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, false, acc...);
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(T1 a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v.unpack(), v_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v.unpack(), v_sign, false, acc...);
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign, T2 a, bool a_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v, v_sign, a, a_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v, v_sign, a, a_sign, false, acc...);
     }
 };
 
@@ -271,35 +273,35 @@ struct mul_bits_impl<MulOp, 48, 8, T1, 16, int16>
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v1, bool v1_sign, const vector_type2<Elems> &v2, bool v2_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v1.unpack(), v1_sign, v2, v2_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v1.unpack(), v1_sign, v2, v2_sign, false, acc...);
     }
 
     template <unsigned ElemsRef, unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(vector_elem_const_ref<T1, ElemsRef> a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v, v_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v, v_sign, false, acc...);
     }
 
     template <unsigned Elems, unsigned ElemsRef, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign, vector_elem_const_ref<T2, ElemsRef> a, bool a_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, false, acc...);
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(T1 a, bool a_sign, const vector_type2<Elems> &v, bool v_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v, v_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(a, a_sign, v, v_sign, false, acc...);
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
     static accum_type<Elems> run(const vector_type1<Elems> &v, bool v_sign, T2 a, bool a_sign, const Acc &... acc)
     {
-        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, acc...);
+        return mul<MulOp, 48, int16, int16>::run(v.unpack(), v_sign, a, a_sign, false, acc...);
     }
 };
 

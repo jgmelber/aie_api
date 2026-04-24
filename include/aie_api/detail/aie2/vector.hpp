@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -8,6 +8,7 @@
 #define __AIE_API_DETAIL_AIE2_VECTOR__HPP__
 
 #include <algorithm>
+#include <ratio>
 
 #include "../ld_st.hpp"
 
@@ -73,6 +74,7 @@ template <> inline auto vector_extract<4,  v16uint32>(const v16uint32 &v, unsign
 template <> inline auto vector_extract<4,    v8int32>(const   v8int32 &v, unsigned idx) { return ::extract_v4int32(v, idx);    };
 template <> inline auto vector_extract<4,   v8uint32>(const  v8uint32 &v, unsigned idx) { return ::extract_v4uint32(v, idx);   };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> inline auto vector_extract<16, v32cint16>(const v32cint16 &v, unsigned idx) { return ::extract_v16cint16(v, idx);  };
 template <> inline auto vector_extract<8,  v32cint16>(const v32cint16 &v, unsigned idx) { return ::extract_v8cint16(v, idx);   };
 template <> inline auto vector_extract<8,  v16cint16>(const v16cint16 &v, unsigned idx) { return ::extract_v8cint16(v, idx);   };
@@ -84,6 +86,7 @@ template <> inline auto vector_extract<4,  v16cint32>(const  v16cint32 &v, unsig
 template <> inline auto vector_extract<4,   v8cint32>(const   v8cint32 &v, unsigned idx) { return ::extract_v4cint32(v, idx);  };
 template <> inline auto vector_extract<2,   v8cint32>(const   v8cint32 &v, unsigned idx) { return ::extract_v2cint32(v, idx ); };
 template <> inline auto vector_extract<2,   v4cint32>(const   v4cint32 &v, unsigned idx) { return ::extract_v2cint32(v, idx);  };
+#endif
 
 template <> inline auto vector_extract<128,  v256int4>(const  v256int4 &v, unsigned idx) { return ::extract_v128int4(v, idx);  };
 template <> inline auto vector_extract<128, v256uint4>(const v256uint4 &v, unsigned idx) { return ::extract_v128uint4(v, idx); };
@@ -102,7 +105,31 @@ template <> inline auto vector_extract<16, v32bfloat16>(const v32bfloat16 &v, un
 template <> inline auto vector_extract<8,  v32bfloat16>(const v32bfloat16 &v, unsigned idx) { return ::extract_v8bfloat16(v, idx);  };
 template <> inline auto vector_extract<8,  v16bfloat16>(const v16bfloat16 &v, unsigned idx) { return ::extract_v8bfloat16(v, idx);  };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_BF8_SUPPORT__
+template <> inline auto vector_extract<64, v128bfloat8>(const v128bfloat8  &v, unsigned idx) { return ::extract_v64bfloat8(v, idx); };
+template <> inline auto vector_extract<32, v128bfloat8>(const v128bfloat8  &v, unsigned idx) { return ::extract_v32bfloat8(v, idx); };
+template <> inline auto vector_extract<32,  v64bfloat8>(const  v64bfloat8  &v, unsigned idx) { return ::extract_v32bfloat8(v, idx); };
+template <> inline auto vector_extract<16,  v64bfloat8>(const  v64bfloat8  &v, unsigned idx) { return ::extract_v16bfloat8(v, idx); };
+template <> inline auto vector_extract<16,  v32bfloat8>(const  v32bfloat8  &v, unsigned idx) { return ::extract_v16bfloat8(v, idx); };
+#endif
+
+#if __AIE_API_FP8_SUPPORT__
+template <> inline auto vector_extract<64, v128float8>(const v128float8 &v, unsigned idx) { return ::extract_v64float8(v, idx); };
+template <> inline auto vector_extract<32, v128float8>(const v128float8 &v, unsigned idx) { return ::extract_v32float8(v, idx); };
+template <> inline auto vector_extract<32,  v64float8>(const  v64float8 &v, unsigned idx) { return ::extract_v32float8(v, idx); };
+template <> inline auto vector_extract<16,  v64float8>(const  v64float8 &v, unsigned idx) { return ::extract_v16float8(v, idx); };
+template <> inline auto vector_extract<16,  v32float8>(const  v32float8 &v, unsigned idx) { return ::extract_v16float8(v, idx); };
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <> inline auto vector_extract<32, v64float16>(const v64float16 &v, unsigned idx) { return ::extract_v32float16(v, idx); };
+template <> inline auto vector_extract<16, v64float16>(const v64float16 &v, unsigned idx) { return ::extract_v16float16(v, idx); };
+template <> inline auto vector_extract<16, v32float16>(const v32float16 &v, unsigned idx) { return ::extract_v16float16(v, idx); };
+template <> inline auto vector_extract<8,  v32float16>(const v32float16 &v, unsigned idx) { return ::extract_v8float16(v, idx);  };
+template <> inline auto vector_extract<8,  v16float16>(const v16float16 &v, unsigned idx) { return ::extract_v8float16(v, idx);  };
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <> inline auto vector_extract<16, v32float>(const v32float &v, unsigned idx) { return ::extract_v16float(v, idx); };
 template <> inline auto vector_extract<8,  v32float>(const v32float &v, unsigned idx) { return ::extract_v8float(v, idx);  };
 template <> inline auto vector_extract<8,  v16float>(const v16float &v, unsigned idx) { return ::extract_v8float(v, idx);  };
@@ -160,6 +187,7 @@ template <> struct vector_set<uint32,    16> { static v16uint32   run(const v4ui
 template <> struct vector_set<int32,      8> { static v8int32     run(const v4int32     &v, unsigned idx) { return ::set_v8int32(idx, v);     } };
 template <> struct vector_set<uint32,     8> { static v8uint32    run(const v4uint32    &v, unsigned idx) { return ::set_v8uint32(idx, v);    } };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct vector_set<cint16,    32> { static v32cint16   run(const v8cint16    &v, unsigned idx) { return ::set_v32cint16(idx, v);   }
                                                static v32cint16   run(const v16cint16   &v, unsigned idx) { return ::set_v32cint16(idx, v);   } };
 template <> struct vector_set<cint16,    16> { static v16cint16   run(const v4cint16    &v, unsigned idx) { return ::set_v16cint16(idx, v);   }
@@ -171,6 +199,7 @@ template <> struct vector_set<cint32,    16> { static v16cint32   run(const v4ci
 template <> struct vector_set<cint32,     8> { static v8cint32    run(const v2cint32    &v, unsigned idx) { return ::set_v8cint32(idx, v);    }
                                                static v8cint32    run(const v4cint32    &v, unsigned idx) { return ::set_v8cint32(idx, v);    } };
 template <> struct vector_set<cint32,     4> { static v4cint32    run(const v2cint32    &v, unsigned idx) { return ::set_v4cint32(idx, v);    } };
+#endif
 
 template <> struct vector_set<bfloat16,  64> { static v64bfloat16 run(const v16bfloat16 &v, unsigned idx) { return ::set_v64bfloat16(idx, v);  }
                                                static v64bfloat16 run(const v32bfloat16 &v, unsigned idx) { return ::set_v64bfloat16(idx, v);  } };
@@ -178,7 +207,31 @@ template <> struct vector_set<bfloat16,  32> { static v32bfloat16 run(const v8bf
                                                static v32bfloat16 run(const v16bfloat16 &v, unsigned idx) { return ::set_v32bfloat16(idx, v);  } };
 template <> struct vector_set<bfloat16,  16> { static v16bfloat16 run(const v8bfloat16  &v, unsigned idx) { return ::set_v16bfloat16(idx, v);  } };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP8_SUPPORT__
+template <> struct vector_set<float8,   128> { static v128float8 run(const v32float8  &v, unsigned idx) { return ::set_v128float8(idx, v); }
+                                               static v128float8 run(const v64float8  &v, unsigned idx) { return ::set_v128float8(idx, v); } };
+template <> struct vector_set<float8,    64> { static v64float8  run(const v16float8  &v, unsigned idx) { return ::set_v64float8(idx, v);  }
+                                               static v64float8  run(const v32float8  &v, unsigned idx) { return ::set_v64float8(idx, v);  } };
+template <> struct vector_set<float8,    32> { static v32float8  run(const v16float8  &v, unsigned idx) { return ::set_v32float8(idx, v);  } };
+#endif
+
+#if __AIE_API_BF8_SUPPORT__
+template <> struct vector_set<bfloat8,  128> { static v128bfloat8 run(const v32bfloat8 &v, unsigned idx) { return ::set_v128bfloat8(idx, v); }
+                                               static v128bfloat8 run(const v64bfloat8 &v, unsigned idx) { return ::set_v128bfloat8(idx, v); } };
+template <> struct vector_set<bfloat8,   64> { static v64bfloat8  run(const v16bfloat8 &v, unsigned idx) { return ::set_v64bfloat8(idx, v);  }
+                                               static v64bfloat8  run(const v32bfloat8 &v, unsigned idx) { return ::set_v64bfloat8(idx, v);  } };
+template <> struct vector_set<bfloat8,   32> { static v32bfloat8  run(const v16bfloat8 &v, unsigned idx) { return ::set_v32bfloat8(idx, v);  } };
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <> struct vector_set<float16,   64> { static v64float16 run(const v16float16 &v, unsigned idx) { return ::set_v64float16(idx, v); }
+                                               static v64float16 run(const v32float16 &v, unsigned idx) { return ::set_v64float16(idx, v); } };
+template <> struct vector_set<float16,   32> { static v32float16 run(const v8float16  &v, unsigned idx) { return ::set_v32float16(idx, v); }
+                                               static v32float16 run(const v16float16 &v, unsigned idx) { return ::set_v32float16(idx, v); } };
+template <> struct vector_set<float16,   16> { static v16float16 run(const v8float16  &v, unsigned idx) { return ::set_v16float16(idx, v); } };
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 //TODO: Add v4float into v32float when intrinsic available (CRVO-4522)
 template <> struct vector_set<float,     32> { static v32float    run(const v8float     &v, unsigned idx) { return ::set_v32float(idx, v);    }
                                                static v32float    run(const v16float    &v, unsigned idx) { return ::set_v32float(idx, v);    } };
@@ -215,21 +268,51 @@ template <> struct vector_set<uint4,    128> { static v128uint4   run(const v32u
 template <> struct vector_set<int4,      64> { static v64int4     run(const v32int4     &v, unsigned idx) { return ::set_v64int4(idx, v);     } };
 template <> struct vector_set<uint4,     64> { static v64uint4    run(const v32uint4    &v, unsigned idx) { return ::set_v64uint4(idx, v);    } };
 
+// For integer vectors, ::insert intrinsic takes a 32bit integer argument as input value regardless of the vector lane width
+// This operator type acts as an adaptor that explicitly performs the conversion
+// Otherwise, an implicit conversion would take place, which can cause ambiguous overload resolution if vector types are
+// convertible (this happens with peano)
+//
+// For Chess, this does not apply to AIE2, but to all later architectures
+template <typename T, unsigned Elems>
+struct vector_insert_cast_arg { using type = T; };
+
+template <typename T, unsigned Elems>
+struct vector_elem_insert {
+    using vector_t = native_vector_type_t<T, Elems>;
+    using insert_t = typename vector_insert_cast_arg<T, Elems>::type;
+
+    __aie_inline
+    static vector_t run(const vector_t &v, unsigned idx, T elem)
+    {
+        return ::insert(v,
+                        static_cast<int>(idx),
+                        static_cast<insert_t>(elem));
+    }
+};
+// Forward declaration, used in vector::push
+template <unsigned TypeBits, typename T, unsigned Elems>
+struct shuffle_up_fill_bits_impl;
+
+// Forward declaration, used in vector::upd_all
+template <unsigned TypeBits, typename T, unsigned Elems>
+struct shuffle_down_fill_bits_impl;
+
 template <typename DstT, unsigned DstElems, typename T>
 __aie_inline
 static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
 {
     static constexpr unsigned max_intrinsic_elems = max_intrinsic_vector_elems<DstT>::value;
-    static constexpr unsigned chunks       = DstElems / max_intrinsic_elems;
+    static constexpr unsigned chunks              = DstElems / max_intrinsic_elems;
 
     // FIXME: this function should be restricted to take simple/non-composite storage types.
     // Composite storage types should just run apply_tuple() and vector::split() at the caller function.
-    if constexpr (DstElems > max_intrinsic_elems ){
+    if constexpr (DstElems > max_intrinsic_elems) {
         return utils::make_array<chunks>([](auto f) __aie_inline { return vector_cast_helper<DstT, max_intrinsic_elems>(f); }, from);
     }
 
     // else needed to prevent compile-time errors on aie2
-    else{
+    else {
     if constexpr (std::is_same_v<DstT, int8> && DstElems ==  16) return  v16int8(from);
     if constexpr (std::is_same_v<DstT, int8> && DstElems ==  32) return  v32int8(from);
     if constexpr (std::is_same_v<DstT, int8> && DstElems ==  64) return  v64int8(from);
@@ -254,6 +337,7 @@ static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
     if constexpr (std::is_same_v<DstT, uint32> && DstElems ==  8) return  v8uint32(from);
     if constexpr (std::is_same_v<DstT, uint32> && DstElems == 16) return v16uint32(from);
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
     if constexpr (std::is_same_v<DstT, cint16> && DstElems ==  4) return  v4cint16(from);
     if constexpr (std::is_same_v<DstT, cint16> && DstElems ==  8) return  v8cint16(from);
     if constexpr (std::is_same_v<DstT, cint16> && DstElems == 16) return v16cint16(from);
@@ -261,6 +345,7 @@ static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
     if constexpr (std::is_same_v<DstT, cint32> && DstElems ==  2) return  v2cint32(from);
     if constexpr (std::is_same_v<DstT, cint32> && DstElems ==  4) return  v4cint32(from);
     if constexpr (std::is_same_v<DstT, cint32> && DstElems ==  8) return  v8cint32(from);
+#endif
 
     if constexpr (std::is_same_v<DstT, int4> && DstElems ==  32) return  v32int4(from);
     if constexpr (std::is_same_v<DstT, int4> && DstElems ==  64) return  v64int4(from);
@@ -274,7 +359,25 @@ static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
     if constexpr (std::is_same_v<DstT, bfloat16> && DstElems == 16) return v16bfloat16(from);
     if constexpr (std::is_same_v<DstT, bfloat16> && DstElems == 32) return v32bfloat16(from);
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP8_SUPPORT__
+    if constexpr (std::is_same_v<DstT, float8 > && DstElems ==  16) return  v16float8(from);
+    if constexpr (std::is_same_v<DstT, float8 > && DstElems ==  32) return  v32float8(from);
+    if constexpr (std::is_same_v<DstT, float8 > && DstElems ==  64) return  v64float8(from);
+#endif
+
+#if __AIE_API_BF8_SUPPORT__
+    if constexpr (std::is_same_v<DstT, bfloat8> && DstElems ==  16) return  v16bfloat8(from);
+    if constexpr (std::is_same_v<DstT, bfloat8> && DstElems ==  32) return  v32bfloat8(from);
+    if constexpr (std::is_same_v<DstT, bfloat8> && DstElems ==  64) return  v64bfloat8(from);
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+    if constexpr (std::is_same_v<DstT, float16> && DstElems ==  8) return  v8float16(from);
+    if constexpr (std::is_same_v<DstT, float16> && DstElems == 16) return v16float16(from);
+    if constexpr (std::is_same_v<DstT, float16> && DstElems == 32) return v32float16(from);
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 #if !__AIE_API_CFP_TO_FP_CONVERSIONS__
     if constexpr (std::is_same_v<DstT, float> && DstElems ==  4) return v4float(v4int32(from));
     if constexpr (std::is_same_v<DstT, float> && DstElems ==  8) return v8float(v8int32(from));
@@ -299,8 +402,9 @@ static vector_storage_t<DstT, DstElems> vector_cast_helper(T &&from)
     if constexpr (std::is_same_v<DstT, cfloat> && DstElems ==  2) return v2cfloat(from);
     if constexpr (std::is_same_v<DstT, cfloat> && DstElems ==  4) return v4cfloat(from);
 #endif
-    if constexpr (std::is_same_v<DstT, cfloat> && DstElems ==  8) return  v8cfloat(from);
+    if constexpr (std::is_same_v<DstT, cfloat> && DstElems ==  8) return v8cfloat(from);
 #endif
+
     }
 }
 
@@ -328,6 +432,21 @@ struct packed_type {
 template <typename T>
 using packed_type_t = typename packed_type<T>::type;
 
+static consteval bool valid_unpack_bits(unsigned source_bits, unsigned target_bits)
+{
+    auto has_value = [](unsigned value, std::initializer_list<unsigned> values) {
+        return std::find(values.begin(), values.end(), value) != values.end();
+    };
+
+    unsigned unpack_ratio = target_bits / source_bits;
+    bool use_upshift = target_bits == 32;
+    bool tiny_int = source_bits < 4;
+
+    return (use_upshift && has_value(unpack_ratio, {2, 4}))
+        || (tiny_int && has_value(target_bits, {4, 8}))
+        || (unpack_ratio == 2);
+}
+
 /**
  * Architecture-specific implementation of the vector data type
  *
@@ -352,9 +471,10 @@ private:
     static constexpr unsigned native_elems      = native_vector_length_v<T>;
     static constexpr unsigned native_bits       = native_vector_bits::value;
 
-    // Number of instrinsic vectors used when 'Elems' parameter is large 
-    static constexpr unsigned num_chunks = utils::num_elems_v<typename vector_storage_type::type>;
-    static constexpr bool is_compound_storage    = num_chunks > 1;
+    // Number of instrinsic vectors used when 'Elems' parameter is large
+    static constexpr unsigned num_chunks      = utils::num_elems_v<typename vector_storage_type::type>;
+    static constexpr unsigned elems_per_chunk = Elems / num_chunks;
+    static constexpr bool is_compound_storage = num_chunks > 1;
 
     // Maximum number of elements/bits supported by instrinsic vector types
     static constexpr unsigned max_intrinsic_elems = max_intrinsic_vector_elems<T>::value;
@@ -491,56 +611,35 @@ public:
     __aie_inline
     auto cast_to() const
     {
-        constexpr unsigned DstSize  = type_bits_v<DstT>;
-        constexpr unsigned DstElems = (DstSize <= type_bits())? Elems * (type_bits() / DstSize) :
-                                                                Elems / (    DstSize / type_bits());
+        using bits_ratio = std::ratio<type_bits(), type_bits_v<DstT>>;
+        using elems_ratio = std::ratio_multiply<std::ratio<Elems, 1>, bits_ratio>;
+        static_assert(elems_ratio::den == 1, "Vector cannot be represented in dest type");
 
-        const vector_base<DstT, DstElems> ret = vector_cast_helper<DstT, DstElems>(data);
+        constexpr unsigned result_elems = elems_ratio::num;
 
+        const vector_base<DstT, result_elems> ret = vector_cast_helper<DstT, result_elems>(data);
         return ret;
     }
 
     __aie_inline
     vector_base &push(value_type v)
     {
-        if constexpr (type_bits() == 4) {
-            if constexpr (bits() > 1024) {
-                T m2 = get(native_elems - 1);
-
-                insert(0, extract<native_elems>(0).unpack().push(v).pack());
-
-                utils::unroll_for<unsigned, 1u, Elems / native_elems>([&](unsigned idx) __aie_inline {
-                    const T m3 = get(native_elems * (idx + 1) - 1);
-                    insert(idx, ::shiftr_elem(extract<native_elems>(idx).unpack().push(m2).pack(), m2));
-                    m2 = m3;
-                });
-            }
-            else if constexpr (bits() == 1024) {
-                const auto v2 = get(Elems / 2 - 1);
-
-                insert(0, extract<native_elems>(0).unpack().push(v).pack());
-                insert(1, extract<native_elems>(1).unpack().push(v2).pack());
-            }
-            else {
-                data = unpack().push(v).pack();
-            }
+        if constexpr (type_bits() < 8) {
+            *this = unpack().push(v).pack();
         }
         else {
-            if constexpr (bits() > 1024) {
-                T m2 = get(native_elems - 1);
+            if constexpr (bits() > 512) {
+                using shuffle_up = shuffle_up_fill_bits_impl<type_bits(), T, native_elems>;
 
-                insert(0, ::shiftr_elem(extract<native_elems>(0), v));
+                constexpr unsigned num_chunks = Elems / native_elems;
+                utils::unroll_for<unsigned, 1u, num_chunks>([&](unsigned i) __aie_inline {
+                    unsigned chunk = num_chunks - i;
 
-                utils::unroll_for<unsigned, 1u, Elems / native_elems>([&](unsigned idx) __aie_inline {
-                    const T m3 = get(native_elems * (idx + 1) - 1);
-                    insert(idx, ::shiftr_elem(extract<native_elems>(idx), m2));
-                    m2 = m3;
+                    auto curr = extract<native_elems>(chunk);
+                    auto fill = extract<native_elems>(chunk - 1);
+                    insert(chunk, shuffle_up::run(curr, fill, 1));
                 });
-            }
-            else if constexpr (bits() == 1024) {
-                const T m = get(native_elems - 1);
-                insert(0, ::shiftr_elem(extract<native_elems>(0), v));
-                insert(1, ::shiftr_elem(extract<native_elems>(1), m));
+                insert(0, extract<native_elems>(0).push(v));
             }
             else if constexpr (bits() == 512) {
                 data = ::shiftr_elem(data, v);
@@ -625,7 +724,7 @@ public:
 
                 return tmp.template grow_replicate<ElemsOut>();
             }
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
             vector_base<T, native_vector_length<T>::value> tmp;
             tmp = (typename decltype(tmp)::native_type)::broadcast_elem_128(this->cast_to<int32>().template grow<16>(), 0);
 
@@ -665,46 +764,52 @@ public:
 
         if constexpr (utils::is_one_of_v<T, int4, uint4>) {
             if constexpr (size() <= 64) {
-                vector_base<utils::get_next_integer_type_t<T>, size()> tmp_vec = unpack();
+                using next_int = utils::get_next_integer_type_t<T>;
+                vector_base<next_int, size()> tmp_vec = unpack();
                 tmp_vec.set(v, idx);
 
-                data = tmp_vec.pack().data;
+                *this = tmp_vec.pack();
             }
             else if constexpr (size() == 128) {
                 const bool odd = idx % 2;
-                const auto tmp_vec = cast_to<utils::get_next_integer_type_t<T>>();
+                // Use unsigned integer types regardless of T, avoiding sign extensions
+                const uint8 w = __builtin_bit_cast(uint4, v);
+
+                auto tmp_vec = cast_to<uint8>();
                 auto tmp = tmp_vec.get(idx / 2);
 
-                tmp = odd? (tmp & 0x0f) | (v << 4) :
-                           (tmp & 0xf0) | (int8)v;
+                tmp = odd? (tmp & 0x0f) | (w << 4) :
+                           (tmp & 0xf0) | (w & 0x0f);
 
-                data = (native_type)::insert(tmp_vec, idx / 2, tmp);
+                tmp_vec.set(tmp, idx / 2);
+
+                *this = tmp_vec.template cast_to<T>();
             }
-            else if constexpr (size() >= 256) {
-                const bool odd = idx % 2;
-                const auto tmp_vec = extract<native_elems>(idx / native_elems).template cast_to<utils::get_next_integer_type_t<T>>();
-                auto tmp = tmp_vec.get((idx % native_elems) / 2);
+            else {
+                auto tmp_vec = extract<native_elems>(idx / native_elems);
 
-                tmp = odd? (tmp & 0x0f) | (v << 4) :
-                           (tmp & 0xf0) | (int8)v;
+                tmp_vec.set(v, (idx % native_elems));
 
-                insert(idx / native_elems, (typename vector_base<T, native_elems>::native_type)::insert(tmp_vec, (idx % native_elems) / 2, tmp));
+                insert(idx / native_elems, tmp_vec.template cast_to<T>());
             }
         }
         else {
-            if constexpr (bits() == 128) {
-                data = vector_extract<size()>(::insert(vector_set<value_type, size() * 4>::run(data, 0), idx, v), 0);
-            }
-            else if constexpr (bits() == 256) {
-                data = vector_extract<size()>(::insert(vector_set<value_type, size() * 2>::run(data, 0), idx, v), 0);
+            if constexpr (bits() < 512) {
+                auto tmp_vec = grow<native_elems>();
+                tmp_vec.set(v, idx);
+                data = tmp_vec.template extract<size()>(0);
             }
             else if constexpr (bits() == 512) {
-                data = ::insert(data, idx, v);
+                data = vector_elem_insert<T, Elems>::run(data, idx, v);
             }
             else if constexpr (bits() >= 1024) {
                 unsigned     i = idx / native_elems;
                 unsigned sub_i = idx % native_elems;
-                insert(i, ::insert(extract<native_elems>(i), sub_i, v));
+
+                auto tmp_vec = extract<native_elems>(i);
+                tmp_vec.set(v, sub_i);
+
+                insert(i, tmp_vec);
             }
         }
     }
@@ -714,40 +819,38 @@ public:
     {
         REQUIRES_MSG(idx < Elems, "idx needs to be a valid element index");
 
-        if constexpr (utils::is_one_of_v<T, int4, uint4>) {
-            if constexpr (size() <= 64) {
+        if constexpr (utils::is_one_of_v<T,
+                                         int4, uint4>) {
+            constexpr unsigned native_unpack_dst_bits = 512;
+            constexpr unsigned native_unpack_elems    = native_unpack_dst_bits / 8u; // unpack to 8b
+
+            if constexpr (size() <= native_unpack_elems) {
                 return unpack().get(idx);
             }
-            else if constexpr (size() == 128) {
-                vector_base<utils::get_next_integer_type_t<T>, 64> tmp_vec;
+            else if constexpr (bits() <= 1024) {
+                vector_base<utils::get_next_integer_type_t<T>, native_unpack_elems> tmp_vec;
 
-                // Unpack 256b subvector if index known at compile time. Otherwise use shift to get the right subvector
-                if (chess_const(idx)) {
-                    tmp_vec = this->extract<64>(idx / 64).unpack();
-                }
-                else {
-                    const vector<T, Elems> tmp = SHIFT_BYTES(data, vector_base(), 32 * (idx / 64));
-                    tmp_vec = tmp.template extract<64>(0).unpack();
-                }
-
-                return (T)tmp_vec.get(idx % 64);
-            }
-            else if constexpr (size() == 256) {
-                vector_base<utils::get_next_integer_type_t<T>, 64> tmp_vec;
-
-                // Unpack 256b subvector if index known at compile time. Otherwise use shift to get the right subvector
-                if (chess_const(idx)) {
-                    tmp_vec = this->extract<64>(idx / 64).unpack();
-                }
-                else {
-                    const vector<T, Elems / 2> tmp = SHIFT_BYTES(extract<native_elems>(0), extract<native_elems>(1), 64 * (idx / 128));
-                    return (T)tmp.unpack().get(idx % 128);
+                {
+                    // Unpack 256b subvector if index known at compile time. Otherwise use shift to get the right subvector
+                    if (chess_const(idx)) {
+                        tmp_vec = this->extract<native_unpack_elems>(idx / native_unpack_elems).unpack();
+                    }
+                    else {
+                        if constexpr (bits() == 512) {
+                            const vector<T, Elems> tmp = ::shift_bytes(data, vector_base(), 32 * (idx / 64));
+                            tmp_vec = tmp.template extract<native_unpack_elems>(0).unpack();
+                        }
+                        else if constexpr (bits() == 1024) {
+                            const vector<T, Elems / 2> tmp = ::shift_bytes(extract<native_elems>(0), extract<native_elems>(1), 64 * (idx / 128));
+                            return (T)tmp.unpack().get(idx % 128);
+                        }
+                    }
                 }
 
-                return (T)tmp_vec.get(idx % 64);
+                return (T)tmp_vec.get(idx % native_unpack_elems);
             }
             else {
-                return (T)vector(extract<native_elems>(idx / native_elems)).unpack().get(idx % native_elems);
+                return (T)vector(extract<native_unpack_elems>(idx / native_unpack_elems)).unpack().get(idx % native_unpack_elems);
             }
         }
         else {
@@ -767,7 +870,7 @@ public:
                 else if (chess_manifest(idx >= size() / 2))
                     return ::extract_elem(data[1], idx - size() / 2);
                 else {
-                    const vector<T, Elems / 2> tmp = SHIFT_BYTES(data[0], data[1], idx * sizeof(T));
+                    const vector<T, Elems / 2> tmp = ::shift_bytes(data[0], data[1], idx * sizeof(T));
                     return tmp.get(0);
                 }
             }
@@ -820,19 +923,32 @@ public:
                 data[c] = arr[c];
             });
         }
-        else if constexpr (num_subvectors == 8 && bits() == 1024) {
-            // Only possible with 128b subvectors into 1024b vector, otherwise larger than sub_vec size
-            utils::unroll_times<num_subvectors>([&] (unsigned idx) __aie_inline {
-                insert(idx, arr[idx]);
-            });
-        }
-    #if __AIE_API_128_BIT_INSERT_CONCAT__ == 0
         else if constexpr (subvector_bits == 128) {
-            utils::unroll_times<num_subvectors>([&] (unsigned idx) __aie_inline {
-                insert(idx, arr[idx]);
+            // Since we create a whole new vector from 128b chunks, use shuffle_down to fill
+            // the lowest bits from input chunks to the top of the result vector
+            // Shuffle unit native bits may differ vector native bits
+            constexpr unsigned native_elems = 512u / type_bits();
+            constexpr unsigned num_chunks = std::max(1u, Elems / native_elems);
+            constexpr unsigned subvectors_per_chunk = std::min(num_subvectors, native_elems / subvector_elems);
+            using shuffle_down = shuffle_down_fill_bits_impl<type_bits(), T, native_elems>;
+
+            auto in = arr.begin();
+            utils::unroll_times<num_chunks>([&](unsigned c) __aie_inline {
+                vector_base<T, native_elems> chunk;
+                utils::unroll_for<unsigned, 1, subvectors_per_chunk>([&](unsigned i) {
+                    chunk = shuffle_down::run(chunk, in->template grow<native_elems>(), subvector_elems);
+                    ++in;
+                });
+
+                // The last shift needs to account for the difference between native_size and the chunks being added,
+                // such that the first chunk always starts at the first lane even for 256b vectors.
+                constexpr unsigned shift_gap = subvector_elems + native_elems - subvector_elems * subvectors_per_chunk;
+                chunk = shuffle_down::run(chunk, in->template grow<native_elems>(), shift_gap);
+                ++in;
+
+                insert(c, chunk.template extract<std::min(Elems, native_elems)>(0));
             });
         }
-    #endif
         else if constexpr (num_subvectors == 8) {
             data = ::concat(::concat(arr[0], arr[1], arr[2], arr[3]),
                             ::concat(arr[4], arr[5], arr[6], arr[7]));
@@ -898,8 +1014,9 @@ public:
     }
 
     template <typename T2 = typename unpacked_type<T>::type>
-        requires(utils::is_one_of_v<T2, int8, uint8, int16, uint16>
-                && type_bits_v<T2> / type_bits_v<T> == 2)
+        requires((utils::is_one_of_v<T2, int8, uint8, int16, uint16>
+                   && type_bits_v<T2> / type_bits_v<T> == 2)
+                )
     __aie_inline
     auto unpack_sign(bool v_sign) const -> vector_base<T2, size()>
     {
@@ -908,11 +1025,17 @@ public:
 
         next_vector_type ret;
 
-        if constexpr (bits() == 128) {
-            ret = this->template grow<size() * 2>().template unpack_sign<T2>(v_sign).template extract<size()>(0);
-        }
-        else if constexpr (next_chunks == 1) {
-            ret = ::unpack(data, v_sign);
+        constexpr auto unpack_fn = []() __aie_inline {
+            return [](auto v, bool sign) __aie_inline {
+                if constexpr (bits() == 128)
+                    return vector_base<T2, size() * 2>(::unpack(vector_base<T, Elems>(v).template grow<size() * 2>(), sign)).template extract<size()>(0);
+                else
+                    return ::unpack(v, sign);
+            };
+        }();
+
+        if constexpr (next_chunks == 1) {
+            ret = unpack_fn(data, v_sign);
         }
         else if constexpr (next_chunks > 1) {
             utils::unroll_times<next_chunks>([&](unsigned idx) __aie_inline {
@@ -924,9 +1047,6 @@ public:
     }
 
     template <typename T2 = typename unpacked_type<T>::type>
-        requires(utils::is_one_of_v<T2, int8, uint8, int16, uint16>
-                && type_bits_v<T2> / type_bits_v<T> == 2)
-    __aie_inline
     auto unpack() const -> vector_base<T2, size()>
     {
         return unpack_sign<T2>(is_signed());
@@ -1012,6 +1132,8 @@ public:
     void load_unaligned(const T2 *ptr, unsigned aligned_elems)
     {
         static_assert(bits() <= 1024, "Unsupported for large vectors. See CRVO-10890");
+
+        [[maybe_unused]]
         constexpr unsigned subbyte_elems = type_bits() == 4 ? 2 : 1;
         const unsigned aligned_bits = aligned_elems * type_bits();
 
@@ -1026,15 +1148,15 @@ public:
 
             const unsigned frac = uintptr_t(ptr) & 31;
 
-            ptr = utils::floor_ptr<Elems * 2>(ptr);
+            aliased_type *tmp_ptr = (aliased_type *)utils::floor_ptr<Elems * 2>(ptr);
 
             vector_base<value_type, Elems * 4> tmp;
 
-            tmp = vector_set<value_type, Elems * 4>::run(*(aliased_type *)ptr, 0); ptr += Elems * 2 / subbyte_elems;
+            tmp = vector_set<value_type, Elems * 4>::run(*tmp_ptr++, 0);
             if (!chess_manifest(frac <= 16))
-                tmp.template insert<Elems * 2>(1, *(aliased_type *)ptr);
+                tmp.template insert<Elems * 2>(1, *tmp_ptr);
 
-            tmp = SHIFT_BYTES(tmp, vector_base<value_type, Elems * 4>(), frac);
+            tmp = ::shift_bytes(tmp, vector_base<value_type, Elems * 4>(), frac);
 
             data = tmp.template extract<Elems>(0);
         }
@@ -1044,17 +1166,18 @@ public:
 
             const unsigned frac = uintptr_t(ptr) & 31;
 
-            ptr = utils::floor_ptr<Elems>(ptr);
+            aliased_type *tmp_ptr = (aliased_type *)utils::floor_ptr<Elems>(ptr);
 
             vector_base<value_type, Elems * 2> tmp;
 
-            tmp = vector_set<value_type, Elems * 2>::run(*(aliased_type *)ptr, 0); ptr += Elems / subbyte_elems;
-            tmp.template insert<Elems>(1, *(aliased_type *)ptr);
+            tmp = vector_set<value_type, Elems * 2>::run(*tmp_ptr++, 0);
+            tmp.template insert<Elems>(1, *tmp_ptr);
 
-            tmp = SHIFT_BYTES(tmp, vector_base<value_type, Elems * 2>(), frac);
+            tmp = ::shift_bytes(tmp, vector_base<value_type, Elems * 2>(), frac);
 
             data = tmp.template extract<Elems>(0);
         }
+#if __AIE_ARCH__ == 20
         else if constexpr (bits() == 512) {
             using native_type = native_vector_type_t<value_type, Elems / 2>;
             using aliased_type = add_memory_bank_t<Resource, aie_dm_resource_set_t<native_type, aie_dm_resource_get_v<T2>>>;
@@ -1070,7 +1193,7 @@ public:
 
             tmp2 = vector_set<value_type, Elems>::run(*(aliased_type *)ptr, 0);
 
-            data = SHIFT_BYTES(tmp1, tmp2, frac);
+            data = ::shift_bytes(tmp1, tmp2, frac);
         }
         else if constexpr (bits() == 1024) {
             using native_type = native_vector_type_t<value_type, Elems / 4>;
@@ -1089,20 +1212,59 @@ public:
 
             // Only supports 1k vectors.
             // TODO: Extend this to work with arbitrary vector sizes (CRVO-10890)
-            insert(0, SHIFT_BYTES(tmp1, tmp2, frac));
+            insert(0, ::shift_bytes(tmp1, tmp2, frac));
 
             tmp2.template insert<Elems / 4>(1, *(aliased_type *)ptr);               ptr += Elems / 4 / subbyte_elems;
 
             tmp1 = vector_set<value_type, Elems / 2>::run(*(aliased_type *)ptr, 0);
 
-            insert(1, SHIFT_BYTES(tmp2, tmp1, frac));
+            insert(1, ::shift_bytes(tmp2, tmp1, frac));
         }
+#else
+        else if constexpr (bits() == 512) {
+            using native_type = native_vector_type_t<value_type, Elems>;
+            using aliased_type = add_memory_bank_t<Resource, aie_dm_resource_set_t<native_type, aie_dm_resource_get_v<T2>>>;
+
+            const unsigned frac = uintptr_t(ptr) & 63;
+
+            aliased_type *tmp_ptr = (aliased_type *)utils::floor_ptr<Elems>(ptr);
+
+            vector_base<value_type, Elems> tmp1, tmp2;
+
+            tmp1 = *tmp_ptr++;
+            tmp2 = *tmp_ptr;
+
+            data = ::shift_bytes(tmp1, tmp2, frac);
+        }
+        else if constexpr (bits() == 1024) {
+            using native_type = native_vector_type_t<value_type, Elems / 2>;
+            using aliased_type = add_memory_bank_t<Resource, aie_dm_resource_set_t<native_type, aie_dm_resource_get_v<T2>>>;
+
+            const unsigned frac = uintptr_t(ptr) & 63;
+
+            aliased_type *tmp_ptr = (aliased_type *)utils::floor_ptr<Elems / 2>(ptr);
+
+            vector_base<value_type, Elems / 2> tmp1, tmp2;
+
+            tmp1 = *tmp_ptr++;
+            tmp2 = *tmp_ptr++;
+
+            // Only supports 1k vectors.
+            // TODO: Extend this to work with arbitrary vector sizes (CRVO-10890)
+            insert(0, ::shift_bytes(tmp1, tmp2, frac));
+
+            tmp1 = *tmp_ptr;
+
+            insert(1, ::shift_bytes(tmp2, tmp1, frac));
+        }
+#endif
     }
 
     template <aie_dm_resource Resource = aie_dm_resource::none, typename T2> requires(std::is_same_v<aie_dm_resource_remove_t<T2>, value_type>)
     __aie_inline
     void store_unaligned(T2 *ptr, unsigned aligned_elems) const
     {
+        [[maybe_unused]]
         constexpr unsigned subbyte_elems = type_bits() == 4 ? 2 : 1;
         const unsigned aligned_bits = aligned_elems * type_bits();
 
@@ -1125,7 +1287,7 @@ public:
             aliased_type *native_ptr = (aliased_type *)ptr;
 
             uint64_t            m = ((1ULL << vector_native_bytes) - 1) << frac;
-            vector_base<int8, 64>    x = SHIFT_BYTES(::undef_v64int8(), ::set_v64int8(0, vec), 64 - frac);
+            vector_base<int8, 64>    x = ::shift_bytes(::undef_v64int8(), ::set_v64int8(0, vec), 64 - frac);
             vector_base<int8, 64>    y = ::set_v64int8(0, native_ptr[0]);
             y = ::insert(y, 1, native_ptr[1]);
             y = ::sel(y, x, m);
@@ -1230,21 +1392,22 @@ private:
     __aie_inline
     vector_base<value_type, N> extract_helper(unsigned idx) const
     {
-        constexpr unsigned output_bits = type_bits() * N;
+        constexpr unsigned output_bits = internal_type_bits_v<T> * N;
+        constexpr unsigned input_bits = internal_type_bits_v<T> * Elems;
 
-        static_assert(output_bits <= bits());
+        static_assert(output_bits <= input_bits);
         static_assert(output_bits >= 128 && utils::is_powerof2(output_bits));
 
-        if constexpr (output_bits == bits()) {
+        if constexpr (output_bits == input_bits) {
             return *this;
         }
         else {
-            if constexpr (bits() > max_intrinsic_bits) {
+            if constexpr (input_bits > max_intrinsic_bits) {
                 if constexpr (output_bits > max_intrinsic_bits) {
                     constexpr unsigned chunks = N / max_intrinsic_elems;
 
                     vector_base<value_type, N> ret;
-                    
+
                     utils::unroll_times<chunks>([&](unsigned j) __aie_inline {
                         ret.data[j] = data[(chunks * idx) + j];
                     });
@@ -1266,7 +1429,7 @@ private:
                 }
             }
             else{
-                constexpr unsigned data_ratio = bits() / output_bits;
+                constexpr unsigned data_ratio = input_bits / output_bits;
                 if constexpr (data_ratio == 8){ // no 128b extract from 1024b vector, first extract 512b sub-vector
                     vector_base<T,native_elems> tmp = extract<native_elems>(idx / (native_bits / output_bits));
                     return tmp.template extract<N>(idx % (native_bits / output_bits));

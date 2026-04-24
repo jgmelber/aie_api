@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -25,6 +25,10 @@ template <typename T> struct is_vector_op;
 template <typename T> struct is_sparse_vector_op;
 
 template <typename T> struct is_block_vector_op;
+
+template <typename T> struct is_tbs;
+
+template <typename T> struct is_tbs_op;
 
 template <typename T> struct is_elem;
 
@@ -102,7 +106,7 @@ template <typename T> struct is_floating_point;
 template <typename T>
 static constexpr bool is_floating_point_v = is_floating_point<T>::value;
 
-#if __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 template <typename T> struct is_block_floating_point;
 
@@ -153,6 +157,16 @@ template <typename T> struct type_bits;
 template <typename T>
 static constexpr unsigned type_bits_v = type_bits<T>::value;
 
+template <typename T>
+static constexpr bool is_tbs_v = is_tbs<T>::value;
+
+template <typename T>
+static constexpr bool is_tbs_op_v = is_tbs_op<T>::value;
+
+template <typename T>
+static constexpr bool is_tbs_or_op_v = is_tbs<T>::value ||
+                                       is_tbs_op<T>::value;
+
 } // namespace detail
 
 template <typename T>
@@ -163,7 +177,6 @@ struct is_elem {
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::ElemBaseType
  * Concept for all the basic types that can be used in operations and as vector element type.
  *
  * \sa @ref vector_valid_parameters "Supported vector types and sizes".
@@ -174,7 +187,6 @@ concept ElemBaseType      = detail::is_valid_element_type<T>::value;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::Elem
  * Concept for element operands. It can be a value that meets aie::ElemBaseType or a vector element reference.
  */
 template <typename T>
@@ -183,7 +195,6 @@ concept Elem = ElemBaseType<T> || detail::is_vector_elem_ref<T>::value;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::ComplexElem
  * Concept similar to aie::Elem, but it only accepts complex types.
  */
 template <typename T>
@@ -192,7 +203,6 @@ concept ComplexElem = Elem<T> && detail::is_complex<typename operand_base_type<T
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::RealElem
  * Concept similar to aie::Elem, but it only accepts real (i.e. non-complex) types.
  */
 template <typename T>
@@ -201,7 +211,6 @@ concept RealElem = Elem<T> && !detail::is_complex<typename operand_base_type<T>:
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::ElemOrOp
  * Concept that allows aie::Elem or an element operation modifier.
  */
 template <typename T>
@@ -210,7 +219,6 @@ concept ElemOrOp = detail::is_elem_or_op_v<T>;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::Vector
  * Concept for vector types. Accepts any aie::vector, aie::vector_ref or aie::unaligned_vector_ref type.
  */
 template <typename T>
@@ -219,7 +227,6 @@ concept Vector = detail::is_vector<aie_dm_resource_remove_t<T>>::value || detail
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::ComplexVector
  * Similar to aie::Vector, but it only accepts vectors with complex element types.
  */
 template <typename T>
@@ -228,7 +235,22 @@ concept ComplexVector = Vector<T> && T::is_complex();
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::RealVector
+ * Similar to aie::ComplexVector, but it only accepts vectors with integral element types.
+ */
+template <typename T>
+concept ComplexIntegralVector = ComplexVector<T> && !T::is_floating_point();
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Similar to aie::ComplexVector, but it only accepts vectors with floating point element types.
+ */
+template <typename T>
+concept ComplexFloatVector = ComplexVector<T> && T::is_floating_point();
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
  * Similar to aie::Vector, but it only accepts vectors with real element types.
  */
 template <typename T>
@@ -237,7 +259,6 @@ concept RealVector = Vector<T> && !T::is_complex();
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::VectorOrOp
  * Concept that allows aie::Vector or a vector operation modifier.
  */
 template <typename T>
@@ -246,7 +267,6 @@ concept VectorOrOp = detail::is_vector_or_op_v<T>;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::SparseVector
  * Concept for vector types. Accepts any aie::sparse_vector type.
  */
 template <typename T>
@@ -255,7 +275,6 @@ concept SparseVector = detail::is_sparse_vector<aie_dm_resource_remove_t<T>>::va
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::SparseVectorOrOp
  * Concept that allows aie::SparseVector or a vector operation modifier.
  */
 template <typename T>
@@ -266,7 +285,6 @@ concept SparseVectorOrOp = detail::is_sparse_vector_or_op_v<T>;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::BlockVector
  * Concept for bloack vector types. Accepts any aie::block_vector type.
  */
 template <typename T>
@@ -275,18 +293,29 @@ concept BlockVector = detail::is_block_vector<aie_dm_resource_remove_t<T>>::valu
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::BlockVectorOp
  * Concept for an operation modifier on a block vector type.
  */
 template <typename T>
 concept BlockVectorOp = is_block_vector_op<T>::value;
 
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Concept that allows aie::BlockVector or a block vector operation modifier.
+ */
+template <typename T>
+concept BlockVectorOrOp = BlockVector<T> || BlockVectorOp<T>;
+
+template <typename T>
+concept RegularOrBlockVector = Vector<T> || BlockVector<T>;
+
+template <typename T>
+concept RegularOrBlockVectorOrOp = VectorOrOp<T> || BlockVectorOrOp<T>;
 #endif
 
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::Accum
  * Concept for accumulator types. Accepts any aie::accum type.
  */
 template <typename T>
@@ -295,7 +324,6 @@ concept Accum = detail::is_accum<aie_dm_resource_remove_t<T>>::value;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::AccumOrOp
  * Concept that allows aie::Accum or an accumulator operation modifier.
  */
 template <typename T>
@@ -304,7 +332,6 @@ concept AccumOrOp = detail::is_accum_or_op_v<T>;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::Mask
  * Concept for mask types. Accepts any aie::mask type.
  */
 template <typename T>
@@ -323,7 +350,6 @@ concept ElemBaseOrBlockType = detail::is_valid_element_type<T>::value || detail:
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::DecoratedElemBaseType
  * Concept for the pointers to basic types that can be used in operations and as vector element type.
  */
 template <typename T>
@@ -332,7 +358,15 @@ concept DecoratedElemBaseType = detail::is_valid_element_type<std::remove_const_
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::AccumElemBaseType
+ * Concept for the pointers to basic or block types that can be used in operations and as vector element type.
+ */
+template <typename T>
+concept DecoratedElemBaseOrBlockType = detail::is_valid_element_type<std::remove_const_t<aie_dm_resource_remove_t<T>>>::value ||
+                                       detail::is_valid_block_type<std::remove_const_t<aie_dm_resource_remove_t<T>>>::value;
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
  * Concept for the supported accumulator element types.
  *
  * \sa @ref accum_valid_parameters "Supported accumulator types and sizes".
@@ -352,7 +386,6 @@ concept ArithmeticType = Elem<T> || Vector<T> || Accum<T>;
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::PackableFrom
  * The concept PackableFrom is satisfied when all the following requirements are met:
  * 
  * 1. Both `From` and `To` types are valid vector element types.
@@ -372,10 +405,55 @@ concept PackableFrom = ElemBaseType<To> &&
                        !detail::is_floating_point_v<To> &&
                        !detail::is_floating_point_v<From>;
 
+
 /**
  * @ingroup group_basic_types_concepts
  *
- * @concept aie::UnpackableFrom
+ * Concept for a tensor buffer stream
+ */
+template <typename T>
+concept TensorBufferStream = detail::is_tbs_v<T>;
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Concept for a tensor buffer stream with an operation modifier
+ */
+template <typename T>
+concept TensorBufferStreamOp = detail::is_tbs_op_v<T>;
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Concept for an ADF io_buffer
+ */
+template <typename T>
+concept IOBuffer = requires (T& t) {
+    t.data();
+};
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Concept for an asynchronous ADF io_buffer
+ */
+template <typename T>
+concept AsyncIOBuffer = IOBuffer<T> && requires (T& t) {
+    t.acquire();
+    t.release();
+};
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
+ * Concept for a tensor buffer stream or an operation modifier
+ */
+template <typename T, typename ElemType>
+concept TensorBufferStreamOrOp = detail::is_tbs_or_op_v<T> && std::is_same_v<typename T::elem_type, ElemType>;
+
+/**
+ * @ingroup group_basic_types_concepts
+ *
  * The concept UnpackableFrom is satisfied when all the following requirements are met:
  * 
  * 1. Both `From` and `To` types are valid vector element types.
@@ -408,6 +486,16 @@ namespace detail::utils {
 
 template <typename T>
 using operand_base_type_t = typename operand_base_type<typename detail::utils::remove_all<T>::type>::type;
+
+template <typename T, typename U>
+concept SameAs = std::is_same_v<T, U> && std::is_same_v<U, T>;
+
+template <typename T, typename U, typename... Us>
+concept AnyOf = (SameAs<T, U> || ... || SameAs<T, Us>);
+
+template <typename From, typename To>
+concept ConvertibleTo = std::is_convertible_v<From, To> &&
+                        requires { static_cast<To>(std::declval<From>()); };
 
 } // namespace aie
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -30,7 +30,13 @@ struct tile_id_hw
 class tile
 {
 private:
+#if defined(__AIE_DEVICE_MEM_TILE_ROWS__) && defined(__AIE_DEVICE_SHIM_ROWS__)
+    static constexpr uint16_t compute_row_offset = __AIE_DEVICE_MEM_TILE_ROWS__ + __AIE_DEVICE_SHIM_ROWS__;
+#else
+    // CRVO-11006: Legacy fallback for AIE1 (1 shim row, 0 mem tile rows).
+    // Will be removed once aiecompiler injects __AIE_DEVICE_MEM_TILE_ROWS__ and __AIE_DEVICE_SHIM_ROWS__.
     static constexpr uint16_t compute_row_offset = 1;
+#endif
 
     __aie_inline
     constexpr tile() {}

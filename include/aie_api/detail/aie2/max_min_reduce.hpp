@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_MAX_MIN_REDUCE__HPP__
 #define __AIE_API_DETAIL_AIE2_MAX_MIN_REDUCE__HPP__
 
+#include <algorithm>
 #include <limits>
 
 #include "../max_min.hpp"
@@ -50,7 +51,7 @@ struct max_min_bits_reduce_impl<8, T, Elems, Op>
             vector<T, native_elems> tmp = v.template grow<native_elems>();
 
             utils::unroll_times<utils::log2(Elems)>([&](auto idx) __aie_inline {
-                tmp = op(tmp, SHIFT_BYTES(tmp, vector<T, native_elems>(), Elems >> (idx + 1)));
+                tmp = op(tmp, ::shift_bytes(tmp, vector<T, native_elems>(), Elems >> (idx + 1)));
             });
 
             return (T) tmp[0];
@@ -89,7 +90,7 @@ struct max_min_bits_reduce_impl<16, T, Elems, Op>
             vector<T, native_elems> tmp = v.template grow<native_elems>();
 
             utils::unroll_times<utils::log2(Elems)>([&](auto idx) __aie_inline {
-                tmp = op(tmp, SHIFT_BYTES(tmp, vector<T, native_elems>(), (Elems >> (idx + 1)) * sizeof(T)));
+                tmp = op(tmp, ::shift_bytes(tmp, vector<T, native_elems>(), (Elems >> (idx + 1)) * sizeof(T)));
             });
 
             return (T) tmp[0];
@@ -128,7 +129,7 @@ struct max_min_bits_reduce_impl<32, T, Elems, Op>
             vector<T, native_elems> tmp = v.template grow<native_elems>();
 
             utils::unroll_times<utils::log2(Elems)>([&](auto idx) __aie_inline {
-                tmp = op(tmp, SHIFT_BYTES(tmp, vector<T, native_elems>(), (Elems >> (idx + 1)) * sizeof(T)));
+                tmp = op(tmp, ::shift_bytes(tmp, vector<T, native_elems>(), (Elems >> (idx + 1)) * sizeof(T)));
             });
 
             return (T) tmp[0];

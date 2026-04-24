@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_MAX_MIN__HPP__
 #define __AIE_API_DETAIL_AIE2_MAX_MIN__HPP__
 
+#include <algorithm>
+
 #include "../add.hpp"
+#include "../blend.hpp"
 #include "../broadcast.hpp"
+#include "../compare.hpp"
 #include "../interleave.hpp"
 
 namespace aie::detail {
@@ -24,7 +28,7 @@ static constexpr auto get_max_min_op()
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_bits_impl<4, T, Elems, Op>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems> / 2;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -45,7 +49,7 @@ struct max_min_bits_impl<4, T, Elems, Op>
                 const vector<next_type, native_elems> tmp = native_impl::run(v1.template extract<native_elems>(idx).unpack(),
                                                                              v2.template extract<native_elems>(idx).unpack());
                 ret.insert(idx, tmp.pack());
-            
+
             });
 
             return ret;
@@ -88,7 +92,7 @@ struct max_min_bits_impl<4, T, Elems, Op>
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_bits_impl_common
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -101,7 +105,7 @@ struct max_min_bits_impl_common
     {
         vector_type ret;
 
-        if constexpr (vector_type::bits() <= 512) {
+        if constexpr (Elems <= native_elems) {
             vector<T, native_elems> tmp;
 
             tmp = op(v1.template grow<native_elems>(), v2.template grow<native_elems>());
@@ -123,7 +127,7 @@ struct max_min_bits_impl_common
     {
         vector_type ret;
 
-        if constexpr (vector_type::bits() <= 512) {
+        if constexpr (Elems <= native_elems) {
             vector<T, native_elems> tmp;
 
             if constexpr (vector_type::is_floating_point())
@@ -134,8 +138,6 @@ struct max_min_bits_impl_common
             ret = tmp.template extract<Elems>(0);
         }
         else {
-            constexpr unsigned num_ops = Elems / native_elems;
-
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
                 ret.insert(idx, native_impl::run(v1.template extract<native_elems>(idx),
                                                  v2.template extract<native_elems>(idx),
@@ -209,7 +211,7 @@ struct max_min_bits_impl<32, T, Elems, Op> : public max_min_bits_impl_common<T, 
 template <typename T, unsigned Elems>
 struct max_min_bits_impl_maxdiff_float_common
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -223,13 +225,10 @@ struct max_min_bits_impl_maxdiff_float_common
         vector_type ret;
 
         if constexpr (Elems <= native_elems) {
-            vector<T, native_elems> tmp;
-            const unsigned cmp = ::lt(v2.template grow<native_elems>(), v1.template grow<native_elems>());
-            tmp = ::sel(zeros<T, native_elems>::run(),
-                        sub<T, native_elems>::run(v1.template grow<native_elems>(), v2.template grow<native_elems>()),
-                        cmp);
-
-            ret = tmp.template extract<Elems>(0);
+            auto cmp = lt<T, native_elems>::run(v2.template grow<native_elems>(), v1.template grow<native_elems>());
+                 ret = select<T, native_elems>::run(zeros<T, native_elems>::run(),
+                                                    sub<T, native_elems>::run(v1.template grow<native_elems>(), v2.template grow<native_elems>()),
+                                                    cmp).template extract<Elems>(0);
         }
         else {
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
@@ -301,7 +300,14 @@ struct max_min_bits_impl_maxdiff_float_common
 template <unsigned Elems>
 struct max_min_bits_impl<16, bfloat16, Elems, MaxMinOperation::MaxDiff> : public max_min_bits_impl_maxdiff_float_common<bfloat16, Elems> {};
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP16_SUPPORT__
+
+template <unsigned Elems>
+struct max_min_bits_impl<16,  float16, Elems, MaxMinOperation::MaxDiff> : public max_min_bits_impl_maxdiff_float_common< float16, Elems> {};
+
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 
 template <unsigned Elems>
 struct max_min_bits_impl<32,  float,   Elems, MaxMinOperation::MaxDiff> : public max_min_bits_impl_maxdiff_float_common< float,   Elems> {};

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_BROADCAST__HPP__
 #define __AIE_API_DETAIL_BROADCAST__HPP__
+
+#include <algorithm>
 
 #include "utils.hpp"
 
@@ -18,7 +20,7 @@ namespace aie::detail {
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct broadcast_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(T a)
@@ -36,7 +38,7 @@ struct broadcast_bits_impl
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct zeros_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run()
@@ -74,10 +76,40 @@ struct broadcast_bits
         return run(a.get());
 #endif
     }
+
+#if __AIE_ARCH__ >= 20
+    template <unsigned Elems2>
+    static vector_type run(const T (&arr)[Elems2])
+    {
+        return broadcast_bits_impl<TypeBits, T, Elems>::run(arr);
+    }
+#endif
 };
 
 template <typename T, unsigned Elems>
 using broadcast = broadcast_bits<type_bits_v<T>, T, Elems>;
+
+template <unsigned TypeBits, typename T, unsigned Elems, unsigned N>
+struct broadcast_vector_bits_impl;
+
+template <unsigned TypeBits, typename T, unsigned Elems, unsigned N>
+struct broadcast_vector_bits
+{
+    using vector_type = vector<T, Elems>;
+
+#if __AIE_ARCH__ >= 20
+
+    template <unsigned Elems2> requires (Elems2 <= Elems)
+    static vector_type run(const vector<T, Elems2> &v, unsigned index)
+    {
+        return broadcast_vector_bits_impl<TypeBits, T, Elems, N>::run(v, index);
+    }
+
+#endif
+};
+
+template <typename T, unsigned Elems, unsigned N>
+using broadcast_vector = broadcast_vector_bits<type_bits_v<T>, T, Elems, N>;
 
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct zeros_bits
@@ -129,7 +161,7 @@ template <> struct zeros_type_for_accum<AccumClass::CInt> { using type = cint32;
 template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = float;    };
 #elif __AIE_ARCH__ == 20
 template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = float;    };
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 template <> struct zeros_type_for_accum<AccumClass::FP>   { using type = bfloat16; };
 #endif
 #if __AIE_ARCH__ == 10 || __AIE_API_COMPLEX_FP32_EMULATION__
@@ -177,7 +209,7 @@ using zeros_acc = zeros_acc_bits<Class, AccumBits, Elems>;
 
 #include "aie1/broadcast.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/broadcast.hpp"
 

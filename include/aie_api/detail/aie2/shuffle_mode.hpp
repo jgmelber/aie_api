@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -44,6 +44,8 @@ private:
 
     unsigned mode;
 public:
+    // Only used for large vector shuffles, where the step exceeds the shuffle unit size
+    // TODO: create specialization such that native size filters do not pay the overhead
     unsigned step;
 
     __aie_inline
@@ -61,7 +63,7 @@ public:
     // Allow casting provided the bypass special value does not change
     template <unsigned Elems2>
     __aie_inline constexpr shuffle_mode(const shuffle_mode<TypeBits, Elems2> &other) noexcept
-        : mode(other.low())
+        : mode(other.low()), step(other.step)
     {
         REQUIRES_MSG(!other.is_bypass() ||
                      bypass_sentinel == other.bypass_sentinel,
@@ -108,7 +110,7 @@ public:
     template <unsigned TypeBits2, unsigned Elems2>
     __aie_inline
     constexpr filter_mode(const filter_mode<TypeBits2, Elems2> &other) noexcept
-        : mode(other.mode)
+        : mode(other.mode), step(other.step * TypeBits2 / TypeBits), is_even(other.is_even)
     {
     }
 
@@ -116,6 +118,8 @@ public:
     constexpr bool operator==(const filter_mode &other) const { return mode == other.mode; }
 
     unsigned mode;
+    // Only used for large vector filters, where the step exceeds the shuffle unit size
+    // TODO: create specialization such that native size filters do not pay the overhead
     unsigned step;
     bool is_even;
 };
@@ -149,10 +153,17 @@ inline constexpr unsigned shuffle_mode<TypeBits, Elems>::zip_mode_low(unsigned s
         return shuffle_mode<8, Elems * TypeBits / 8>::zip_mode_low(step * TypeBits / 8);
     }
     else {
+#if __AIE_ARCH__ == 22
+        constexpr unsigned base_shuffle_mode = INTLV_lo_8o16 - (utils::fls(TypeBits / 8)) * 16;
+        return is_bypass(step) ? bypass_sentinel
+               : is_swap(step) ? INTLV_lo_512o1024
+               : base_shuffle_mode - utils::fls(step) * 16;
+#else
         constexpr unsigned base_shuffle_mode = INTLV_lo_8o16 - (utils::fls(TypeBits / 8)) * 2;
         return is_bypass(step) ? bypass_sentinel
                : is_swap(step) ? INTLV_lo_512o1024
                : base_shuffle_mode - utils::fls(step) * 2;
+#endif
     }
 }
 
@@ -165,10 +176,17 @@ inline constexpr unsigned shuffle_mode<TypeBits, Elems>::unzip_mode_low(unsigned
         return shuffle_mode<8, Elems * TypeBits / 8>::unzip_mode_low(step * TypeBits / 8);
     }
     else {
+#if __AIE_ARCH__ == 22
+        constexpr unsigned base_shuffle_mode = DINTLV_lo_8o16 - (utils::fls(TypeBits / 8)) * 2;
+        return is_bypass(step) ? bypass_sentinel
+               : is_swap(step) ? INTLV_lo_512o1024
+               : base_shuffle_mode - utils::fls(step) * 2;
+#else
         constexpr unsigned base_shuffle_mode = DINTLV_lo_8o16 + (utils::fls(TypeBits / 8)) * 2;
         return is_bypass(step) ? bypass_sentinel
                : is_swap(step) ? INTLV_lo_512o1024
                : base_shuffle_mode + utils::fls(step) * 2;
+#endif
     }
 }
 

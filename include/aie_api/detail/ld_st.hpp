@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -40,6 +40,16 @@ struct vector_ldst_align
                                       64;
 };
 
+#elif __AIE_ARCH__ == 22
+
+template <typename T, unsigned Elems>
+struct vector_ldst_align
+{
+    static constexpr unsigned value = (detail::type_bits_v<T> * Elems == 128)? 16 :
+                                      (detail::type_bits_v<T> * Elems == 256)? 32 :
+                                      64;
+};
+
 #endif
 
 template <typename T, unsigned Elems>
@@ -58,7 +68,7 @@ __aie_inline
 constexpr T *floor_ptr(T *ptr)
 {
 #if AIE_API_NATIVE == 1
-    constexpr uintptr_t mask = ~(vector_ldst_align_v<T, Elems> - 1);
+    constexpr uintptr_t mask = ~uintptr_t{vector_ldst_align_v<T, Elems> - 1};
 
     return (T *)((uintptr_t)ptr & mask);
 #else

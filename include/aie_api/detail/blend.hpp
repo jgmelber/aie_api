@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -14,7 +14,7 @@ namespace aie::detail {
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct select_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v1, const vector_type &v2, const mask<Elems> &m)
@@ -129,7 +129,7 @@ using select = select_bits<type_bits_v<T>, T, Elems>;
 
 #include "aie1/blend.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/blend.hpp"
 

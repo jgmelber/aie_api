@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -21,6 +21,8 @@ namespace aie::detail {
 
 template <unsigned M, unsigned K, unsigned N, typename TypeA, typename TypeB, unsigned AccumBits>
 struct mmul_32_16;
+
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 template <typename TypeA, typename TypeB>
 struct mmul_32_16<4, 2, 8, TypeA, TypeB, 64> : public C_block<TypeA, TypeB, 64, 32, 1>
@@ -43,6 +45,8 @@ struct mmul_32_16<4, 2, 8, TypeA, TypeB, 64> : public C_block<TypeA, TypeB, 64, 
     }
 };
 
+#endif
+
 template <typename TypeA, typename TypeB>
 struct mmul_32_16<2, 4, 8, TypeA, TypeB, 64> : public C_block_larger_internal<TypeA, TypeB, 64, 16, 2>
 {
@@ -53,21 +57,13 @@ struct mmul_32_16<2, 4, 8, TypeA, TypeB, 64> : public C_block_larger_internal<Ty
 
     __aie_inline void mac(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
-#if __AIE_API_HAS_32x16_MMUL_INTRINSICS__
         this->data = ::mac_4x4_4x8_conf(a.template grow<16>(), a_sign, b, b_sign, this->data, this->zero, 0, 0);
-#else
-        this->data = mac_4x4_4x8_32bx16b(a.template grow<16>(), a_sign, b, b_sign, this->data, this->zero);
-#endif
         this->zero = false;
     }
 
     __aie_inline void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
-#if __AIE_API_HAS_32x16_MMUL_INTRINSICS__
         this->data = ::mul_4x4_4x8(a.template grow<16>(), a_sign, b, b_sign);
-#else
-        this->data = mul_4x4_4x8_32bx16b(a.template grow<16>(), a_sign, b, b_sign);
-#endif
         this->zero = false;
     }
 };
@@ -82,21 +78,13 @@ struct mmul_32_16<4, 4, 8, TypeA, TypeB, 64> : public C_block<TypeA, TypeB, 64, 
 
     __aie_inline void mac(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
-#if __AIE_API_HAS_32x16_MMUL_INTRINSICS__
         this->data = ::mac_4x4_4x8_conf(a, a_sign, b, b_sign, this->data, this->zero, 0, 0);
-#else
-        this->data = mac_4x4_4x8_32bx16b(a.template grow<16>(), a_sign, b, b_sign, this->data, this->zero);
-#endif
         this->zero = false;
     }
 
     __aie_inline void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
     {
-#if __AIE_API_HAS_32x16_MMUL_INTRINSICS__
         this->data = ::mul_4x4_4x8(a, a_sign, b, b_sign);
-#else
-        this->data = mul_4x4_4x8_32bx16b(a.template grow<16>(), a_sign, b, b_sign);
-#endif
         this->zero = false;
     }
 };

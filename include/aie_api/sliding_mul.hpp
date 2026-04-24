@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -8,6 +8,10 @@
 #define __AIE_API_SLIDING_MUL__HPP__
 
 #include "concepts.hpp"
+
+// Forward declaration of input and output cascade types
+template <typename, typename> struct input_cascade;
+template <typename, typename> struct output_cascade;
 
 namespace aie {
 
@@ -36,85 +40,104 @@ namespace aie {
  * <table>
  * <caption>Supported AIE parameters for sliding_mul</caption>
  * <tr><th>Types (coeff x data)          <th colspan=2>Native accum.            <th>Native lanes      <th>Native points<th>CoeffStep<th>DataStepX<th>DataStepY                     <th>coeff_start             <th>data_start
- * <tr><td rowspan=3>  8b x   8b         <td>          AIE-ML/XDNA 1 <td> acc32 <td>32                <td>8            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td> acc32 <td>64                <td>8            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5> 16b x  16b         <td>          AIE           <td> acc48 <td>8<br/>16          <td>32/Lanes     <td>1,2,3,4  <td>1        <td>1                             <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td rowspan=2>AIE-ML/XDNA 1 <td> acc32 <td>16                <td>4            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                                              <td> acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td> acc32 <td>32                <td>4            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5> 16b x  32b         <td rowspan=2>AIE           <td> acc48 <td>8<br/>16          <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2<br/>1                     <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td> acc80 <td>8                 <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2                           <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td> acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td> acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5> 32b x  16b         <td rowspan=2>AIE           <td> acc48 <td>8<br/>16          <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2<br/>1                     <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td> acc80 <td>8                 <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2                           <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td> acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td> acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4> 32b x  32b         <td>          AIE           <td> acc80 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td> acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td> acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4> 16b x c16b         <td>          AIE           <td>cacc48 <td>4<br/>8           <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5> 16b x c32b         <td rowspan=2>AIE           <td>cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1, 2</sup> <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5> 32b x c16b         <td rowspan=2>AIE           <td>cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4> 32b x c32b         <td>          AIE           <td>cacc80 <td>2<br/>4           <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1, 2</sup> <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4>c16b x  16b         <td>          AIE           <td>cacc48 <td>4<br/>8           <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5>c16b x  32b         <td rowspan=2>AIE           <td>cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4>c16b x c16b         <td>          AIE           <td>cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5>c16b x c32b         <td rowspan=2>AIE           <td>cacc48 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td> 8<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5>c32b x  16b         <td rowspan=2>AIE           <td>cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4>c32b x  32b         <td>          AIE           <td>cacc80 <td>2<br/>4           <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=5>c32b x c16b         <td rowspan=2>AIE           <td>cacc48 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                                              <td>cacc80 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td> 8<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr><td rowspan=4>c32b x c32b         <td>          AIE           <td>cacc80 <td>2                 <td>2/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
- * <tr>                                  <td>          AIE-ML/XDNA 1 <td>cacc64 <td> 8                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
- * <tr>                                  <td>          XDNA 2        <td>cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=3>  8b x   8b         <td>          AIE-ML/XDNA1 <td> %acc32 <td>32                <td>8            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td> %acc32 <td>64                <td>8            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td> %acc32 <td>64                <td>8            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5> 16b x  16b         <td>          AIE          <td> %acc48 <td>8<br/>16          <td>32/Lanes     <td>1,2,3,4  <td>1        <td>1                             <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td rowspan=2>AIE-ML/XDNA1 <td> %acc32 <td>16                <td>4            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                                             <td> %acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td> %acc32 <td>32                <td>4            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td> %acc32 <td>32                <td>4            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5> 16b x  32b         <td rowspan=2>AIE          <td> %acc48 <td>8<br/>16          <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2<br/>1                     <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td> %acc80 <td>8                 <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2                           <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td> %acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5> 32b x  16b         <td rowspan=2>AIE          <td> %acc48 <td>8<br/>16          <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2<br/>1                     <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td> %acc80 <td>8                 <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2                           <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td> %acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4> 32b x  32b         <td>          AIE          <td> %acc80 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td> %acc64 <td>16                <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td> %acc64 <td>32                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4> 16b x c16b         <td>          AIE          <td>%cacc48 <td>4<br/>8           <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5> 16b x c32b         <td rowspan=2>AIE          <td>%cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1, 2</sup> <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5> 32b x c16b         <td rowspan=2>AIE          <td>%cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4> 32b x c32b         <td>          AIE          <td>%cacc80 <td>2<br/>4           <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1, 2</sup> <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4>c16b x  16b         <td>          AIE          <td>%cacc48 <td>4<br/>8           <td>16/Lanes     <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>32<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5>c16b x  32b         <td rowspan=2>AIE          <td>%cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4>c16b x c16b         <td>          AIE          <td>%cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5>c16b x c32b         <td rowspan=2>AIE          <td>%cacc48 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td> 8<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5>c32b x  16b         <td rowspan=2>AIE          <td>%cacc48 <td>4<br/>8           <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4<br/>1,2               <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>8/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4>c32b x  32b         <td>          AIE          <td>%cacc80 <td>2<br/>4           <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td>16<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=5>c32b x c16b         <td rowspan=2>AIE          <td>%cacc48 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                                             <td>%cacc80 <td>4                 <td>4/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td> 8<sup>1</sup>    <td>4            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr><td rowspan=4>c32b x c32b         <td>          AIE          <td>%cacc80 <td>2                 <td>2/Lanes      <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3,4                       <td>Unsigned smaller than 16<td>Signed
+ * <tr>                                  <td>          AIE-ML/XDNA1 <td>%cacc64 <td> 8                <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          XDNA2        <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
+ * <tr>                                  <td>          AIE-MLv2     <td>%cacc64 <td>16<sup>1</sup>    <td>1            <td>1        <td>1,2      <td>1,2 (needs to match DataStepX)<td>Unsigned                <td>Signed
  * </table>
  *
  * \note
- * <sup>1</sup>. Complex multiplication is emulated by decomposing the product into real x real multiplications. Real
- * and complex results are shuffled into the result vector at the end.
- *
- * \note
- * <sup>2</sup>. These real-coeff by complex-data operations compute real and complex components separately.
+ * <dl class="footnote">
+ * <dt>1</dt><dd>Complex multiplication is emulated by decomposing the product into real x real multiplications.
+ * Real and complex results are shuffled into the result vector at the end.</dd>
+ * <dt>2</dt><dd>These real-coeff by complex-data operations compute real and complex components separately.</dd>
+ * </dl>
  *
  * <table>
  * <caption>Supported AIE parameters for sliding_mul with floating point accumulation</caption>
  * <tr><th>Types (coeff x data)          <th colspan=2>Native accum.   <th>Native lanes<th>Native points<th>CoeffStep<th>DataStepX<th>DataStepY                      <th>coeff_start              <th>data_start
- * <tr><td rowspan=3>bfloat16 x bfloat16 <td>AIE-ML/XDNA 1 <td> accfloat    <td>16          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
- * <tr>                                  <td>XDNA 2        <td> accfloat    <td>64          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
- * <tr><td rowspan=4>float x float       <td>AIE           <td> accfloat    <td>8           <td>1            <td>1,2,3,4  <td>1,2,3,4  <td>1,2                            <td>Unsigned smaller than 16 <td>Signed
- * <tr>                                  <td>AIE-ML/XDNA 1 <td> accfloat    <td>32          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
- * <tr>                                  <td>XDNA 2        <td> accfloat    <td>32          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
- * <tr><td> float x cfloat               <td>AIE           <td>caccfloat    <td>4           <td>1            <td>1,2,3    <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
- * <tr><td>cfloat x  float               <td>AIE           <td>caccfloat    <td>4           <td>1            <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
- * <tr><td>cfloat x cfloat               <td>AIE           <td>caccfloat    <td>4           <td>1            <td>1,2,3    <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
+ * <tr><td rowspan=3>bfloat16 x bfloat16 <td>AIE-ML/XDNA1 <td> %accfloat    <td>16          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr>                                  <td>XDNA2        <td> %accfloat    <td>64          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr>                                  <td>AIE-MLv2     <td> %accfloat    <td>64          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr><td rowspan=4>float x float       <td>AIE          <td> %accfloat    <td>8           <td>1            <td>1,2,3,4  <td>1,2,3,4  <td>1,2                            <td>Unsigned smaller than 16 <td>Signed
+ * <tr>                                  <td>AIE-ML/XDNA1 <td> %accfloat    <td>32          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr>                                  <td>XDNA2        <td> %accfloat    <td>32          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr>                                  <td>AIE-MLv2     <td> %accfloat    <td>16          <td>1            <td>1,2      <td>1,2      <td>1,2 (needs to match DataStepX) <td>Unsigned                 <td>Signed
+ * <tr><td> float x cfloat               <td>AIE          <td>%caccfloat    <td>4           <td>1            <td>1,2,3    <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
+ * <tr><td>cfloat x  float               <td>AIE          <td>%caccfloat    <td>4           <td>1            <td>1,2,3,4  <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
+ * <tr><td>cfloat x cfloat               <td>AIE          <td>%caccfloat    <td>4           <td>1            <td>1,2,3    <td>1,2,3,4  <td>1,2,3                          <td>Unsigned smaller than 16 <td>Signed
  * </table>
  *
  * \note
@@ -143,7 +166,10 @@ namespace aie {
  * @tparam AccumTag  Accumulator tag that specifies the required accumulation bits. The class must be compatible with
  *                   the result of the multiplication of the coefficient and data types (real/complex).
  */
-template <unsigned Lanes, unsigned Points, int CoeffStep, int DataStepX, int DataStepY, ElemBaseType CoeffType, ElemBaseType DataType, AccumElemBaseType AccumTag = detail::default_accum_tag_t<CoeffType, DataType>>
+template <unsigned Lanes, unsigned Points,
+          int CoeffStep, int DataStepX, int DataStepY,
+          ElemBaseType CoeffType, ElemBaseType DataType,
+          AccumElemBaseType AccumTag = detail::default_accum_tag_t<CoeffType, DataType>>
 struct sliding_mul_ops {
     static constexpr unsigned accum_bits = detail::to_native_accum_bits_for_mul_types_tag<CoeffType, DataType, AccumTag>();
 #if __AIE_ARCH__ == 10
@@ -210,12 +236,49 @@ struct sliding_mul_ops {
                 constexpr Operation OpCoeff = detail::evaluate_mul_operation<VecCoeff>();
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
+                bool zero_acc = false;
+
                 if      constexpr (Mul == MulType::Mul)
-                    return impl_type::template run<detail::to_mul_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data));
+                {
+                    constexpr auto op = detail::to_mul_macro_op<OpData, OpCoeff>();
+                    return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                        data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                        zero_acc);
+                }
+                else if constexpr (Mul == MulType::NegMul)
+                {
+                    constexpr auto op = detail::to_negmul_macro_op<OpData, OpCoeff>();
+                    return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                        data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                        zero_acc);
+                }
                 else if constexpr (Mul == MulType::Acc_Mul)
-                    return impl_type::template run<detail::to_mul_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data), acc.parent1()...);
-                else if constexpr (Mul == MulType::Negmul)
-                    return impl_type::template run<detail::to_negmul_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data));
+                {
+#if __AIE_ARCH__ == 10
+                    constexpr auto op = detail::to_mul_macro_op<Acc::operation..., OpData, OpCoeff>();
+                    return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                        data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                         zero_acc, acc.parent1()...);
+#else
+                    if constexpr (sizeof...(Acc) && (true && ... && Acc::is_operation(Operation::Zero)))
+                        zero_acc = (false || ... || acc.parent2());
+
+                    if constexpr (sizeof...(Acc) && (true && ... && Acc::is_operation(Operation::Zero)))
+                    {
+                        constexpr auto op = detail::to_mul_macro_op<Operation::Acc_Add, OpData, OpCoeff>();
+                        return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                            data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                             zero_acc, acc.parent1()...);
+                    }
+                    else
+                    {
+                        constexpr auto op = detail::to_mul_macro_op<Acc::operation..., OpData, OpCoeff>();
+                        return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                            data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                             zero_acc, acc.parent1()...);
+                    }
+#endif
+                }
             }
         }
     }
@@ -224,7 +287,7 @@ struct sliding_mul_ops {
      * Performs the multiplication pattern defined by the class parameters using the input coefficient and data
      * arguments.
      *
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -247,7 +310,7 @@ struct sliding_mul_ops {
      * arguments.
      *
      * @param acc         Accumulator that is added to the result of the multiplication.
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -272,7 +335,7 @@ struct sliding_mul_ops {
      * Performs a negation of the multiplication pattern defined by the class parameters using the input coefficient and
      * data arguments.
      *
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -602,13 +665,13 @@ struct sliding_mul_sym_ops {
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
                 if      constexpr (MulType == SymMulType::Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, false);
                 else if constexpr (MulType == SymMulType::Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, false);
                 else if constexpr (MulType == SymMulType::Acc_Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, false, acc.parent1()...);
                 else if constexpr (MulType == SymMulType::Acc_Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, false, acc.parent1()...);
             }
         }
     }
@@ -642,13 +705,13 @@ struct sliding_mul_sym_ops {
                 constexpr Operation OpData = VecData::operation;
 
                 if      constexpr (MulType == SymMulType::Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, false);
                 else if constexpr (MulType == SymMulType::Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, false);
                 else if constexpr (MulType == SymMulType::Acc_Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, false, acc.parent1()...);
                 else if constexpr (MulType == SymMulType::Acc_Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), ldata_start, rdata_start, false, acc.parent1()...);
             }
         }
     }
@@ -683,13 +746,13 @@ struct sliding_mul_sym_ops {
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
                 if      constexpr (MulType == SymMulType::Sym)
-                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start);
+                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, false);
                 else if constexpr (MulType == SymMulType::Antisym)
-                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start);
+                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, false);
                 else if constexpr (MulType == SymMulType::Acc_Sym)
-                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, acc.parent1()...);
+                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, false, acc.parent1()...);
                 else if constexpr (MulType == SymMulType::Acc_Antisym)
-                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, acc.parent1()...);
+                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, false, acc.parent1()...);
             }
         }
     }
@@ -1213,13 +1276,13 @@ struct sliding_mul_sym_uct_ops {
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
                 if      constexpr (MulType == SymMulType::Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, false);
                 else if constexpr (MulType == SymMulType::Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, false);
                 else if constexpr (MulType == SymMulType::Acc_Sym)
-                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, false, acc.parent1()...);
                 else if constexpr (MulType == SymMulType::Acc_Antisym)
-                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, acc.parent1()...);
+                    return impl_type::template run<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, data.parent1(), data_start, uct_shift, false, acc.parent1()...);
             }
 
         }
@@ -1252,13 +1315,13 @@ struct sliding_mul_sym_uct_ops {
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
                 if      constexpr (MulType == SymMulType::Sym)
-                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift);
+                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, false);
                 else if constexpr (MulType == SymMulType::Antisym)
-                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift);
+                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, false);
                 else if constexpr (MulType == SymMulType::Acc_Sym)
-                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, acc.parent1()...);
+                    return impl_type::template run_2buff<detail::to_mul_sym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, false, acc.parent1()...);
                 else if constexpr (MulType == SymMulType::Acc_Antisym)
-                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, acc.parent1()...);
+                    return impl_type::template run_2buff<detail::to_mul_antisym_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, ldata.parent1(), ldata_start, rdata.parent1(), rdata_start, uct_shift, false, acc.parent1()...);
             }
         }
     }
@@ -1913,7 +1976,7 @@ auto sliding_mac_antisym_uct(const Acc &acc,
 /**
  * @ingroup group_mul_special
  *
- * @note Supported added in AIE-ML/XDNA 1.
+ * @note Supported since AIE-ML/XDNA1.
  *
  * This type provides a parametrized multiplication that implements the following compute pattern:
  *
@@ -1947,17 +2010,19 @@ auto sliding_mac_antisym_uct(const Acc &acc,
  *
  * <table>
  * <caption>Supported parameters for sliding_mul_ch with 32b accumulation</caption>
- * <tr><th>Types (coeff x data) <th colspan=2>Native accum.                <th>Native lanes <th>Native points <th>Channels <th>CoeffStep <th>DataStep <th>coeff_start <th>data_start
- * <tr><td rowspan=4>8b x 8b    <td rowspan=2>AIE-ML/XDNA 1 <td> acc32     <td>4            <td>4             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
- * <tr>                                                     <td> acc32     <td>8            <td>8             <td>4        <td>1         <td>1        <td>Unsigned    <td>Signed
- * <tr>                         <td>XDNA 2                  <td> acc32     <td>8            <td>8             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
- * <tr><td rowspan=2>16b x 16b  <td>XDNA 2                  <td> acc64     <td>4            <td>4             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr><th>Types (coeff x data) <th colspan=2>Native accum.                        <th>Native lanes <th>Native points <th>Channels <th>CoeffStep <th>DataStep <th>coeff_start <th>data_start
+ * <tr><td rowspan=4>8b x 8b    <td rowspan=2>AIE-ML/XDNA1 <td> %acc32             <td>4            <td>4             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr>                                                    <td> %acc32             <td>8            <td>8             <td>4        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr>                         <td>XDNA2                  <td> %acc32             <td>8            <td>8             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr>                         <td>AIE-MLv2               <td> %acc32             <td>8            <td>8             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr><td rowspan=2>16b x 16b  <td>XDNA2                  <td> %acc64             <td>4            <td>4             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
+ * <tr>                         <td>AIE-MLv2               <td> %acc64             <td>4            <td>4             <td>8        <td>1         <td>1        <td>Unsigned    <td>Signed
  * </table>
  *
  * \note
  * Native lanes denotes the number of outputs handled by a single intrinsic call. For `Lanes = N * Native lanes`, N
  * calls to the underlying intrinsic are made. For `Lanes < Native lanes`, a single call is made and the requested lanes
- * extracted .
+ * extracted.
  *
  * \note
  * Native points denotes the number of multiplications and additions handled by a single intrinsic call.  Other values
@@ -2038,12 +2103,42 @@ struct sliding_mul_ch_ops
                 constexpr Operation OpCoeff = detail::evaluate_mul_operation<VecCoeff>();
                 constexpr Operation OpData  = detail::evaluate_mul_operation<VecData>();
 
+                bool zero_acc = false;
+
                 if      constexpr (Mul == MulType::Mul)
-                    return impl_type::template run<detail::to_mul_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data));
+                {
+                    constexpr auto op = detail::to_mul_macro_op<OpData, OpCoeff>();
+                    return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                        data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                        zero_acc);
+                }
+                else if constexpr (Mul == MulType::NegMul)
+                {
+                    constexpr auto op = detail::to_negmul_macro_op<OpData, OpCoeff>();
+                    return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                        data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                        zero_acc);
+                }
                 else if constexpr (Mul == MulType::Acc_Mul)
-                    return impl_type::template run<detail::to_mul_macro_op<Acc::operation..., OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data), acc.parent1()...);
-                else if constexpr (Mul == MulType::Negmul)
-                    return impl_type::template run<detail::to_negmul_macro_op<OpData, OpCoeff>()>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff), data.parent1(), data_start, detail::get_mul_sign(data));
+                {
+                    if constexpr (sizeof...(Acc) && (true && ... && Acc::is_operation(Operation::Zero)))
+                        zero_acc = (false || ... || acc.parent2());
+
+                    if constexpr (sizeof...(Acc) && (true && ... && Acc::is_operation(Operation::Zero)))
+                    {
+                        constexpr auto op = detail::to_mul_macro_op<Operation::Acc_Add, OpData, OpCoeff>();
+                        return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                            data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                             zero_acc, acc.parent1()...);
+                    }
+                    else
+                    {
+                        constexpr auto op = detail::to_mul_macro_op<Acc::operation..., OpData, OpCoeff>();
+                        return impl_type::template run<op>(coeff.parent1(), coeff_start, detail::get_mul_sign(coeff),
+                                                            data.parent1(),  data_start, detail::get_mul_sign(data),
+                                                             zero_acc, acc.parent1()...);
+                    }
+                }
             }
         }
     }
@@ -2052,7 +2147,7 @@ struct sliding_mul_ch_ops
      * Performs the multiplication pattern defined by the class parameters using the input coefficient and data
      * arguments.
      *
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -2075,7 +2170,7 @@ struct sliding_mul_ch_ops
      * arguments.
      *
      * @param acc         Accumulator that is added to the result of the multiplication.
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -2100,7 +2195,7 @@ struct sliding_mul_ch_ops
      * Performs a negation of the multiplication pattern defined by the class parameters using the input coefficient and
      * data arguments.
      *
-     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+     * @param coeff       Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
      * @param coeff_start Index of the first coefficient element to be used in the multiplication.
      * @param data        Vector of data samples.
      * @param data_start  Index of the first data element to be used in the multiplication.
@@ -2122,7 +2217,7 @@ struct sliding_mul_ch_ops
 /**
  * @ingroup group_mul_special
  *
- * @note Only supported from AIE-ML/XDNA 1.
+ * @note Only supported from AIE-ML/XDNA1.
  *
  * Similar to @ref sliding_mul_ch_ops, but DataStepY is always 1.
  *
@@ -2174,7 +2269,7 @@ using sliding_mul_ch_x_ops = sliding_mul_ch_ops<Outputs, Channels, Points, Coeff
 /**
  * @ingroup group_mul_special
  *
- * @note Only supported from AIE-ML/XDNA 1.
+ * @note Only supported from AIE-ML/XDNA1.
  *
  * Similar to @ref sliding_mul_ch_ops, but DataStepX is always 1.
  *
@@ -2226,7 +2321,7 @@ using sliding_mul_ch_y_ops = sliding_mul_ch_ops<Outputs, Channels, Points, Coeff
 /**
  * @ingroup group_mul_special
  *
- * @note Only supported from AIE-ML/XDNA 1.
+ * @note Only supported from AIE-ML/XDNA1.
  *
  * Similar to @ref sliding_mul_ch_ops, but DataStepX is equal to DataStepY.
  *
@@ -2316,6 +2411,121 @@ auto sliding_mac_ch(const Acc &acc,
 
     return mul_ops::mac(acc, coeff, coeff_start, data, data_start);
 }
+
+/**
+ * @ingroup group_mul_special
+ *
+ * Object oriented interface to @ref sliding_mul_ops. It allows the implementation to pick a better partial result
+ * internally when it differs from the layout of the result type.
+ *
+ * @snippet partial_sliding_mul.cpp Example mul and mac
+ *
+ * @sa sliding_mul_ops
+ */
+template <unsigned Lanes, unsigned Points,
+          int CoeffStep, int DataStepX, int DataStepY,
+          ElemBaseType CoeffType, ElemBaseType DataType,
+          AccumElemBaseType AccumTag = detail::default_accum_tag_t<CoeffType, DataType>>
+class partial_sliding_mul : detail::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag> {
+private:
+    using base_type = detail::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag>;
+public:
+    using accum_type      = accum<AccumTag, Lanes>;
+    using real_accum_type = detail::remove_complex_t<accum_type>;
+
+    /** Default constructor */
+    partial_sliding_mul() = default;
+
+    /** Copy constructor */
+    partial_sliding_mul(const partial_sliding_mul &) = default;
+
+    /** Initialise partial result from an existing accumulator */
+    explicit partial_sliding_mul(const accum_type &acc)
+        : base_type(acc)
+    {
+    }
+
+    /** Initialise partial result from each of the complex components (real and imaginary).
+     *
+     * This is only available when the result of the operation is a series of complex values.
+     */
+    explicit partial_sliding_mul(const std::array<real_accum_type, 2> &acc)
+        requires(accum_type::is_complex())
+        : base_type(acc)
+    {
+    }
+
+    /** Performs a multiplication operation following @ref sliding_mul_ops formula, overwriting any existing internal
+     * value.
+     */
+    template <VectorOrOp VecCoeff, VectorOrOp VecData>
+    __aie_inline
+    void mul(const VecCoeff &coeff,
+             unsigned coeff_start,
+             const VecData  &data,
+             unsigned data_start)
+    {
+        base_type::mul(coeff, coeff_start, data, data_start);
+    }
+
+    /** Performs a multiplication operation following @ref sliding_mul_ops formula, adding its result to its previous
+     * internal value, if there is any.
+     */
+    template <VectorOrOp VecCoeff, VectorOrOp VecData>
+    __aie_inline
+    void mac(const VecCoeff &coeff,
+             unsigned coeff_start,
+             const VecData  &data,
+             unsigned data_start)
+    {
+        base_type::mac(coeff, coeff_start, data, data_start);
+    }
+
+    /** Returns the result. */
+    __aie_inline
+    accum_type to_accum() const
+    {
+        return base_type::to_accum();
+    }
+
+    /** Returns the result of the operation in separate real and imaginary components.
+     * This is only allowed when the result of the operation is a series of complex values.
+     */
+    __aie_inline
+    std::array<real_accum_type, 2> to_accum_components() const
+        requires(accum_type::is_complex())
+    {
+        return base_type::to_accum_components();
+    }
+
+    /** Returns the result of the operation in a vector, applying shift-round-saturate.
+     * @sa accum::to_vector
+     */
+    template <ElemBaseType T>
+    __aie_inline
+    vector<T, Lanes> to_vector(int shift = 0) const
+    {
+        return base_type::template to_vector<T>(shift);
+    }
+
+    /** Returns the result of the operation in separate real and imaginary vetor components.
+     * This is only allowed when the result of the operation is a series of complex values.
+     *
+     * @sa accum::to_vector
+     * @sa to_vector
+     * @sa to_accum_components
+     */
+    template <ElemBaseType T>
+    __aie_inline
+    std::array<vector<T, Lanes>, 2> to_vector_components(int shift = 0) const
+        requires(accum_type::is_complex())
+    {
+        return base_type::template to_vector_components<T>(shift);
+    }
+
+    friend input_cascade<AccumTag, void> &operator>>(input_cascade<AccumTag, void> &, partial_sliding_mul &);
+    friend output_cascade<AccumTag, void> &operator<<(output_cascade<AccumTag, void> &, const partial_sliding_mul &);
+};
 
 } // namespace aie
 

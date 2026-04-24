@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -18,7 +18,7 @@ namespace aie::detail {
 template <MulMacroOp MulOp, unsigned AccumBits, unsigned TypeBits, typename T>
 struct square_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     template <unsigned Elems>
     using vector_type = vector<T, Elems>;
 
@@ -30,7 +30,7 @@ struct square_bits_impl
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     static accum_type<Elems> run(const vector_type<Elems> &v, const Acc &... acc)
     {
-        return mul<MulOp, AccumBits, T, T>::run(v, is_signed_v<T>, v, is_signed_v<T>, acc...);
+        return mul<MulOp, AccumBits, T, T>::run(v, is_signed_v<T>, v, is_signed_v<T>, false, acc...);
     }
 #endif
 };
@@ -43,12 +43,12 @@ struct square_bits
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
     __aie_inline
-    static auto run(const vector_type<Elems> &v, const Acc &... acc)
+    static auto run(const vector_type<Elems> &v, bool zero_acc, const Acc &... acc)
     {
 #if __AIE_ARCH__ == 10
         return square_bits_impl<MulOp, AccumBits, TypeBits, T>::run(v, acc...);
 #else
-        return mul<MulOp, AccumBits, T, T>::run(v, is_signed_v<T>, v, is_signed_v<T>, acc...);
+        return mul<MulOp, AccumBits, T, T>::run(v, is_signed_v<T>, v, is_signed_v<T>, false, false, zero_acc, acc...);
 #endif
     }
 };

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_ELEMENTARY__HPP__
 #define __AIE_API_DETAIL_AIE2P_ELEMENTARY__HPP__
+
+#include <algorithm>
 
 #include "../add.hpp"
 #include "../broadcast.hpp"
@@ -61,6 +63,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Fix2Float, Bits, TR, T, N>
     }
 };
 
+
 template <unsigned Bits, typename TR, typename T, unsigned N>
 struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
 {
@@ -72,7 +75,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
     {
         constexpr unsigned N_Op = std::max(N, 32u);
 
-        using upper_t = std::conditional_t<std::is_signed_v<T>, int16, uint16>;
+        using upper_t = std::conditional_t<std::is_signed_v<TR>, int16, uint16>;
 
         using acc_fp_t  = aie::accum<accfloat, N_Op>;
         using acc_int_t = aie::accum<acc32, N_Op>;
@@ -132,7 +135,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
 };
 
 template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int16, bfloat16, N>
+struct elementary_vector_bits_impl<ElementaryOp::Float2FixFloor, 16, int16, bfloat16, N>
 {
     using vector_ret_type = vector<int16, N>;
     using     vector_type = vector<bfloat16, N>;
@@ -165,7 +168,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int16, bfloat16,
 };
 
 template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int32, bfloat16, N>
+struct elementary_vector_bits_impl<ElementaryOp::Float2FixFloor, 16, int32, bfloat16, N>
 {
     using vector_ret_type = vector<int32, N>;
     using     vector_type = vector<bfloat16, N>;
@@ -192,81 +195,71 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int32, bfloat16,
     }
 };
 
-template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::Inv, 16, bfloat16, bfloat16, N>
+template <ElementaryOp Op, typename T, unsigned N>
+#if __AIE_ARCH__ == 22
+    requires(utils::is_one_of_v<T, bfloat16, float16> && (Op == ElementaryOp::Inv || Op == ElementaryOp::InvSqrt))
+#else
+    requires(utils::is_one_of_v<T, bfloat16>          && (Op == ElementaryOp::Inv || Op == ElementaryOp::InvSqrt))
+#endif
+struct elementary_vector_scalar_common
 {
-    using vector_ret_type = vector<bfloat16, N>;
-    using     vector_type = vector<bfloat16, N>;
+    using vector_ret_type = vector<T, N>;
+    using     vector_type = vector<T, N>;
+
+    __aie_inline
+    static float scalar_op(float in) {
+        if constexpr (Op == ElementaryOp::Inv)
+            return ::inv(in);
+        else if constexpr (Op == ElementaryOp::InvSqrt)
+            return ::invsqrt(in);
+    }
 
     __aie_inline
     static vector_ret_type run(const vector_type &v, int shift = 0, bool sign_dummy = false)
     {
-        constexpr unsigned native_lanes = N <= 32? 32 : 64;
-        constexpr unsigned num_op       = N <  64?  1 : N / 64;
-        BFLOAT16_CONSTEXPR bfloat16 K1 = 1.9395974f;
-
-        const vector<int16, native_lanes> magic = broadcast<int16, native_lanes>::run(0x7eb5);
-
-        accum<accfloat, native_lanes> k2;
-
-        utils::unroll_times<native_lanes / 16>([&](auto idx) __aie_inline {
-            k2.template insert<16>(idx, ::broadcast_to_v16accfloat(1.436142f));
-        });
-
-        accum<accfloat, native_lanes> acc_twos;
-
-        utils::unroll_times<native_lanes / 16>([&](auto idx) __aie_inline {
-            acc_twos.template insert<16>(idx, ::broadcast_to_v16accfloat(2.0f));
-        });
-
         vector_ret_type ret;
+        accum<accfloat, N> v_float(v);
+
+        constexpr unsigned native_lanes = 16;
+        constexpr unsigned iter_lanes = std::min(native_lanes, N);
+        constexpr unsigned num_op = N / iter_lanes;
 
         utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-            vector<bfloat16, native_lanes> current = v.template grow_extract<native_lanes>(idx);
+#if !__AIE_API_CINT_SUPPORT__ || defined(__AIECC__) // use 64b scalar intrinsic types when complex types are not available
+            // Use 64b insert/push
+            const vector<int32, native_lanes> subv = v_float.template grow_extract<native_lanes>(idx).template to_vector<float>().template cast_to<int32>();
 
-            // int16 i = *(int16*)&v;
-            // i = 0x7eb5 - i;
-            // bfloat16 y = *(bfloat16*)&i;
-            vector<bfloat16, native_lanes> y = sub<int16, native_lanes>::run(magic, current.template cast_to<int16>()).template cast_to<bfloat16>();
+            vector<int32, native_lanes> outv;
+            for (unsigned l = 0; l < iter_lanes / 2; ++l) {
+                v2int32 tmp = ::extract_v2int32(subv, l);
+                float a = scalar_op(__builtin_bit_cast(float, ::extract_elem(tmp, 0)));
+                float b = scalar_op(__builtin_bit_cast(float, ::extract_elem(tmp, 1)));
+                tmp = ::set_v2int32(0, __builtin_bit_cast(int, a)),
+                tmp = ::insert(tmp, 1, __builtin_bit_cast(int, b));
 
-            // y = k1*y*((-v)*y + k2);
-            accum<accfloat, native_lanes> acc;
-            if constexpr (native_lanes == 32)
-                acc = ::negmul_elem_32(current, y);
-            else
-                acc = ::negmul_elem_64(current, y);
+                // Use shiftl_elem as it does not need an index parameter
+                // Note: shift_elem not implemented for non-complex 64b scalar types
+                outv = ::shift_bytes(outv, ::broadcast_v2s32(tmp), 8);
+            }
+#else
+            // Use cint32 for input / output vectors so that the compiler can generate 64b insert/extract
+            const vector<cint32, native_lanes / 2> subv = v_float.template grow_extract<native_lanes>(idx).template to_vector<float>().template cast_to<cint32>();
+            vector<cint32, native_lanes / 2> outv;
 
-            acc = ::add(acc, k2);
+            for (unsigned l = 0; l < iter_lanes / 2; ++l) {
+                cfloat tmp = __builtin_bit_cast(cfloat, subv.get(l));
 
-            if constexpr (native_lanes == 32)
-                acc = ::mul_elem_32(acc.template to_vector<bfloat16>(), y);
-            else
-                acc = ::mul_elem_64(acc.template to_vector<bfloat16>(), y);
+                // Use shiftl_elem as it does not need an index parameter
+                outv = ::shiftl_elem(outv, __builtin_bit_cast(cint32, cfloat(scalar_op(tmp.real), scalar_op(tmp.imag))));
+            }
+#endif
 
-            // This computes -y
-            if constexpr (native_lanes == 32)
-                acc = ::negmul_elem_32(acc.template to_vector<bfloat16>(), mul_vector_or_scalar<native_lanes>(K1));
-            else
-                acc = ::negmul_elem_64(acc.template to_vector<bfloat16>(), mul_vector_or_scalar<native_lanes>(K1));
-
-            y = acc.template to_vector<bfloat16>();
-
-            // bfloat16 r = -y * v + 2.0f;
-            if constexpr (native_lanes == 32)
-                acc = ::mac_elem_32(y, current, acc_twos);
-            else
-                acc = ::mac_elem_64(y, current, acc_twos);
-
-            // y = y*r
-            if constexpr (native_lanes == 32)
-                acc = ::negmul_elem_32( y, acc.template to_vector<bfloat16>());
-            else
-                acc = ::negmul_elem_64( y, acc.template to_vector<bfloat16>());
+            const accum<accfloat, 16> tmp_acc(outv.template cast_to<float>());
 
             if constexpr (N < native_lanes)
-                ret = acc.template to_vector<bfloat16>().template extract<N>(0);
+                ret.insert(idx, tmp_acc.template to_vector<T>().template extract<N>(native_lanes / N - 1));
             else
-                ret.insert(idx, acc.template to_vector<bfloat16>());
+                ret.insert(idx, tmp_acc.template to_vector<T>());
         });
 
         return ret;
@@ -274,70 +267,28 @@ struct elementary_vector_bits_impl<ElementaryOp::Inv, 16, bfloat16, bfloat16, N>
 };
 
 template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::InvSqrt, 16, bfloat16, bfloat16, N>
-{
-    using vector_ret_type = vector<bfloat16, N>;
-    using     vector_type = vector<bfloat16, N>;
+struct elementary_vector_bits_impl<ElementaryOp::Inv, 16, bfloat16, bfloat16, N> :
+    public elementary_vector_scalar_common<ElementaryOp::Inv, bfloat16, N>
+{};
 
-    __aie_inline
-    static vector_ret_type run(const vector_type &v, int shift = 0, bool sign_dummy = false)
-    {
-        // Implementation based on http://rrrola.wz.cz/inv_sqrt.html
-        constexpr int   C1 = 0x5F1FFFF9;
-        constexpr float C2 = 0.703952253f;
-        constexpr float C3 = 2.38924456f;
+template <unsigned N>
+struct elementary_vector_bits_impl<ElementaryOp::InvSqrt, 16, bfloat16, bfloat16, N> :
+    public elementary_vector_scalar_common<ElementaryOp::InvSqrt, bfloat16, N>
+{};
 
-        BFLOAT16_CONSTEXPR bfloat16 C2_bf16 = C2;
+#if __AIE_ARCH__ == 22
 
-        // TODO: some operations support 64 lanes. Try to optimize that case
-        constexpr unsigned native_lanes = 32;                   // (N <= 32? 32 : 64);
-        constexpr unsigned num_op       = (N < 32? 1 : N / 32); // (N < 32? 1 : (N < 64? 2 : N / 64));
+template <unsigned N>
+struct elementary_vector_bits_impl<ElementaryOp::Inv, 16, float16, float16, N> :
+    public elementary_vector_scalar_common<ElementaryOp::Inv, float16, N>
+{};
 
-        vector_ret_type ret;
+template <unsigned N>
+struct elementary_vector_bits_impl<ElementaryOp::InvSqrt, 16, float16, float16, N> :
+    public elementary_vector_scalar_common<ElementaryOp::InvSqrt, float16, N>
+{};
 
-        const vector<int32, native_lanes> c1 = broadcast<int32, native_lanes>::run(C1);
-
-        accum<accfloat, native_lanes> c2c3;
-
-        const auto c2c3_tmp = ::broadcast_to_v16accfloat(C2 * C3);
-        c2c3.template insert<16>(0, c2c3_tmp);
-        if constexpr (N > 16) c2c3.template insert<16>(1, c2c3_tmp);
-
-        vector<bfloat16, native_lanes>   x2;
-        vector<bfloat16, native_lanes>    y;
-        vector<bfloat16, native_lanes>   yy;
-        vector<bfloat16, native_lanes> x2yy;
-
-        utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-            const vector<bfloat16, native_lanes> current = v.template grow_extract<native_lanes>(idx);
-
-            x2 = mul<MulMacroOp::Mul, 32, bfloat16, bfloat16>::run(current,
-                                                                   false,
-                                                                   mul_vector_or_scalar<native_lanes>(C2_bf16),
-                                                                   false).template to_vector<bfloat16>();
-
-            accum<accfloat, native_lanes> current_acc(current);
-            accum<acc64, native_lanes> current_int_acc(current_acc.template cast_to<acc32>().template to_vector<int32>());
-
-            vector<int32, native_lanes> i = sub<int32, native_lanes>::run(c1, current_int_acc.template to_vector<int32>(1));
-            accum<accfloat, native_lanes> ii = (v32accfloat)i;
-
-            y = ii.template to_vector<bfloat16>();
-
-            yy   = mul<MulMacroOp::Mul,     32, bfloat16, bfloat16>::run(y,  false, y,  false).template to_vector<bfloat16>();
-            x2yy = mul<MulMacroOp::Sub_Mul, 32, bfloat16, bfloat16>::run(x2, false, yy, false, c2c3).template to_vector<bfloat16>();
-
-            const accum<accfloat, native_lanes> acc = mul<MulMacroOp::Mul, 32, bfloat16, bfloat16>::run(y, false, x2yy, false);
-
-            if constexpr (N < native_lanes)
-                ret = acc.template to_vector<bfloat16>().template extract<N>(0);
-            else
-                ret.insert(idx, acc.template to_vector<bfloat16>());
-        });
-
-        return ret;
-    }
-};
+#endif
 
 template <unsigned N>
 struct elementary_vector_bits_impl<ElementaryOp::Tanh, 32, bfloat16, float, N>
@@ -394,6 +345,40 @@ struct elementary_vector_bits_impl<ElementaryOp::Exp2, 32, bfloat16, float, N>
         return ret;
     }
 };
+
+#if (__AIE_ARCH__ == 22 && __AIE_API_FP32_EMULATION__) || __AIE_API_FP32_SUPPORT__
+
+// AIE2PS supports a more accurate instruction for exp2
+
+template <unsigned N>
+struct elementary_vector_bits_impl<ElementaryOp::Exp2, 32, float, float, N>
+{
+    using vector_ret_type = vector<float, N>;
+    using     vector_type = vector<float, N>;
+
+    __aie_inline
+    static vector_ret_type run(const vector_type &v, int shift = 0, bool sign_dummy = false)
+    {
+        constexpr unsigned native_lanes = 16;
+        constexpr unsigned num_op = N < native_lanes? 1 : N / native_lanes;
+
+        vector_ret_type ret;
+
+        utils::unroll_times<num_op>([&](auto idx) __aie_inline {
+            const accum<accfloat, native_lanes> acc(v.template grow_extract<native_lanes>(idx));
+            const vector<float, native_lanes> tmp = accum<accfloat, native_lanes>(::exp2_bf20(acc)).template to_vector<float>();
+
+            if constexpr (N < native_lanes)
+                ret = tmp.extract<N>(0);
+            else
+                ret.insert(idx, tmp);
+        });
+
+        return ret;
+    }
+};
+
+#endif
 
 template <unsigned Bits, typename TR, typename T, unsigned N>
 struct elementary_acc_bits_impl<ElementaryOp::Fix2Float, Bits, TR, T, N>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -196,23 +196,28 @@ struct mmul_16_16<2, 8, 16, TypeA, TypeB, AccumBits>
     {
         zero = to_zero;
         if constexpr (AccumBits > 32) {
-            const auto vec1 = accum_to_vector_cast<cint32, acc64, 8>::run(acc.template extract<8>(0));
-            const auto vec2 = accum_to_vector_cast<cint32, acc64, 8>::run(acc.template extract<8>(1));
-            const auto vec3 = accum_to_vector_cast<cint32, acc64, 8>::run(acc.template extract<8>(2));
-            const auto vec4 = accum_to_vector_cast<cint32, acc64, 8>::run(acc.template extract<8>(3));
+            using to_vector = accum_to_vector_cast<uint32, acc64, 8>;
+            using to_accum  = vector_to_accum_cast<acc64, uint32, 16>;
+            using unzip     = interleave_unzip<uint32, 16>;
 
-            const auto [tmp1, tmp2] = interleave_unzip<cint32, 8>::run(vec1, vec2, 8);
+            const auto vec1 = to_vector::run(acc.template extract<8>(0));
+            const auto vec2 = to_vector::run(acc.template extract<8>(1));
+            const auto vec3 = to_vector::run(acc.template extract<8>(2));
+            const auto vec4 = to_vector::run(acc.template extract<8>(3));
 
-            const auto [tmp3, tmp4] = interleave_unzip<cint32, 8>::run(vec3, vec4, 8);
+            const auto [tmp1, tmp2] = unzip::run(vec1, vec2, 8);
+            const auto [tmp3, tmp4] = unzip::run(vec3, vec4, 8);
 
-            data[0] = ::concat(vector_to_accum_cast<acc64, cint32, 8>::run(tmp1),
-                               vector_to_accum_cast<acc64, cint32, 8>::run(tmp3));
-            data[1] = ::concat(vector_to_accum_cast<acc64, cint32, 8>::run(tmp2),
-                               vector_to_accum_cast<acc64, cint32, 8>::run(tmp4));
+            data[0] = ::concat(to_accum::run(tmp1),
+                               to_accum::run(tmp3));
+            data[1] = ::concat(to_accum::run(tmp2),
+                               to_accum::run(tmp4));
         }
         else {
-            const auto vec1 = accum_to_vector_cast< int32, acc32, 16>::run(acc.template extract<16>(0));
-            const auto vec2 = accum_to_vector_cast< int32, acc32, 16>::run(acc.template extract<16>(1));
+            using to_vector = accum_to_vector_cast< int32, acc32, 16>;
+
+            const auto vec1 = to_vector::run(acc.template extract<16>(0));
+            const auto vec2 = to_vector::run(acc.template extract<16>(1));
 
             const auto [tmp1, tmp2] = interleave_unzip<int32, 16>::run(vec1, vec2, 8);
 
@@ -238,37 +243,45 @@ struct mmul_16_16<2, 8, 16, TypeA, TypeB, AccumBits>
         accum_type ret;
 
         if constexpr (AccumBits > 32) {
-            const auto vec1 = accum_to_vector_cast<cint32, acc64, 8>::run(data[0].template extract<8>(0));
-            const auto vec2 = accum_to_vector_cast<cint32, acc64, 8>::run(data[0].template extract<8>(1));
-            const auto vec3 = accum_to_vector_cast<cint32, acc64, 8>::run(data[1].template extract<8>(0));
-            const auto vec4 = accum_to_vector_cast<cint32, acc64, 8>::run(data[1].template extract<8>(1));
+            using to_vector = accum_to_vector_cast<uint32, acc64, 8>;
+            using to_accum  = vector_to_accum_cast<acc64, uint32, 16>;
+            using zip       = interleave_zip<uint32, 16>;
 
-            const auto [tmp1, tmp2] = interleave_zip<cint32, 8>::run(vec1, vec3, 8);
+            const auto vec1 = to_vector::run(data[0].template extract<8>(0));
+            const auto vec2 = to_vector::run(data[0].template extract<8>(1));
+            const auto vec3 = to_vector::run(data[1].template extract<8>(0));
+            const auto vec4 = to_vector::run(data[1].template extract<8>(1));
 
-            ret.insert(0, vector_to_accum_cast<acc64, cint32, 8>::run(tmp1));
-            ret.insert(1, vector_to_accum_cast<acc64, cint32, 8>::run(tmp2));
+            const auto [tmp1, tmp2] = zip::run(vec1, vec3, 8);
 
-            const auto [tmp3, tmp4] = interleave_zip<cint32, 8>::run(vec2, vec4, 8);
+            ret.insert(0, to_accum::run(tmp1));
+            ret.insert(1, to_accum::run(tmp2));
 
-            ret.insert(2, vector_to_accum_cast<acc64, cint32, 8>::run(tmp3));
-            ret.insert(3, vector_to_accum_cast<acc64, cint32, 8>::run(tmp4));
+            const auto [tmp3, tmp4] = zip::run(vec2, vec4, 8);
+
+            ret.insert(2, to_accum::run(tmp3));
+            ret.insert(3, to_accum::run(tmp4));
         }
         else {
-            const auto vec1 = accum_to_vector_cast<int32, acc64, 8>::run(data[0].template extract<8>(0));
-            const auto vec2 = accum_to_vector_cast<int32, acc64, 8>::run(data[0].template extract<8>(1));
-            const auto vec3 = accum_to_vector_cast<int32, acc64, 8>::run(data[1].template extract<8>(0));
-            const auto vec4 = accum_to_vector_cast<int32, acc64, 8>::run(data[1].template extract<8>(1));
+            using to_vector   = accum_to_vector_cast<int32, acc64, 8>;
+            using to_accum    = vector_to_accum_cast<acc32, int32, 16>;
+            using filter_even = filter<int32, 16, FilterOp::Even>;
 
-            auto vec32_1 = concat_vector(filter<int32, 16, FilterOp::Even>::run(vec1, 1),
-                                         filter<int32, 16, FilterOp::Even>::run(vec2, 1));
+            const auto vec1 = to_vector::run(data[0].template extract<8>(0));
+            const auto vec2 = to_vector::run(data[0].template extract<8>(1));
+            const auto vec3 = to_vector::run(data[1].template extract<8>(0));
+            const auto vec4 = to_vector::run(data[1].template extract<8>(1));
 
-            auto vec32_2 = concat_vector(filter<int32, 16, FilterOp::Even>::run(vec3, 1),
-                                         filter<int32, 16, FilterOp::Even>::run(vec4, 1));
+            auto vec32_1 = concat_vector(filter_even::run(vec1, 1),
+                                         filter_even::run(vec2, 1));
+
+            auto vec32_2 = concat_vector(filter_even::run(vec3, 1),
+                                         filter_even::run(vec4, 1));
 
             const auto [tmp1, tmp2] = interleave_zip<int32, 16>::run(vec32_1, vec32_2, 8);
 
-            ret.insert(0, vector_to_accum_cast<acc32, int32, 16>::run(tmp1));
-            ret.insert(1, vector_to_accum_cast<acc32, int32, 16>::run(tmp2));
+            ret.insert(0, to_accum::run(tmp1));
+            ret.insert(1, to_accum::run(tmp2));
         }
 
         return ret;

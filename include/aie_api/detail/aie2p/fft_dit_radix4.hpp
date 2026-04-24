@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_FFT_DIT_RADIX4_HPP__
 #define __AIE_API_DETAIL_AIE2P_FFT_DIT_RADIX4_HPP__
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 
 #include "../array_helpers.hpp"
 
@@ -179,11 +181,17 @@ private:
     auto load_twiddles(twiddle_type *& ptw0, twiddle_type *& ptw1, twiddle_type *& ptw2)
     {
         if      constexpr (Stage == 0) {
+#if __AIE_ARCH__ == 21
             vector<twiddle_type, 16> tw0, tw1, tw2;
 
             tw0 = broadcast<twiddle_type, 16>::run(*ptw0);    ptw0 = ::add_2d_ptr(ptw0, 1, Vectorization/16-1, cnt_tw0_, 0);
             tw1 = broadcast<twiddle_type, 16>::run(*ptw1);    ptw1 = ::add_2d_ptr(ptw1, 1, Vectorization/16-1, cnt_tw1_, 0);
             tw2 = broadcast<twiddle_type, 16>::run(*ptw2);    ptw2 = ::add_2d_ptr(ptw2, 1, Vectorization/16-1, cnt_tw2_, 0);
+#else
+            cint16 tw0 = *ptw0;    ptw0 = ::add_2d_ptr(ptw0, 1, Vectorization/16-1, cnt_tw0_, 0);
+            cint16 tw1 = *ptw1;    ptw1 = ::add_2d_ptr(ptw1, 1, Vectorization/16-1, cnt_tw1_, 0);
+            cint16 tw2 = *ptw2;    ptw2 = ::add_2d_ptr(ptw2, 1, Vectorization/16-1, cnt_tw2_, 0);
+#endif
 
             return std::make_tuple(tw0, tw1, tw2);
         }
@@ -278,8 +286,8 @@ struct fft_dit<Vectorization, 2, 4, cint32, Output, cint16> : public fft_dit_com
             accum<cacc64, 8> k = ::mul_elem_8_conf(b,        w1,           cmplx_mask_,    0);
             accum<cacc64, 8> l = ::mul_elem_8_conf(b, swap16(w1),          cmplx_mask_mj_, 0);
             
-            accum<cacc64, 8> o0 = ::addmac_elem_8_conf(d,        w3,  g,                                          k, 0, 0, cmplx_mask_,    0, 0, 0);
-            accum<cacc64, 8> o1 = ::addmsc_elem_8_conf(d, swap16(w3), h,                                          l, 0, 0, cmplx_mask_mj_, 0, 0, 0);
+            accum<cacc64, 8> o0 = ::addmac_elem_8_conf(d,        w3,  g, k, 0, 0, cmplx_mask_,    0, 0, 0);
+            accum<cacc64, 8> o1 = ::addmsc_elem_8_conf(d, swap16(w3), h, l, 0, 0, cmplx_mask_mj_, 0, 0, 0);
             accum<cacc64, 8> o2 = ::addmsc_elem_8_conf(d,        w3,  g, k, 0, 0, cmplx_mask_,    0, 0, 1);
             accum<cacc64, 8> o3 = ::addmac_elem_8_conf(d, swap16(w3), h, l, 0, 0, cmplx_mask_mj_, 0, 0, 1);
         
@@ -316,7 +324,7 @@ private:
     __aie_inline
     auto load_twiddles(twiddle_type *& ptw0, twiddle_type *& ptw1, twiddle_type *& ptw2)
     {
-        constexpr unsigned lanes = 8;
+        constexpr unsigned lanes = __AIE_ARCH__ == 21 ? 8 : 16;
         vector<twiddle_type, lanes> tw0, tw1, tw2;
 
         tw0.insert(0, *(v8cint16*)ptw0);    ptw0 += 8;
@@ -574,6 +582,485 @@ private:
     addr_t cnt_tw0_, cnt_tw1_, cnt_tw2_;
 };
 
+#if __AIE_API_CBF16_SUPPORT__
+template<unsigned Vectorization, unsigned Stage>
+struct fft_dit<Vectorization, Stage, 4, cbfloat16, cbfloat16, cbfloat16> : public fft_dit_common<Vectorization, Stage, 4, cbfloat16, cbfloat16, cbfloat16>
+{
+    using   input_type = cbfloat16;
+    using  output_type = cbfloat16;
+    using twiddle_type = cbfloat16;
+
+    static constexpr unsigned native_elems = 16;
+
+    using input_vector  = vector<input_type, native_elems>;
+    using input_ptr     = typename input_vector::storage_t;
+    using output_vector = vector<output_type, native_elems>;
+    using output_ptr    = typename output_vector::storage_t;
+
+    __aie_inline
+    fft_dit(unsigned /*shift_tw*/, unsigned /*shift*/, bool inv)
+        : inv_(inv),
+          cmplx_mask_(inv ? OP_TERM_NEG_COMPLEX_CONJUGATE_Y : OP_TERM_NEG_COMPLEX),
+          cmplx_mask_mj_(inv ? OP_TERM_NEG_COMPLEX : OP_TERM_NEG_COMPLEX_CONJUGATE_Y),
+          cnt0_(0), cnt1_(0),
+          cnt_tw0_(0), cnt_tw1_(0), cnt_tw2_(0)
+    {}
+
+    __aie_inline
+    void run(const input_type * __restrict x,
+             const twiddle_type * __restrict tw0,
+             const twiddle_type * __restrict tw1,
+             const twiddle_type * __restrict tw2,
+             output_type * __restrict out,
+             unsigned n)
+    {
+        input_ptr *           pi   = (input_ptr *) x;
+        input_ptr *           pi1  = (input_ptr *) (x + Vectorization);
+        output_ptr * restrict po   = (output_ptr *) out;
+        // Note reversal of twiddle args
+        twiddle_type *        ptw0 = (twiddle_type *) tw1;
+        twiddle_type *        ptw1 = (twiddle_type *) tw0;
+        twiddle_type *        ptw2 = (twiddle_type *) tw2;
+
+        if constexpr (Stage == 1) {
+            ptw0 += 1;
+            ptw1 += 1;
+            ptw2 += 1;
+        }
+
+        for (unsigned int j = 0; j < this->block_size(n); ++j)
+            chess_prepare_for_pipelining
+            chess_loop_range(1,)
+        {
+            accum<caccfloat, 16> a;
+            vector<input_type, 16> b, c, d;
+            
+            if constexpr (Stage == 0)
+                std::tie(a, b, c, d) = load_data(pi, pi1);
+            else
+                std::tie(a, b, c, d) = load_data(pi);
+
+            auto [w1, w2, w3] = load_twiddles(ptw0, ptw1, ptw2);
+
+            accum<caccfloat, 16> g = ::mac_elem_16_conf(c, w2, a, 0,   cmplx_mask_,    0, 0);
+            accum<caccfloat, 16> h = ::msc_elem_16_conf(c, w2, a, 0,   cmplx_mask_,    0, 0);
+            accum<caccfloat, 16> k = ::mul_elem_16_conf(b, w1,         cmplx_mask_,    0);
+            accum<caccfloat, 16> l = ::mul_elem_16_conf(b, swap16(w1), cmplx_mask_mj_, 0);
+        
+            accum<caccfloat, 16> o0 = ::addmac_elem_16_conf(d,        w3,  g, k, 0, cmplx_mask_,    0, 0, 0); 
+            accum<caccfloat, 16> o1 = ::addmsc_elem_16_conf(d, swap16(w3), h, l, 0, cmplx_mask_mj_, 0, 0, 0);
+            accum<caccfloat, 16> o2 = ::addmsc_elem_16_conf(d,        w3,  g, k, 0, cmplx_mask_,    0, 0, 1);
+            accum<caccfloat, 16> o3 = ::addmac_elem_16_conf(d, swap16(w3), h, l, 0, cmplx_mask_mj_, 0, 0, 1); 
+
+            *po = o0.template to_vector<output_type>();  po +=  n/64;
+            *po = o1.template to_vector<output_type>();  po +=  n/64;
+            *po = o2.template to_vector<output_type>();  po +=  n/64;
+            *po = o3.template to_vector<output_type>();  po  = ::byte_incr(po, 64 - 3*n);
+        }
+    }
+
+private:
+    __aie_inline
+    auto load_data(input_ptr *& pi0, input_ptr *& pi1) requires (Stage == 0)
+    {
+        using return_acc_type = accum<caccfloat, native_elems>;
+        using return_vec_type = vector<input_type, native_elems>;
+        return_acc_type a;
+        return_vec_type a_tmp;
+        return_vec_type b, c, d;
+
+        a_tmp = *pi0;    pi0 += Vectorization/8;
+        b     = *pi1;    pi1 += Vectorization/8;
+        c     = *pi0;    pi0 = ::add_2d_ptr(pi0, Vectorization/16+1, Vectorization/16-1, cnt0_, 1-Vectorization/8);
+        d     = *pi1;    pi1 = ::add_2d_ptr(pi1, Vectorization/16+1, Vectorization/16-1, cnt1_, 1-Vectorization/8);
+
+        a.from_vector(a_tmp);
+
+        return std::make_tuple(a, b, c, d);
+    }
+
+    __aie_inline
+    auto load_data(input_ptr *& pi) requires (Stage != 0)
+    {
+        using return_acc_type = accum<caccfloat, native_elems>;
+        using return_vec_type = vector<input_type, native_elems>;
+        using a_type          = std::conditional_t<Stage == 1, return_vec_type,
+                                                               return_acc_type>;
+        a_type a;
+        return_vec_type b, c, d;
+
+        if constexpr (Stage == 1) {
+            v8cbfloat16 * tmp = (v8cbfloat16*)pi;
+
+            vector<cbfloat16, 16> dat0, dat1, dat2, dat3;
+
+            dat0.insert(0, *tmp);    tmp += 2;
+            dat0.insert(1, *tmp);    tmp += 2;
+            dat1.insert(0, *tmp);    tmp += 2;
+            dat1.insert(1, *tmp);    tmp -= 5;
+            dat2.insert(0, *tmp);    tmp += 2;
+            dat2.insert(1, *tmp);    tmp += 2;
+            dat3.insert(0, *tmp);    tmp += 2;
+            dat3.insert(1, *tmp);    tmp += 1;
+
+            std::tie(a, b) = interleave_unzip<input_type, 16>::run(dat0, dat1, 4);
+            std::tie(c, d) = interleave_unzip<input_type, 16>::run(dat2, dat3, 4);
+
+            pi = (input_ptr*)tmp;
+        }
+        else if constexpr (Stage == 2) {
+            using vec_type = vector<input_type, 16>;
+
+            vec_type dat0 = *pi++;
+            vec_type dat1 = *pi++;
+            vec_type dat2 = *pi++;
+            vec_type dat3 = *pi++;
+
+            vec_type s0 = ::shuffle(dat0, dat1, T32_8x4_lo);
+            vec_type s1 = ::shuffle(dat0, dat1, T32_8x4_hi);
+            vec_type s2 = ::shuffle(dat2, dat3, T32_8x4_lo);
+            vec_type s3 = ::shuffle(dat2, dat3, T32_8x4_hi);
+
+            vec_type a_tmp;
+
+            std::tie(a_tmp, b) = interleave_unzip<input_type, 16>::run(s0, s2, 8);
+            std::tie(c, d)     = interleave_unzip<input_type, 16>::run(s1, s3, 8);
+
+            a.from_vector(a_tmp);
+        }
+        else {
+            UNREACHABLE_MSG("Unreachable");
+        }
+
+        return std::make_tuple(a, b, c, d);
+    }
+
+    __aie_inline
+    auto load_twiddles(twiddle_type *& ptw0, twiddle_type *& ptw1, twiddle_type *& ptw2)
+    {
+        vector<twiddle_type, 16> tw0, tw1, tw2;
+
+        if      constexpr (Stage == 0) {
+            tw0 = broadcast<twiddle_type, 16>::run(*ptw0);    ptw0 = ::add_2d_ptr(ptw0, 1, Vectorization/16-1, cnt_tw0_, 0);
+            tw1 = broadcast<twiddle_type, 16>::run(*ptw1);    ptw1 = ::add_2d_ptr(ptw1, 1, Vectorization/16-1, cnt_tw1_, 0);
+            tw2 = broadcast<twiddle_type, 16>::run(*ptw2);    ptw2 = ::add_2d_ptr(ptw2, 1, Vectorization/16-1, cnt_tw2_, 0);
+        }
+        else if constexpr (Stage == 1) {
+            vector<twiddle_type, 16> tw0, tw1, tw2;
+
+            int tw_step = 1;
+            ptw0 = chess_copy(ptw0); ptw1 = chess_copy(ptw1); ptw2 = chess_copy(ptw2);
+
+            cbfloat16 wa, wb, wc, wd;
+            wa = ptw0[-tw_step];
+            wb = *ptw0;      ptw0 += 2*tw_step;    ptw0 = chess_copy(ptw0);
+            wc = ptw0[-tw_step];
+            wd = *ptw0;      ptw0 += 2*tw_step;    ptw0 = chess_copy(ptw0);
+            tw0 = ::shuffle( broadcast_2c16_T32_4x4( wa, wb ), broadcast_2c16_T32_4x4( wc, wd ), T256_2x2_lo );
+            wa = ptw1[-tw_step];
+            wb = *ptw1;      ptw1 += 2*tw_step;    ptw1 = chess_copy(ptw1);
+            wc = ptw1[-tw_step];
+            wd = *ptw1;      ptw1 += 2*tw_step;    ptw1 = chess_copy(ptw1);
+            tw1 = ::shuffle( broadcast_2c16_T32_4x4( wa, wb ), broadcast_2c16_T32_4x4( wc, wd ), T256_2x2_lo );
+            wa = ptw2[-tw_step];
+            wb = *ptw2;      ptw2 += 2*tw_step;    ptw2 = chess_copy(ptw2);
+            wc = ptw2[-tw_step];
+            wd = *ptw2;      ptw2 += 2*tw_step;    ptw2 = chess_copy(ptw2);
+            tw2 = ::shuffle( broadcast_2c16_T32_4x4( wa, wb ), broadcast_2c16_T32_4x4( wc, wd ), T256_2x2_lo );
+
+            return std::make_tuple(tw0, tw1, tw2);
+        }
+        else if constexpr (Stage == 2) {
+            tw0 = *(v16cbfloat16*)ptw0;    ptw0 += 16;
+            tw1 = *(v16cbfloat16*)ptw1;    ptw1 += 16;
+            tw2 = *(v16cbfloat16*)ptw2;    ptw2 += 16;
+        }
+        else {
+            UNREACHABLE_MSG("Unreachable");
+        }
+
+        return std::make_tuple(tw0, tw1, tw2);
+    }
+
+    unsigned inv_;
+    int cmplx_mask_;
+    int cmplx_mask_mj_;
+    addr_t cnt0_, cnt1_;
+    addr_t cnt_tw0_, cnt_tw1_, cnt_tw2_;
+};
+#endif
+
+#if __AIE_API_COMPLEX_FP32_EMULATION__
+template<unsigned Vectorization, unsigned Stage>
+struct fft_dit<Vectorization, Stage, 4, cfloat, cfloat, cfloat> : public fft_dit_common<Vectorization, Stage, 4, cfloat, cfloat, cfloat>
+{
+    using   input_type = cfloat;
+    using  output_type = cfloat;
+    using twiddle_type = cfloat;
+
+    static constexpr unsigned native_mul_elems    = 16;
+    static constexpr unsigned native_input_elems  = native_vector_length_v<input_type>;
+    static constexpr unsigned native_output_elems = native_vector_length_v<output_type>;
+
+    using input_vector  = vector<input_type, native_input_elems>;
+    using input_ptr     = typename input_vector::storage_t;
+    using output_vector = vector<output_type, native_output_elems>;
+    using output_ptr    = typename output_vector::storage_t;
+
+    __aie_inline
+    fft_dit(unsigned /*shift_tw*/, unsigned /*shift*/, bool inv)
+        : inv_(inv),
+          cmplx_mask_(inv ? OP_TERM_NEG_COMPLEX_CONJUGATE_Y : OP_TERM_NEG_COMPLEX),
+          cmplx_mask_mj_(inv ? OP_TERM_NEG_COMPLEX : OP_TERM_NEG_COMPLEX_CONJUGATE_Y),
+          cnt0_(0), cnt1_(0),
+          cnt_tw0_(0), cnt_tw1_(0), cnt_tw2_(0)
+    {}
+
+    __aie_inline
+    void run(const input_type * __restrict x,
+             const twiddle_type * __restrict tw0,
+             const twiddle_type * __restrict tw1,
+             const twiddle_type * __restrict tw2,
+             output_type * __restrict out,
+             unsigned n)
+    {
+        input_ptr *           pi   = (input_ptr *) x;
+        input_ptr *           pi1  = (input_ptr *) (x + Vectorization);
+        output_ptr * restrict po   = (output_ptr *) out;
+        // Note reversal of twiddle args
+        twiddle_type *        ptw0 = (twiddle_type *) tw1;
+        twiddle_type *        ptw1 = (twiddle_type *) tw0;
+        twiddle_type *        ptw2 = (twiddle_type *) tw2;
+
+        if constexpr (Stage == 1) {
+            ptw0 += 1;
+            ptw1 += 1;
+            ptw2 += 1;
+        }
+
+        for (unsigned int j = 0; j < this->block_size(n); ++j)
+            chess_prepare_for_pipelining
+            chess_loop_range(1,)
+        {
+            accum<caccfloat, 16> a;
+            vector<input_type, 16> b, c, d;
+            
+            if constexpr (Stage == 0)
+                std::tie(a, b, c, d) = load_data(pi, pi1);
+            else
+                std::tie(a, b, c, d) = load_data(pi);
+
+            auto [w1, w2, w3] = load_twiddles(ptw0, ptw1, ptw2);
+
+            accum<caccfloat, 16> g = ::mac_elem_16_conf(c, w2, a, 0,   cmplx_mask_,    0, 0);
+            accum<caccfloat, 16> h = ::msc_elem_16_conf(c, w2, a, 0,   cmplx_mask_,    0, 0);
+            accum<caccfloat, 16> k = ::mul_elem_16_conf(b, w1,         cmplx_mask_,    0);
+            accum<caccfloat, 16> l = ::mul_elem_16_conf(b, swap32(w1), cmplx_mask_mj_, 0);
+        
+            accum<caccfloat, 16> o0 = ::add(::mac_elem_16_conf(d,        w3,  g, 0, cmplx_mask_,    0, 0), k); 
+            accum<caccfloat, 16> o1 = ::add(::msc_elem_16_conf(d, swap32(w3), h, 0, cmplx_mask_mj_, 0, 0), l);
+            accum<caccfloat, 16> o2 = ::sub(::msc_elem_16_conf(d,        w3,  g, 0, cmplx_mask_,    0, 0), k);
+            accum<caccfloat, 16> o3 = ::sub(::mac_elem_16_conf(d, swap32(w3), h, 0, cmplx_mask_mj_, 0, 0), l); 
+
+            *po++ = o0.template extract<8>(0).template to_vector<output_type>();
+            *po   = o0.template extract<8>(1).template to_vector<output_type>();  po += n/32-1;
+            *po++ = o1.template extract<8>(0).template to_vector<output_type>();
+            *po   = o1.template extract<8>(1).template to_vector<output_type>();  po += n/32-1;
+            *po++ = o2.template extract<8>(0).template to_vector<output_type>();
+            *po   = o2.template extract<8>(1).template to_vector<output_type>();  po += n/32-1;
+            *po++ = o3.template extract<8>(0).template to_vector<output_type>();
+            *po   = o3.template extract<8>(1).template to_vector<output_type>();  po  = ::byte_incr(po, 64 - 6*n);
+        }
+    }
+
+private:
+    __aie_inline
+    auto load_data(input_ptr *& pi0, input_ptr *& pi1) requires (Stage == 0)
+    {
+        using return_acc_type = accum<caccfloat, native_mul_elems>;
+        using return_vec_type = vector<input_type, native_mul_elems>;
+        return_acc_type a;
+        return_vec_type a_tmp;
+        return_vec_type b, c, d;
+
+        a_tmp.insert(0, pi0[0]);
+        a_tmp.insert(1, pi0[1]);  pi0 += 2*Vectorization/8;
+
+        b.insert(0, pi1[0]);
+        b.insert(1, pi1[1]);      pi1 += 2*Vectorization/8;
+
+        c.insert(0, pi0[0]);
+        c.insert(1, pi0[1]);      pi0 = ::add_2d_ptr(pi0, 2*Vectorization/16+2, Vectorization/16-1, cnt0_, 2-2*Vectorization/8);
+
+        d.insert(0, pi1[0]);
+        d.insert(1, pi1[1]);      pi1 = ::add_2d_ptr(pi1, 2*Vectorization/16+2, Vectorization/16-1, cnt1_, 2-2*Vectorization/8);
+
+        a.from_vector(a_tmp);
+
+        return std::make_tuple(a, b, c, d);
+    }
+
+    __aie_inline
+    auto load_data(input_ptr *& pi) requires (Stage != 0)
+    {
+        using return_acc_type = accum<caccfloat, native_mul_elems>;
+        using return_vec_type = vector<input_type, native_mul_elems>;
+
+        return_acc_type a;
+        return_vec_type b, c, d;
+
+        if constexpr (Stage == 1) {
+            return_vec_type a_tmp;
+
+            v4cfloat * tmp = (v4cfloat *)pi;
+
+            a_tmp.insert(0, *tmp);    tmp += 4;
+            a_tmp.insert(1, *tmp);    tmp += 4;
+            a_tmp.insert(2, *tmp);    tmp += 4;
+            a_tmp.insert(3, *tmp);    tmp -= 10;
+
+            c.insert(0, *tmp);        tmp += 4;
+            c.insert(1, *tmp);        tmp += 4;
+            c.insert(2, *tmp);        tmp += 4;
+            c.insert(3, *tmp);        tmp -= 13;
+
+            b.insert(0, *tmp);        tmp += 4;
+            b.insert(1, *tmp);        tmp += 4;
+            b.insert(2, *tmp);        tmp += 4;
+            b.insert(3, *tmp);        tmp -= 10;
+
+            d.insert(0, *tmp);        tmp += 4;
+            d.insert(1, *tmp);        tmp += 4;
+            d.insert(2, *tmp);        tmp += 4;
+            d.insert(3, *tmp);        tmp += 1;
+
+            a.from_vector(a_tmp);
+
+            pi = (input_ptr*)tmp;
+        }
+        else if constexpr (Stage == 2) {
+            //using vec_type = vector<input_type, 8>;
+            //v8cfloat * tmp = (v8cfloat *)pi;
+
+            //vec_type dat0 = *pi++;
+            //vec_type dat1 = *pi++;
+            //vec_type dat2 = *pi++;
+            //vec_type dat3 = *pi++;
+            //vec_type dat4 = *pi++;
+            //vec_type dat5 = *pi++;
+            //vec_type dat6 = *pi++;
+            //vec_type dat7 = *pi++;
+
+            //vec_type s0 = ::shuffle(dat0, dat1, T64_4x4_lo);
+            //vec_type s1 = ::shuffle(dat0, dat1, T64_4x4_hi);
+            //vec_type s2 = ::shuffle(dat2, dat3, T64_4x4_lo);
+            //vec_type s3 = ::shuffle(dat2, dat3, T64_4x4_hi);
+            //vec_type s4 = ::shuffle(dat4, dat5, T64_4x4_lo);
+            //vec_type s5 = ::shuffle(dat4, dat5, T64_4x4_hi);
+            //vec_type s6 = ::shuffle(dat6, dat7, T64_4x4_lo);
+            //vec_type s7 = ::shuffle(dat6, dat7, T64_4x4_hi);
+
+            //vec_type ss0 = ::shuffle(s0, s2, T256_2x2_lo);
+            //vec_type ss1 = ::shuffle(s0, s2, T256_2x2_hi);
+            //vec_type ss2 = ::shuffle(s1, s3, T256_2x2_lo);
+            //vec_type ss3 = ::shuffle(s1, s3, T256_2x2_hi);
+            //vec_type ss4 = ::shuffle(s4, s6, T256_2x2_lo);
+            //vec_type ss5 = ::shuffle(s4, s6, T256_2x2_hi);
+            //vec_type ss6 = ::shuffle(s5, s7, T256_2x2_lo);
+            //vec_type ss7 = ::shuffle(s5, s7, T256_2x2_hi);
+
+            //accum<caccfloat, 8> acc;
+            //a.insert(0, accum<caccfloat, 8>(ss0)); a.insert(1, accum<caccfloat, 8>(ss4));
+            //b.insert(0, ss1); b.insert(1, ss5);
+            //c.insert(0, ss2); c.insert(1, ss6);
+            //d.insert(0, ss3); d.insert(1, ss7);
+
+            using vec_type = vector<input_type, 16>;
+            v16cfloat * tmp = (v16cfloat *)pi;
+
+            vec_type dat0 = *tmp++;
+            vec_type dat1 = *tmp++;
+            vec_type dat2 = *tmp++;
+            vec_type dat3 = *tmp++;
+
+            auto [s0, s1] = interleave_unzip<input_type, 16>::run(dat0, dat1, 1);
+            auto [s2, s3] = interleave_unzip<input_type, 16>::run(dat2, dat3, 1);
+
+            return_vec_type a_tmp;
+            std::tie(a_tmp, c) = interleave_unzip<input_type, 16>::run(s0, s2, 1);
+            std::tie(b, d)     = interleave_unzip<input_type, 16>::run(s1, s3, 1);
+
+            a.from_vector(a_tmp);
+
+            pi = (input_ptr*)tmp;
+        }
+        else {
+            UNREACHABLE_MSG("Unreachable");
+        }
+
+        return std::make_tuple(a, b, c, d);
+    }
+
+    __aie_inline
+    auto load_twiddles(twiddle_type *& ptw0, twiddle_type *& ptw1, twiddle_type *& ptw2)
+    {
+        vector<twiddle_type, 16> tw0, tw1, tw2;
+
+        if      constexpr (Stage == 0) {
+            tw0 = broadcast<twiddle_type, 16>::run(*ptw0);    ptw0 = ::add_2d_ptr(ptw0, 1, Vectorization/16-1, cnt_tw0_, 0);
+            tw1 = broadcast<twiddle_type, 16>::run(*ptw1);    ptw1 = ::add_2d_ptr(ptw1, 1, Vectorization/16-1, cnt_tw1_, 0);
+            tw2 = broadcast<twiddle_type, 16>::run(*ptw2);    ptw2 = ::add_2d_ptr(ptw2, 1, Vectorization/16-1, cnt_tw2_, 0);
+        }
+        else if constexpr (Stage == 1) {
+            vector<twiddle_type, 16> tw0, tw1, tw2;
+
+            int tw_step = 1;
+            ptw0 = chess_copy(ptw0); ptw1 = chess_copy(ptw1); ptw2 = chess_copy(ptw2);
+
+            cfloat wa, wb, wc, wd;
+            wa = ptw0[-tw_step];
+            wb = *ptw0;      ptw0 += 2*tw_step;    ptw0 = chess_copy(ptw0);
+            wc = ptw0[-tw_step];
+            wd = *ptw0;      ptw0 += 2*tw_step;    ptw0 = chess_copy(ptw0);
+            tw0.insert(0, broadcast_2c32_T64_4x2( wa, wb ));
+            tw0.insert(1, broadcast_2c32_T64_4x2( wc, wd ));
+            wa = ptw1[-tw_step];
+            wb = *ptw1;      ptw1 += 2*tw_step;    ptw1 = chess_copy(ptw1);
+            wc = ptw1[-tw_step];
+            wd = *ptw1;      ptw1 += 2*tw_step;    ptw1 = chess_copy(ptw1);
+            tw1.insert(0, broadcast_2c32_T64_4x2( wa, wb ));
+            tw1.insert(1, broadcast_2c32_T64_4x2( wc, wd ));
+            wa = ptw2[-tw_step];
+            wb = *ptw2;      ptw2 += 2*tw_step;    ptw2 = chess_copy(ptw2);
+            wc = ptw2[-tw_step];
+            wd = *ptw2;      ptw2 += 2*tw_step;    ptw2 = chess_copy(ptw2);
+            tw2.insert(0, broadcast_2c32_T64_4x2( wa, wb ));
+            tw2.insert(1, broadcast_2c32_T64_4x2( wc, wd ));
+
+            return std::make_tuple(tw0, tw1, tw2);
+        }
+        else if constexpr (Stage == 2) {
+            tw0 = *(v16cfloat*)ptw0;    ptw0 += 16;
+            tw1 = *(v16cfloat*)ptw1;    ptw1 += 16;
+            tw2 = *(v16cfloat*)ptw2;    ptw2 += 16;
+        }
+        else {
+            UNREACHABLE_MSG("Unreachable");
+        }
+
+        return std::make_tuple(tw0, tw1, tw2);
+    }
+
+    unsigned inv_;
+    int cmplx_mask_;
+    int cmplx_mask_mj_;
+    addr_t cnt0_, cnt1_;
+    addr_t cnt_tw0_, cnt_tw1_, cnt_tw2_;
+};
+
+#endif // __AIE_API_COMPLEX_FP32_EMULATION__
+
 } // namespace aie::detail
 
+#endif // __AIE_API_COMPLEX_VECTOR_SUPPORT__
 #endif  // __AIE_API_DETAIL_AIE2P_FFT_DIT_RADIX4_HPP__

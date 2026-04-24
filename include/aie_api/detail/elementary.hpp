@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_ELEMENTARY__HPP__
 #define __AIE_API_DETAIL_ELEMENTARY__HPP__
 
+#include <algorithm>
 #include <cmath>
 
 #include "vector.hpp"
@@ -24,6 +25,7 @@ enum class ElementaryOp {
     Cos,
     Fix2Float,
     Float2Fix,
+    Float2FixFloor,
     Tanh,
     Exp2
 };
@@ -43,6 +45,8 @@ struct elementary_bits_impl
             return TR(a >> shift);
         else if constexpr (Op == ElementaryOp::Float2Fix)
             return TR(a) << shift;
+        else if constexpr (Op == ElementaryOp::Float2FixFloor)
+            return TR(std::floor(a)) << shift;
         else
             UNREACHABLE_MSG("Unsupported operation");
         // TODO: CRVO-7950: add support for tanh/exp2 emulation once support is added to libm.a
@@ -55,6 +59,7 @@ struct elementary_vector_bits_impl
     using vector_type     = vector<T, N>;
     using vector_ret_type = vector<TR, N>;
 
+    __aie_inline
     static auto run(const vector_type &v, int shift = 0, bool sign = vector_type::is_signed())
     {
         vector_ret_type ret;
@@ -162,7 +167,7 @@ using elementary_acc    = elementary_acc_bits<Op, accum<T, N>::accum_bits(), TR,
 
 #include "aie2/elementary.hpp"
 
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2p/elementary.hpp"
 

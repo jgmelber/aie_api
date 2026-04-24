@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -45,6 +45,7 @@ template <> struct native_vector_type<uint32,     8> { using type =     v8uint32
 template <> struct native_vector_type<uint32,    16> { using type =    v16uint32; };
 template <> struct native_vector_type<uint32,    32> { using type =    v32uint32; };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct native_vector_type<cint16,     4> { using type =     v4cint16; };
 template <> struct native_vector_type<cint16,     8> { using type =     v8cint16; };
 template <> struct native_vector_type<cint16,    16> { using type =    v16cint16; };
@@ -54,6 +55,7 @@ template <> struct native_vector_type<cint32,     2> { using type =     v2cint32
 template <> struct native_vector_type<cint32,     4> { using type =     v4cint32; };
 template <> struct native_vector_type<cint32,     8> { using type =     v8cint32; };
 template <> struct native_vector_type<cint32,    16> { using type =    v16cint32; };
+#endif
 
 template <> struct native_vector_type<int4,      32> { using type =      v32int4; };
 template <> struct native_vector_type<int4,      64> { using type =      v64int4; };
@@ -70,7 +72,28 @@ template <> struct native_vector_type<bfloat16,  16> { using type =  v16bfloat16
 template <> struct native_vector_type<bfloat16,  32> { using type =  v32bfloat16; };
 template <> struct native_vector_type<bfloat16,  64> { using type =  v64bfloat16; };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP16_SUPPORT__
+template <> struct native_vector_type<float16,    8> { using type =    v8float16; };
+template <> struct native_vector_type<float16,   16> { using type =   v16float16; };
+template <> struct native_vector_type<float16,   32> { using type =   v32float16; };
+template <> struct native_vector_type<float16,   64> { using type =   v64float16; };
+#endif
+
+#if __AIE_API_BF8_SUPPORT__
+template <> struct native_vector_type<bfloat8,  16> { using type =   v16bfloat8; };
+template <> struct native_vector_type<bfloat8,  32> { using type =   v32bfloat8; };
+template <> struct native_vector_type<bfloat8,  64> { using type =   v64bfloat8; };
+template <> struct native_vector_type<bfloat8, 128> { using type =  v128bfloat8; };
+#endif
+
+#if __AIE_API_FP8_SUPPORT__
+template <> struct native_vector_type<float8,   16> { using type =    v16float8; };
+template <> struct native_vector_type<float8,   32> { using type =    v32float8; };
+template <> struct native_vector_type<float8,   64> { using type =    v64float8; };
+template <> struct native_vector_type<float8,  128> { using type =   v128float8; };
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <> struct native_vector_type<float,      4> { using type =     v4float; };
 template <> struct native_vector_type<float,      8> { using type =     v8float; };
 template <> struct native_vector_type<float,     16> { using type =    v16float; };
@@ -121,6 +144,7 @@ template <> struct native_vector_traits<   v4uint32> { using value_type =   uint
 template <> struct native_vector_traits<   v8uint32> { using value_type =   uint32; static constexpr unsigned size =   8; };
 template <> struct native_vector_traits<  v16uint32> { using value_type =   uint32; static constexpr unsigned size =  16; };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct native_vector_traits<   v4cint16> { using value_type =   cint16; static constexpr unsigned size =   4; };
 template <> struct native_vector_traits<   v8cint16> { using value_type =   cint16; static constexpr unsigned size =   8; };
 template <> struct native_vector_traits<  v16cint16> { using value_type =   cint16; static constexpr unsigned size =  16; };
@@ -128,6 +152,8 @@ template <> struct native_vector_traits<  v16cint16> { using value_type =   cint
 template <> struct native_vector_traits<   v2cint32> { using value_type =   cint32; static constexpr unsigned size =   2; };
 template <> struct native_vector_traits<   v4cint32> { using value_type =   cint32; static constexpr unsigned size =   4; };
 template <> struct native_vector_traits<   v8cint32> { using value_type =   cint32; static constexpr unsigned size =   8; };
+
+#endif
 
 template <> struct native_vector_traits<    v32int4> { using value_type =     int4; static constexpr unsigned size =  32; };
 template <> struct native_vector_traits<    v64int4> { using value_type =     int4; static constexpr unsigned size =  64; };
@@ -141,7 +167,25 @@ template <> struct native_vector_traits< v8bfloat16> { using value_type = bfloat
 template <> struct native_vector_traits<v16bfloat16> { using value_type = bfloat16; static constexpr unsigned size =  16; };
 template <> struct native_vector_traits<v32bfloat16> { using value_type = bfloat16; static constexpr unsigned size =  32; };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP8_SUPPORT__
+template <> struct native_vector_traits< v16float8>  { using value_type =    float8; static constexpr unsigned size =  16; };
+template <> struct native_vector_traits< v32float8>  { using value_type =    float8; static constexpr unsigned size =  32; };
+template <> struct native_vector_traits< v64float8>  { using value_type =    float8; static constexpr unsigned size =  64; };
+#endif
+
+#if __AIE_API_BF8_SUPPORT__
+template <> struct native_vector_traits< v16bfloat8> { using value_type =   bfloat8; static constexpr unsigned size =  16; };
+template <> struct native_vector_traits< v32bfloat8> { using value_type =   bfloat8; static constexpr unsigned size =  32; };
+template <> struct native_vector_traits< v64bfloat8> { using value_type =   bfloat8; static constexpr unsigned size =  64; };
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <> struct native_vector_traits< v8float16>  { using value_type =  float16; static constexpr unsigned size =   8; };
+template <> struct native_vector_traits<v16float16>  { using value_type =  float16; static constexpr unsigned size =  16; };
+template <> struct native_vector_traits<v32float16>  { using value_type =  float16; static constexpr unsigned size =  32; };
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <> struct native_vector_traits<    v4float> { using value_type =    float; static constexpr unsigned size =   4; };
 template <> struct native_vector_traits<    v8float> { using value_type =    float; static constexpr unsigned size =   8; };
 template <> struct native_vector_traits<   v16float> { using value_type =    float; static constexpr unsigned size =  16; };
@@ -208,6 +252,7 @@ template <>                               struct vector_storage<   uint32,   8> 
 template <>                               struct vector_storage<   uint32,  16> { using type = v16uint32;   static type undef() { return ::undef_v16uint32();   } };
 template <unsigned N> requires (N >=  32) struct vector_storage<   uint32,   N> : compound_vector_storage<N, vector_storage<uint32, 16>> {};
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <>                               struct vector_storage<   cint16,   4> { using type =  v4cint16;   static type undef() { return ::undef_v4cint16();    } };
 template <>                               struct vector_storage<   cint16,   8> { using type =  v8cint16;   static type undef() { return ::undef_v8cint16();    } };
 template <>                               struct vector_storage<   cint16,  16> { using type = v16cint16;   static type undef() { return ::undef_v16cint16();   } };
@@ -217,6 +262,7 @@ template <>                               struct vector_storage<   cint32,   2> 
 template <>                               struct vector_storage<   cint32,   4> { using type =  v4cint32;    static type undef() { return ::undef_v4cint32();    } };
 template <>                               struct vector_storage<   cint32,   8> { using type =  v8cint32;    static type undef() { return ::undef_v8cint32();    } };
 template <unsigned N> requires (N >=  16) struct vector_storage<   cint32,   N> : compound_vector_storage<N, vector_storage<cint32,  8>> {};
+#endif
 
 template <>                               struct vector_storage<     int4,  32> { using type =  v32int4;    static type undef() { return ::undef_v32int4();     } };
 template <>                               struct vector_storage<     int4,  64> { using type =  v64int4;    static type undef() { return ::undef_v64int4();     } };
@@ -233,7 +279,28 @@ template <>                               struct vector_storage< bfloat16,  16> 
 template <>                               struct vector_storage< bfloat16,  32> { using type = v32bfloat16; static type undef() { return ::undef_v32bfloat16(); } };
 template <unsigned N> requires (N >=  64) struct vector_storage< bfloat16,   N> : compound_vector_storage<N, vector_storage<bfloat16, 32>> {};
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_BF8_SUPPORT__
+template <>                               struct vector_storage<  bfloat8,  16> { using type =  v16bfloat8;  static type undef() { return ::undef_v16bfloat8();  } };
+template <>                               struct vector_storage<  bfloat8,  32> { using type =  v32bfloat8;  static type undef() { return ::undef_v32bfloat8();  } };
+template <>                               struct vector_storage<  bfloat8,  64> { using type =  v64bfloat8;  static type undef() { return ::undef_v64bfloat8();  } };
+template <unsigned N> requires (N >= 128) struct vector_storage<  bfloat8,   N> : compound_vector_storage<N, vector_storage<bfloat8,  64>> {};
+#endif
+
+#if __AIE_API_FP8_SUPPORT__
+template <>                               struct vector_storage<   float8,  16> { using type =  v16float8;   static type undef() { return ::undef_v16float8();   } };
+template <>                               struct vector_storage<   float8,  32> { using type =  v32float8;   static type undef() { return ::undef_v32float8();   } };
+template <>                               struct vector_storage<   float8,  64> { using type =  v64float8;   static type undef() { return ::undef_v64float8();   } };
+template <unsigned N> requires (N >= 128) struct vector_storage<   float8,   N> : compound_vector_storage<N, vector_storage<float8, 64>> {};
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <>                               struct vector_storage<   float16,  8> { using type =  v8float16;  static type undef() { return ::undef_v8float16();   } };
+template <>                               struct vector_storage<   float16, 16> { using type = v16float16;  static type undef() { return ::undef_v16float16();  } };
+template <>                               struct vector_storage<   float16, 32> { using type = v32float16;  static type undef() { return ::undef_v32float16();  } };
+template <unsigned N> requires (N >=  64) struct vector_storage<   float16,  N> : compound_vector_storage<N, vector_storage<float16, 32>> {};
+#endif
+
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <>                               struct vector_storage<   float,    4> { using type =  v4float;    static type undef() { return ::undef_v4float();     } };
 template <>                               struct vector_storage<   float,    8> { using type =  v8float;    static type undef() { return ::undef_v8float();     } };
 template <>                               struct vector_storage<   float,   16> { using type = v16float;    static type undef() { return ::undef_v16float();    } };
@@ -254,6 +321,7 @@ template <>                               struct vector_storage< cbfloat16, 16> 
 template <unsigned N> requires (N >=  32) struct vector_storage< cbfloat16,  N> : compound_vector_storage<N, vector_storage<cbfloat16, 16>> {};
 #endif
 
+
 template <typename T>
 struct is_valid_element_type
 {
@@ -264,18 +332,29 @@ struct is_valid_element_type
                                                      int32,
                                                      uint16,
                                                      uint32,
-                                                     cint16,
-                                                     cint32,
                                                      int4,
                                                      uint4,
                                                      bfloat16
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP8_SUPPORT__
+                                                     , float8
+#endif
+#if __AIE_API_BF8_SUPPORT__
+                                                     , bfloat8
+#endif
+#if __AIE_API_FP16_SUPPORT__
+                                                     , float16
+#endif
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
                                                      , float
 #endif
-#if __AIE_API_COMPLEX_FP32_EMULATION__
+#if __AIE_API_CINT_SUPPORT__
+                                                     , cint16
+                                                     , cint32
+#endif
 #if __AIE_API_CBF16_SUPPORT__
                                                      , cbfloat16
 #endif
+#if __AIE_API_CFP32_SUPPORT__
                                                      , cfloat
 #endif
                                                      >;
@@ -287,10 +366,10 @@ struct is_complex
     static constexpr bool value = utils::is_one_of_v<T,
                                                      cint16,
                                                      cint32
-#if __AIE_API_COMPLEX_FP32_EMULATION__
 #if __AIE_API_CBF16_SUPPORT__
                                                      , cbfloat16
 #endif
+#if __AIE_API_CFP32_SUPPORT__
                                                      , cfloat
 #endif
                                                      >;
@@ -299,7 +378,8 @@ struct is_complex
 template <typename T>
 struct is_integral
 {
-    static constexpr bool value = utils::is_one_of_v<T, int4, uint4, int8, uint8, int16, int32, uint16, uint32, cint16, cint32>;
+    static constexpr bool value = utils::is_one_of_v<T,
+                                                     int4, uint4, int8, uint8, int16, int32, uint16, uint32, cint16, cint32>;
 };
 
 template <typename T>
@@ -314,8 +394,22 @@ struct is_floating_point
 #endif
                                                      , cfloat
 #endif
+#if __AIE_API_FP8_SUPPORT__
+                                                     , float8
+#endif
+#if __AIE_API_BF8_SUPPORT__
+                                                     , bfloat8
+#endif
+#if __AIE_API_FP16_SUPPORT__
+                                                     , float16
+#endif
 #if __AIE_ARCH__ == 21
                                                      , bfp16ebs8, bfp16ebs16
+#elif __AIE_ARCH__ == 22
+                                                     , mx4, mx6, mx9
+#endif
+#if __AIE_API_MX6_SUPPORT__
+                                                     , mx6
 #endif
                                                          >;
 };
@@ -327,6 +421,16 @@ template <typename T> struct is_block_floating_point
     static constexpr bool value = detail::utils::is_one_of_v<T,
                                                              bfp16ebs8,
                                                              bfp16ebs16>;
+};
+
+#elif __AIE_ARCH__ == 22
+
+template <typename T> struct is_block_floating_point
+{
+    static constexpr bool value = detail::utils::is_one_of_v<T,
+                                                             mx4,
+                                                             mx6,
+                                                             mx9>;
 };
 
 #endif
@@ -349,20 +453,38 @@ struct is_signed
 #endif
                                                      , cfloat
 #endif
+#if __AIE_API_FP8_SUPPORT__
+                                                     , float8
+#endif
+#if __AIE_API_BF8_SUPPORT__
+                                                     , bfloat8
+#endif
+#if __AIE_API_FP16_SUPPORT__
+                                                     , float16
+#endif
+#if __AIE_ARCH__ == 21
+                                                     , bfp16ebs8, bfp16ebs16
+#elif __AIE_ARCH__ == 22
+                                                     , mx4, mx6, mx9
+#endif
+
                                                          >;
 };
 
-template <>
-struct type_bits<int4>
-{
-    static constexpr unsigned value = 4;
-};
+template <> struct type_bits< int4> { static constexpr unsigned value = 4; };
+template <> struct type_bits<uint4> { static constexpr unsigned value = 4; };
 
-template <>
-struct type_bits<uint4>
-{
-    static constexpr unsigned value = 4;
-};
+#if __AIE_API_FP8_SUPPORT__
+template <> struct type_bits<float8> { static constexpr unsigned value = 8; };
+#endif
+
+#if __AIE_API_BF8_SUPPORT__
+template <> struct type_bits<bfloat8> { static constexpr unsigned value = 8; };
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <> struct type_bits<float16> { static constexpr unsigned value = 16; };
+#endif
 
 } // namespace aie::detail
 

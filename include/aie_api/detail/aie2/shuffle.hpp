@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -116,7 +116,8 @@ struct shuffle_down_rotate_bits_impl<TypeBits, T, Elems>
     }
 };
 
-template <unsigned TypeBits, typename T, unsigned Elems> requires(TypeBits >= 8)
+template <unsigned TypeBits, typename T, unsigned Elems>
+    requires(TypeBits >= 8)
 struct shuffle_down_fill_bits_impl<TypeBits, T, Elems>
 {
     using vector_type = vector<T, Elems>;
@@ -126,7 +127,22 @@ struct shuffle_down_fill_bits_impl<TypeBits, T, Elems>
     {
         vector_type ret;
 
-        if (chess_manifest(n == 0))
+#if __AIE_ARCH__ == 22
+        // TODO: CRVO-11672: cast cbfloat16 to float as sel does not work properly with cbfloat16 on AIE2PS
+        if constexpr (std::is_same_v<T, cbfloat16>) {
+            return shuffle_down_fill_bits_impl<TypeBits, float, Elems>::run(
+                v.template cast_to<float>(),
+                fill.template cast_to<float>(),
+                n
+            ).template cast_to<cbfloat16>();
+        }
+#endif
+
+        if (chess_manifest(n == 0)
+#if AIE_API_NATIVE
+            || (n == 0)
+#endif
+            )
             return v;
 
         if constexpr (vector_type::bits() == 128) {
@@ -138,20 +154,20 @@ struct shuffle_down_fill_bits_impl<TypeBits, T, Elems>
                                                                            concat_vector(vector_type(),  vector_type()), n).template extract<Elems>(0);
         }
         else if constexpr (vector_type::bits() == 512) {
-            ret = SHIFT_BYTES(v, fill, n * sizeof(T));
+            ret = ::shift_bytes(v, fill, n * sizeof(T));
         }
         else if constexpr (vector_type::bits() == 1024) {
             if (chess_manifest(n >= Elems / 2)) {
-                ret.template insert<Elems / 2>(0, SHIFT_BYTES(   v.template extract<Elems / 2>(1),
-                                                              fill.template extract<Elems / 2>(0), (n - Elems / 2) * sizeof(T)));
-                ret.template insert<Elems / 2>(1, SHIFT_BYTES(fill.template extract<Elems / 2>(0),
-                                                              fill.template extract<Elems / 2>(1), (n - Elems / 2) * sizeof(T)));
+                ret.template insert<Elems / 2>(0, ::shift_bytes(   v.template extract<Elems / 2>(1),
+                                                                fill.template extract<Elems / 2>(0), (n - Elems / 2) * sizeof(T)));
+                ret.template insert<Elems / 2>(1, ::shift_bytes(fill.template extract<Elems / 2>(0),
+                                                                fill.template extract<Elems / 2>(1), (n - Elems / 2) * sizeof(T)));
             }
             else if (chess_manifest(n < Elems / 2)) {
-                ret.template insert<Elems / 2>(0, SHIFT_BYTES(   v.template extract<Elems / 2>(0),
-                                                                 v.template extract<Elems / 2>(1), n * sizeof(T)));
-                ret.template insert<Elems / 2>(1, SHIFT_BYTES(   v.template extract<Elems / 2>(1),
-                                                              fill.template extract<Elems / 2>(0), n * sizeof(T)));
+                ret.template insert<Elems / 2>(0, ::shift_bytes(   v.template extract<Elems / 2>(0),
+                                                                   v.template extract<Elems / 2>(1), n * sizeof(T)));
+                ret.template insert<Elems / 2>(1, ::shift_bytes(   v.template extract<Elems / 2>(1),
+                                                                fill.template extract<Elems / 2>(0), n * sizeof(T)));
             }
             else {
                 vector<T, Elems / 2> tmp1a, tmp1b, tmp2a, tmp2b;
@@ -161,11 +177,11 @@ struct shuffle_down_fill_bits_impl<TypeBits, T, Elems>
                 mask1 <<= Elems - n;
                 mask2 <<= Elems - n;
 
-                tmp1a = SHIFT_BYTES(v.template extract<Elems / 2>(0),    v.template extract<Elems / 2>(1), n * sizeof(T));
-                tmp1b = SHIFT_BYTES(vector<T, Elems / 2>(),           fill.template extract<Elems / 2>(0), (n - Elems / 2) * sizeof(T));
+                tmp1a = ::shift_bytes(v.template extract<Elems / 2>(0),    v.template extract<Elems / 2>(1), n * sizeof(T));
+                tmp1b = ::shift_bytes(vector<T, Elems / 2>(),           fill.template extract<Elems / 2>(0), (n - Elems / 2) * sizeof(T));
 
-                tmp2a = SHIFT_BYTES(v.template extract<Elems / 2>(1), fill.template extract<Elems / 2>(0), n * sizeof(T));
-                tmp2b = SHIFT_BYTES(vector<T, Elems / 2>(),           fill.template extract<Elems / 2>(1), (n - Elems / 2) * sizeof(T));
+                tmp2a = ::shift_bytes(v.template extract<Elems / 2>(1), fill.template extract<Elems / 2>(0), n * sizeof(T));
+                tmp2b = ::shift_bytes(vector<T, Elems / 2>(),           fill.template extract<Elems / 2>(1), (n - Elems / 2) * sizeof(T));
 
                 if constexpr (Elems > 64) {
                     ret.template insert<Elems / 2>(0, ::sel(tmp1a, tmp1b, mask1.to_uint64()));
@@ -175,6 +191,21 @@ struct shuffle_down_fill_bits_impl<TypeBits, T, Elems>
                     ret.template insert<Elems / 2>(0, ::sel(tmp1a, tmp1b, mask1.to_uint32()));
                     ret.template insert<Elems / 2>(1, ::sel(tmp2a, tmp2b, mask2.to_uint32()));
                 }
+            }
+        }
+        else {
+            //FIXME: CRVO-12835 generalise this branch
+            if (chess_manifest(n == native_vector_length_v<T>)
+#if AIE_API_NATIVE
+                || (n == native_vector_length_v<T>)
+#endif
+                ) {
+                constexpr unsigned native_elems = native_vector_length_v<T>;
+                constexpr unsigned n_moves      = Elems / native_elems;
+                utils::unroll_times<n_moves - 1>([&](unsigned idx) __aie_inline {
+                    ret.insert(idx, v.template extract<native_elems>(idx + 1));
+                });
+                ret.insert(n_moves - 1, fill.template extract<native_elems>(0));
             }
         }
 
@@ -202,11 +233,11 @@ struct shuffle_down_bits_impl<TypeBits, T, Elems>
             ret = shuffle_down_bits_impl<TypeBits, T, Elems * 2>::run(v.template grow<Elems * 2>(), n).template extract<Elems>(0);
         }
         else if constexpr (vector_type::bits() == 512) {
-            ret = SHIFT_BYTES(v, v, n * sizeof(T));
+            ret = ::shift_bytes(v, v, n * sizeof(T));
         }
         else if constexpr (vector_type::bits() == 1024) {
-            ret.template insert<Elems / 2>(0, SHIFT_BYTES(v.template extract<Elems / 2>(0), v.template extract<Elems / 2>(1), n * sizeof(T)));
-            ret.template insert<Elems / 2>(1, SHIFT_BYTES(v.template extract<Elems / 2>(1), vector<T, Elems / 2>(),           n * sizeof(T)));
+            ret.template insert<Elems / 2>(0, ::shift_bytes(v.template extract<Elems / 2>(0), v.template extract<Elems / 2>(1), n * sizeof(T)));
+            ret.template insert<Elems / 2>(1, ::shift_bytes(v.template extract<Elems / 2>(1), vector<T, Elems / 2>(),           n * sizeof(T)));
         }
 
         return ret;

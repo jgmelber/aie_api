@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_AIE_ADF_STREAM_HPP__
 #define __AIE_API_AIE_ADF_STREAM_HPP__
 
+#include <algorithm>
+
 #include <adf.h>
 #include "../aie.hpp"
+#include "../sliding_mul.hpp"
 
 namespace aie::detail::adf {
 
@@ -19,15 +22,13 @@ struct stream_helper_common
 
 #if __AIE_ARCH__ == 10
     static constexpr unsigned stream_width = 128;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static constexpr unsigned stream_width = std::min(512u, type::bits());
 #endif
 
-    static_assert(type::bits() >= stream_width);
-    static_assert(type::bits() % stream_width == 0);
-
-    static constexpr unsigned num_ops = type::bits() / stream_width;
-    static constexpr unsigned elems_per_op = N / num_ops;
+    static constexpr unsigned num_ops        = std::max(1u, type::bits() / stream_width);
+    static constexpr unsigned elems_per_op   = N / num_ops;
+    static constexpr unsigned elems_per_read = stream_width / type::type_bits();
 };
 
 template <unsigned N, typename T, aie_stream_resource_in Resource>
@@ -37,14 +38,14 @@ struct stream_in_helper : public stream_helper_common<N, T>
 
     static constexpr auto get_op()
     {
-        if      constexpr (stream_in_helper::elems_per_op ==   2) return [](auto&&... args) __aie_inline { return ::readincr_v2<Resource>  (std::forward<decltype(args)>(args)...); };
-        else if constexpr (stream_in_helper::elems_per_op ==   4) return [](auto&&... args) __aie_inline { return ::readincr_v4<Resource>  (std::forward<decltype(args)>(args)...); };
-        else if constexpr (stream_in_helper::elems_per_op ==   8) return [](auto&&... args) __aie_inline { return ::readincr_v8<Resource>  (std::forward<decltype(args)>(args)...); };
-        else if constexpr (stream_in_helper::elems_per_op ==  16) return [](auto&&... args) __aie_inline { return ::readincr_v16<Resource> (std::forward<decltype(args)>(args)...); };
+        if      constexpr (stream_in_helper::elems_per_read ==   2) return [](auto&&... args) __aie_inline { return ::readincr_v2<Resource>  (std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read ==   4) return [](auto&&... args) __aie_inline { return ::readincr_v4<Resource>  (std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read ==   8) return [](auto&&... args) __aie_inline { return ::readincr_v8<Resource>  (std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read ==  16) return [](auto&&... args) __aie_inline { return ::readincr_v16<Resource> (std::forward<decltype(args)>(args)...); };
 #if __AIE_ARCH__ != 10
-        else if constexpr (stream_in_helper::elems_per_op ==  32) return [](auto&&... args) __aie_inline { return ::readincr_v32<Resource> (std::forward<decltype(args)>(args)...); };
-        else if constexpr (stream_in_helper::elems_per_op ==  64) return [](auto&&... args) __aie_inline { return ::readincr_v64<Resource> (std::forward<decltype(args)>(args)...); };
-        else if constexpr (stream_in_helper::elems_per_op == 128) return [](auto&&... args) __aie_inline { return ::readincr_v128<Resource>(std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read ==  32) return [](auto&&... args) __aie_inline { return ::readincr_v32<Resource> (std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read ==  64) return [](auto&&... args) __aie_inline { return ::readincr_v64<Resource> (std::forward<decltype(args)>(args)...); };
+        else if constexpr (stream_in_helper::elems_per_read == 128) return [](auto&&... args) __aie_inline { return ::readincr_v128<Resource>(std::forward<decltype(args)>(args)...); };
 #endif
         else UNREACHABLE_MSG("Unhandled case\n");
     }
@@ -54,21 +55,21 @@ struct stream_in_helper : public stream_helper_common<N, T>
     {
         type ret;
 
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-        if constexpr (std::is_same_v<T, cfloat>) {
-            aie::vector<float, N * 2> tmp = stream_in_helper<N * 2, float, Resource>::readincr((input_stream<float> *)w);
-
-            ret = tmp.template cast_to<cfloat>();
+#if __AIE_API_COMPLEX_FP32_EMULATION__ || __AIE_API_CBF16_SUPPORT__
+        if constexpr (aie::detail::is_floating_point_v<T> && aie::detail::is_complex_v<T>) {
+            using R = aie::detail::utils::get_complex_component_type_t<T>;
+            aie::vector<R, N * 2> tmp = stream_in_helper<N * 2, R, Resource>::readincr((input_stream<R> *)w);
+            ret = tmp.template cast_to<T>();
         }
         else
 #endif
         {
             utils::unroll_times<stream_in_helper::num_ops>([&](auto idx) __aie_inline {
-                aie::vector<T, stream_in_helper::elems_per_op> tmp;
+                aie::vector<T, stream_in_helper::elems_per_read> tmp;
 
                 tmp = get_op()(w);
 
-                ret.insert(idx, tmp);
+                ret.insert(idx, tmp.template extract<stream_in_helper::elems_per_op>(0));
             });
         }
 
@@ -80,24 +81,24 @@ struct stream_in_helper : public stream_helper_common<N, T>
     {
         type ret;
 
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-        if constexpr (std::is_same_v<T, cfloat>) {
-            aie::vector<float, N * 2> tmp = stream_in_helper<N * 2, float, Resource>::readincr((input_stream<float> *)w, tlast);
-
-            ret = tmp.template cast_to<cfloat>();
+#if __AIE_API_COMPLEX_FP32_EMULATION__ || __AIE_API_CBF16_SUPPORT__
+        if constexpr (aie::detail::is_floating_point_v<T> && aie::detail::is_complex_v<T>) {
+            using R = aie::detail::utils::get_complex_component_type_t<T>;
+            aie::vector<R, N * 2> tmp = stream_in_helper<N * 2, R, Resource>::readincr((input_stream<R> *)w, tlast);
+            ret = tmp.template cast_to<T>();
         }
         else
 #endif
         {
             utils::unroll_times<stream_in_helper::num_ops>([&](auto idx) __aie_inline {
-                aie::vector<T, stream_in_helper::elems_per_op> tmp;
+                aie::vector<T, stream_in_helper::elems_per_read> tmp;
 
                 if (idx < stream_in_helper::num_ops - 1)
                     tmp = get_op()(w);
                 else
                     tmp = get_op()(w, tlast);
 
-                ret.insert(idx, tmp);
+                ret.insert(idx, tmp.template extract<stream_in_helper::elems_per_op>(0));
             });
         }
 
@@ -113,25 +114,27 @@ struct stream_out_helper : public stream_helper_common<N, T>
     __aie_inline
     static void writeincr(output_stream<T> *w, type value)
     {
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-        if constexpr (std::is_same_v<T, cfloat>) {
-            stream_out_helper<N * 2, float, Resource>::writeincr((output_stream<float> *)w, value.template cast_to<float>());
+#if __AIE_API_COMPLEX_FP32_EMULATION__ || __AIE_API_CBF16_SUPPORT__
+        if constexpr (aie::detail::is_floating_point_v<T> && aie::detail::is_complex_v<T>) {
+            using R = aie::detail::utils::get_complex_component_type_t<T>;
+            stream_out_helper<N * 2, R, Resource>::writeincr((output_stream<R> *)w, value.template cast_to<R>());
         }
         else
 #endif
         {
             #pragma unroll
             for (unsigned i = 0; i < stream_out_helper::num_ops; ++i)
-                ::writeincr<Resource>(w, value.template extract<stream_out_helper::elems_per_op>(i));
+                ::writeincr<Resource>(w, value.template grow_extract<stream_out_helper::elems_per_read>(i));
         }
     }
 
     __aie_inline
     static void writeincr(output_stream<T> *w, type value, bool tlast)
     {
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-        if constexpr (std::is_same_v<T, cfloat>) {
-            stream_out_helper<N * 2, float, Resource>::writeincr((output_stream<float> *)w, value.template cast_to<float>(), tlast);
+#if __AIE_API_COMPLEX_FP32_EMULATION__ || __AIE_API_CBF16_SUPPORT__
+        if constexpr (aie::detail::is_floating_point_v<T> && aie::detail::is_complex_v<T>) {
+            using R = aie::detail::utils::get_complex_component_type_t<T>;
+            stream_out_helper<N * 2, R, Resource>::writeincr((output_stream<R> *)w, value.template cast_to<R>(), tlast);
         }
         else
 #endif
@@ -139,9 +142,9 @@ struct stream_out_helper : public stream_helper_common<N, T>
             #pragma unroll
             for (unsigned i = 0; i < stream_out_helper::num_ops; ++i) {
                 if (i < stream_out_helper::num_ops - 1)
-                    ::writeincr<Resource>(w, value.template extract<stream_out_helper::elems_per_op>(i));
+                    ::writeincr<Resource>(w, value.template grow_extract<stream_out_helper::elems_per_read>(i));
                 else
-                    ::writeincr<Resource>(w, value.template extract<stream_out_helper::elems_per_op>(i), tlast);
+                    ::writeincr<Resource>(w, value.template grow_extract<stream_out_helper::elems_per_read>(i), tlast);
             }
         }
     }
@@ -165,7 +168,7 @@ struct cascade_stream_helper
     static constexpr unsigned             num_ops = compute_num_ops();
     static constexpr unsigned        elems_per_op = N / num_ops;
     static constexpr unsigned native_elems_per_op = elems_per_op;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static constexpr unsigned compute_native_elems_per_op()
     {
         if      constexpr (type::value_bits() == 32)
@@ -226,41 +229,30 @@ struct cascade_stream_helper
         else
 #endif
         {
+            struct unsupported_read_size {};
+            auto read_op = [](input_cascade<native_tag> *arg) __aie_inline -> aie::accum<native_tag, native_elems_per_op> {
+#if __AIE_ARCH__ == 10
+                if constexpr (native_elems_per_op == 2)
+                    return ::readincr_v2(arg);
+                else
+#endif
+                if constexpr (native_elems_per_op == 4)
+                    return ::readincr_v4(arg);
+                else
+                if constexpr (native_elems_per_op == 8)
+                    return ::readincr_v8(arg);
+                else
+#if __AIE_ARCH__ != 10
+                if constexpr (native_elems_per_op == 16)
+                    return ::readincr_v16(arg);
+                else
+#endif
+                    return unsupported_read_size{};
+            };
             #pragma unroll
             for (unsigned i = 0; i < num_ops; ++i) {
-#if __AIE_ARCH__ == 10
-                if      constexpr (elems_per_op == 2)
-                    ret.template insert<2>(i, readincr_v2(w));
-                else if constexpr (elems_per_op == 4)
-                    ret.template insert<4>(i, readincr_v4(w));
-                else if constexpr (elems_per_op == 8)
-                    ret.template insert<8>(i, readincr_v8(w));
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-                if      constexpr (native_elems_per_op == 4) {
-                    const aie::accum<native_tag, 4> tmp = readincr_v4(w);
-
-                    if constexpr (native_elems_per_op > elems_per_op)
-                        ret.template insert<N>(i, tmp.template extract<N>(0));
-                    else
-                        ret.template insert<4>(i, tmp);
-                }
-                else if      constexpr (native_elems_per_op == 8) {
-                    const aie::accum<native_tag, 8> tmp = readincr_v8(w);
-
-                    if constexpr (native_elems_per_op > elems_per_op)
-                        ret.template insert<N>(i, tmp.template extract<N>(0));
-                    else
-                        ret.template insert<8>(i, tmp);
-                }
-                else if constexpr (native_elems_per_op == 16) {
-                    const aie::accum<native_tag, 16> tmp = readincr_v16(w);
-
-                    if constexpr (native_elems_per_op > elems_per_op)
-                        ret.template insert<N>(i, tmp.template extract<N>(0));
-                    else
-                        ret.template insert<16>(i, tmp);
-                }
-#endif
+                constexpr unsigned elems = std::min(elems_per_op, native_elems_per_op);
+                ret.insert(i, read_op(w).template extract<elems>(0));
             }
         }
 
@@ -405,7 +397,7 @@ struct vector_cascade_stream_helper
 
 #if __AIE_ARCH__ == 10
     static constexpr unsigned cascade_width = 256;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     static constexpr unsigned cascade_width = 512;
 #endif
 
@@ -445,11 +437,11 @@ struct vector_cascade_stream_helper
     {
         type ret;
 
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-        if constexpr (std::is_same_v<T, cfloat>) {
-            aie::vector<float, N * 2> tmp = vector_cascade_stream_helper<float, N * 2>::readincr((input_cascade<float> *)w);
-
-            ret = tmp.template cast_to<cfloat>();
+#if __AIE_API_COMPLEX_FP32_EMULATION__ || __AIE_API_CBF16_SUPPORT__
+        if constexpr (aie::detail::is_floating_point_v<T> && aie::detail::is_complex_v<T>) {
+            using R = aie::detail::utils::get_complex_component_type_t<T>;
+            aie::vector<R, N * 2> tmp = vector_cascade_stream_helper<R, N * 2>::readincr((input_cascade<R> *)w);
+            ret = tmp.template cast_to<T>();
         }
         else
 #endif
@@ -460,7 +452,7 @@ struct vector_cascade_stream_helper
                 else if constexpr (native_elems_per_op ==   8) { return [](auto* w){ return readincr_v8(w);   }; }
                 else if constexpr (native_elems_per_op ==  16) { return [](auto* w){ return readincr_v16(w);  }; }
                 else if constexpr (native_elems_per_op ==  32) { return [](auto* w){ return readincr_v32(w);  }; }
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
                 if      constexpr (native_elems_per_op ==   8) { return [](auto* w){ return readincr_v8(w);   }; }
                 else if constexpr (native_elems_per_op ==  16) { return [](auto* w){ return readincr_v16(w);  }; }
                 else if constexpr (native_elems_per_op ==  32) { return [](auto* w){ return readincr_v32(w);  }; }
@@ -485,7 +477,7 @@ struct vector_cascade_stream_helper
     }
 };
 
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
 template <unsigned N>
 struct vector_cascade_stream_helper<float, N>
 {
@@ -493,7 +485,12 @@ struct vector_cascade_stream_helper<float, N>
     using       type = aie::vector<T, N>;
     using accum_type = aie::accum<accfloat, N>;
 
-    static constexpr unsigned       cascade_width = 512;
+#if __AIE_ARCH__ == 10
+    static constexpr unsigned cascade_width = 256;
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+    static constexpr unsigned cascade_width = 512;
+#endif
+
     static constexpr unsigned             num_ops = cascade_width > type::bits()? 1 : type::bits() / cascade_width;
     static constexpr unsigned        elems_per_op = N / num_ops;
     static constexpr unsigned native_elems_per_op = cascade_width / type_bits_v<T>;
@@ -535,7 +532,11 @@ struct vector_cascade_stream_helper<float, N>
 
         #pragma unroll
         for (unsigned i = 0; i < num_ops; ++i) {
+#if __AIE_ARCH__ == 10
+            const aie::accum<accfloat, native_elems_per_op> tmp_acc = ::readincr_v8((input_cascade<accfloat> *)w);
+#else
             const aie::accum<accfloat, native_elems_per_op> tmp_acc = ::readincr_v16((input_cascade<accfloat> *)w);
+#endif
             const aie::vector<float, native_elems_per_op> tmp = tmp_acc.template to_vector<float>();
 
             if constexpr (native_elems_per_op > elems_per_op)
@@ -549,10 +550,15 @@ struct vector_cascade_stream_helper<float, N>
 };
 
 #if __AIE_API_COMPLEX_FP32_EMULATION__
-template <unsigned N>
-struct vector_cascade_stream_helper<cfloat, N>
+template <typename T, unsigned N>
+    requires(aie::detail::utils::is_one_of_v<T, cfloat
+#if __AIE_API_CBF16_SUPPORT__
+                                                , cbfloat16
+#endif
+                                                >)
+struct vector_cascade_stream_helper<T, N>
 {
-    using    T = cfloat;
+    using R    = aie::detail::utils::get_complex_component_type_t<T>;
     using type = aie::vector<T, N>;
 
     static constexpr unsigned       cascade_width = 512;
@@ -570,7 +576,7 @@ struct vector_cascade_stream_helper<cfloat, N>
     __aie_inline
     static void writeincr(output_cascade<T> *w, type value)
     {
-        vector_cascade_stream_helper<float, N * 2>::writeincr((output_cascade<float> *)w, value.template cast_to<float>());
+        vector_cascade_stream_helper<R, N * 2>::writeincr((output_cascade<R> *)w, value.template cast_to<R>());
     }
 
     __aie_inline
@@ -583,9 +589,9 @@ struct vector_cascade_stream_helper<cfloat, N>
     __aie_inline
     static type readincr(input_cascade<T> *w)
     {
-        aie::vector<float, N * 2> tmp = vector_cascade_stream_helper<float, N * 2>::readincr((input_cascade<float> *)w);
+        aie::vector<R, N * 2> tmp = vector_cascade_stream_helper<R, N * 2>::readincr((input_cascade<R> *)w);
 
-        return tmp.template cast_to<cfloat>();
+        return tmp.template cast_to<T>();
     }
 };
 #endif
@@ -830,6 +836,7 @@ static constexpr bool is_tlast_type_v = is_tlast_type<T, T2>::value;
  */
 template <typename T, typename T2>
 concept TLast = detail::is_tlast_v<T> && detail::is_tlast_type_v<detail::utils::remove_all_t<T>, T2>;
+
 
 }
 
@@ -1304,5 +1311,66 @@ constexpr input_cascade<T> &operator>>(input_cascade<T> &w, aie::accum<T, N> &ac
     acc = readincr_v<N>(&w);
     return w;
 }
+
+/**
+ * Reads a partial_sliding_mul value from a cascade port.
+ */
+template <unsigned Lanes, unsigned Points,
+          int CoeffStep, int DataStepX, int DataStepY,
+          aie::ElemBaseType CoeffType, aie::ElemBaseType DataType,
+          aie::AccumElemBaseType AccumTag>
+__aie_inline
+inline input_cascade<AccumTag, void> &operator>>(input_cascade<AccumTag, void> &cascade, aie::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag> &value)
+{
+    using value_type = aie::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag>;
+    using base_type  = typename value_type::base_type;
+    using accum_type = typename value_type::accum_type;
+
+    accum_type acc;
+    cascade >> acc;
+
+    if constexpr (base_type::split_complex_components()) {
+        using real_accum_type = typename value_type::real_accum_type;
+        auto real_acc = acc.template cast_to<real_accum_type::value_type>();
+        std::array<real_accum_type, 2> components{
+            real_acc.extract<real_accum_type::size()>(0),
+            real_acc.extract<real_accum_type::size()>(1)
+        };
+        value = value_type(components);
+    }
+    else {
+        value = value_type(acc);
+    }
+
+    return cascade;
+}
+
+/**
+ * Writes a partial_sliding_mul value to a cascade output port.
+ * The value's internal sum must have a valid initialised accumulator, that is, it must not be a default initialised value.
+ */
+template <unsigned Lanes, unsigned Points,
+          int CoeffStep, int DataStepX, int DataStepY,
+          aie::ElemBaseType CoeffType, aie::ElemBaseType DataType,
+          aie::AccumElemBaseType AccumTag>
+__aie_inline
+inline output_cascade<AccumTag, void> &operator<<(output_cascade<AccumTag, void> &cascade, const aie::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag> &value)
+{
+    using value_type = aie::partial_sliding_mul<Lanes, Points, CoeffStep, DataStepX, DataStepY, CoeffType, DataType, AccumTag>;
+    using base_type  = typename value_type::base_type;
+    using accum_type = typename value_type::accum_type;
+
+    REQUIRES_MSG(!static_cast<const base_type &>(value).zero_acc, "Partial result must have initialised accumulator before writing to cascade");
+
+    if constexpr (base_type::split_complex_components()) {
+        cascade << (concat(value.to_accum_components()).template cast_to<typename accum_type::value_type>());
+    }
+    else {
+        cascade << value.to_accum();
+    }
+
+    return cascade;
+}
+
 
 #endif

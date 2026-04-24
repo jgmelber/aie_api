@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_SHIFT__HPP__
 #define __AIE_API_DETAIL_AIE2_SHIFT__HPP__
+
+#include <algorithm>
 
 #include "../vector.hpp"
 
@@ -20,18 +22,19 @@ struct shift_bits_impl<T, 4, Elems>
     static vector_type run(const vector_type &v, unsigned upshift, unsigned downshift)
     {
         using next_type = utils::get_next_integer_type_t<T>;
+        static constexpr unsigned native_elems = 128;
+        static constexpr unsigned num_ops      = std::max(1u, Elems / native_elems);
 
         vector_type ret;
 
-        if constexpr (Elems < 256) {
-            ret = shift_bits_impl<next_type, 8, Elems>::run(v.template unpack(), upshift, downshift).pack();
+        if constexpr (num_ops == 1) {
+            ret = shift_bits_impl<next_type, 8, Elems>::run(v.unpack(), upshift, downshift).pack();
         }
         else {
-            const auto tmp1 = v.template extract<128>(0).unpack();
-            const auto tmp2 = v.template extract<128>(1).unpack();
-
-            ret = concat_vector(shift_bits_impl<next_type, 8, Elems / 2>::run(tmp1, upshift, downshift).pack(),
-                                shift_bits_impl<next_type, 8, Elems / 2>::run(tmp2, upshift, downshift).pack());
+            utils::unroll_times<num_ops>([&](auto idx) __aie_inline {
+                ret.insert(idx, shift_bits_impl<next_type, 8, native_elems>::run(v.template extract<native_elems>(idx).unpack(),
+                                                                                 upshift, downshift).pack());
+            });
         }
 
         return ret;
@@ -45,17 +48,43 @@ struct shift_bits_impl_common
 
     static constexpr auto get_op_elems()
     {
+#if __AIE_ARCH__ == 20
         if      constexpr (utils::is_one_of_v<T, int8, uint8>)   { return 32; }
         else if constexpr (utils::is_one_of_v<T, int16, uint16>) {
             if     constexpr (Elems <= 16)                       { return 16; }
             else                                                 { return 32; }
         }
-        else if constexpr (utils::is_one_of_v<T, int32, uint32>) { return 16; }
+        else if constexpr (utils::is_one_of_v<T, int32, uint32>) {
+            if     constexpr (Elems <= 8)                        { return 8;  }
+            else                                                 { return 16; }
+        }
         else if constexpr (std::is_same_v<T, cint16>)            { return 8;  }
         else if constexpr (std::is_same_v<T, cint32>) {
             if     constexpr (Elems <= 4)                        { return 4;  }
             else                                                 { return 8;  }
         }
+#else
+        if      constexpr (utils::is_one_of_v<T, int8, uint8>)   {
+            if     constexpr (Elems > 32)                        { return 64; }
+            else                                                 { return 32; }
+        }
+        else if constexpr (utils::is_one_of_v<T, int16, uint16>) {
+            if     constexpr (Elems > 16)                        { return 32; }
+            else                                                 { return 16; }
+        }
+        else if constexpr (utils::is_one_of_v<T, int32, uint32>) {
+            if     constexpr (Elems > 8)                         { return 16; }
+            else                                                 { return 8;  }
+        }
+        else if constexpr (std::is_same_v<T, cint16>)            {
+            if     constexpr (Elems > 8)                         { return 16; }
+            else                                                 { return 8;  }
+        }
+        else if constexpr (std::is_same_v<T, cint32>) {
+            if     constexpr (Elems > 4)                         { return 8;  }
+            else                                                 { return 4;  }
+        }
+#endif
     }
 
     __aie_inline

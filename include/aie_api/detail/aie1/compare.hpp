@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_COMPARE__HPP__
 #define __AIE_API_DETAIL_AIE1_COMPARE__HPP__
+
+#include <algorithm>
 
 #include "../../mask.hpp"
 #include "../utils.hpp"
@@ -930,7 +932,10 @@ struct equal_bits_impl<8, T, Elems>
     static bool run(vector_elem_const_ref<T, Elems2> a, const vector_type &v)
     {
         int16 val = a.get();
-        val |= val << 8;
+        if constexpr (is_signed_v<T>)
+            val = (val & 0xFF) | (val << 8);
+        else
+            val |= val << 8;
         return equal_bits_impl<16, int16, Elems / 2>::run(val, vector_cast<int16>(v));
     }
 
@@ -938,7 +943,10 @@ struct equal_bits_impl<8, T, Elems>
     static bool run(const T &a, const vector_type &v)
     {
         int16 val = a;
-        val |= val << 8;
+        if constexpr (is_signed_v<T>)
+            val = (val & 0xFF) | (val << 8);
+        else
+            val |= val << 8;
         return equal_bits_impl<16, int16, Elems / 2>::run(val, vector_cast<int16>(v));
     }
 
@@ -947,7 +955,10 @@ struct equal_bits_impl<8, T, Elems>
     static bool run(const vector_type &v, vector_elem_const_ref<T, Elems2> a)
     {
         int16 val = a.get();
-        val |= val << 8;
+        if constexpr (is_signed_v<T>)
+            val = (val & 0xFF) | (val << 8);
+        else
+            val |= val << 8;
         return equal_bits_impl<16, int16, Elems / 2>::run(vector_cast<int16>(v), val);
     }
 
@@ -955,7 +966,10 @@ struct equal_bits_impl<8, T, Elems>
     static bool run(const vector_type &v, const T &a)
     {
         int16 val = a;
-        val |= val << 8;
+        if constexpr (is_signed_v<T>)
+            val = (val & 0xFF) | (val << 8);
+        else
+            val |= val << 8;
         return equal_bits_impl<16, int16, Elems / 2>::run(vector_cast<int16>(v), val);
     }
 };

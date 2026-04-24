@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -14,7 +14,7 @@ namespace aie::detail {
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct transpose_bits_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned row, unsigned col)
@@ -72,7 +72,7 @@ using transpose = transpose_bits<type_bits_v<T>, T, Elems>;
 
 #include "aie1/transpose.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/transpose.hpp"
 

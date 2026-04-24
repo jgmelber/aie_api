@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_SLIDING_MUL_ACC32_HPP__
 #define __AIE_API_DETAIL_AIE2_SLIDING_MUL_ACC32_HPP__
+
+#include <algorithm>
 
 #include "../mul.hpp"
 #include "../vector.hpp"
@@ -20,33 +22,16 @@ template <MulMacroOp MulOp, unsigned Lanes, typename CoeffType, typename DataTyp
 static constexpr auto sliding_mul_acc32_get_mul_op()
 {
     if      constexpr (type_bits_v<CoeffType> == 16) {
-        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_16x4(args...); };
-        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_16x4(args...); };
-        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_16x4(args...); };
-        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_16x4(args...); };
+        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_16x4_conf(args..., /*sub_mul=*/0); };
+        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_16x4_conf(args..., /*sub_mul=*/0); };
+        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_16x4_conf(args..., /*shift16=*/0, /*sub_mul=*/0, /*sub_acc1=*/0); };
+        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_16x4_conf(args..., /*shift16=*/0, /*sub_mul=*/0, /*sub_acc1=*/0); };
     }
     else if constexpr (type_bits_v<CoeffType> == 8) {
-        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_32x8(args...); };
-        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_32x8(args...); };
-        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_32x8(args...); };
-        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_32x8(args...); };
-    }
-}
-
-template <MulMacroOp MulOp, unsigned Lanes, typename CoeffType, typename DataType>
-static constexpr auto sliding_mul_acc32_get_mul_conf_op()
-{
-    if      constexpr (type_bits_v<CoeffType> == 16) {
-        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_16x4_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_16x4_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_16x4_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_16x4_conf(args...); };
-    }
-    else if constexpr (type_bits_v<CoeffType> == 8) {
-        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_32x8_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_32x8_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_32x8_conf(args...); };
-        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_32x8_conf(args...); };
+        if constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_conv_32x8_conf(args..., /*sub_mul=*/0); };
+        if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_conv_32x8_conf(args..., /*sub_mul=*/0); };
+        if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_conv_32x8_conf(args..., /*shift16=*/0, /*sub_mul=*/0, /*sub_acc1=*/0); };
+        if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_conv_32x8_conf(args..., /*shift16=*/0, /*sub_mul=*/0, /*sub_acc1=*/0); };
     }
 }
 
@@ -70,6 +55,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 8, 8, CoeffType, DataTy
                           const vector<data_type, N_Data> &data,
                           unsigned data_start,
                           bool data_sign,
+                          bool zero_acc,
                           const Acc &... acc)
     {
         constexpr unsigned data_elems = std::max(N_Data, 64u);
@@ -98,7 +84,8 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 8, 8, CoeffType, DataTy
                          data_sign,
                          shuffle_down_rotate<coeff_type,         64>::run(coeff2,                                      coeff_start_local),
                          coeff_sign,
-                         utils::get_nth<0>(ret.template grow_extract<32>(idx_y), acc)...);
+                         utils::get_nth<0>(ret.template grow_extract<32>(idx_y), acc)...,
+                         utils::get_nth<0>(zero_acc, acc)...);
 
             utils::unroll_for<unsigned, 1, num_mul>([&](auto idx) __aie_inline {
                 const unsigned data_start_local  =  (data_start + columns_per_mul * idx + idx_y * 32) % data_elems;
@@ -108,7 +95,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 8, 8, CoeffType, DataTy
                              data_sign,
                              shuffle_down_rotate<coeff_type,         64>::run(coeff2,                                      coeff_start_local),
                              coeff_sign,
-                             tmp);
+                             tmp, false);
             });
 
             if constexpr (Lanes <= 32)
@@ -142,6 +129,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, CoeffType, Data
                           const vector<data_type, N_Data> &data,
                           unsigned data_start,
                           bool data_sign,
+                          bool zero_acc,
                           const Acc &... acc)
     {
         constexpr unsigned data_elems = std::max(N_Data, 32u);
@@ -185,7 +173,8 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, CoeffType, Data
                          data_sign,
                          shuffle_down_rotate<coeff_type,         32>::run(coeff2,                                      coeff_start_local),
                          coeff_sign,
-                         utils::get_nth<0>(acc_internal.template grow_extract<16>(idx_y), acc)...);
+                         utils::get_nth<0>(acc_internal.template grow_extract<16>(idx_y), acc)...,
+                         utils::get_nth<0>(zero_acc, acc)...);
 
             utils::unroll_for<unsigned, 1, num_mul>([&](auto idx) __aie_inline {
                 const unsigned data_start_local  =  (data_start + columns_per_mul * idx + idx_y * 16) % data_elems;
@@ -195,7 +184,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, CoeffType, Data
                              data_sign,
                              shuffle_down_rotate<coeff_type,         32>::run(coeff2,                                      coeff_start_local),
                              coeff_sign,
-                             tmp);
+                             tmp, false);
             });
 
             const vector<int32, 32> vec1 = accum_to_vector_cast<int32, acc64, 16>::run(tmp);

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_SHIFT__HPP__
 #define __AIE_API_DETAIL_AIE1_SHIFT__HPP__
+
+#include <algorithm>
 
 #include "../vector.hpp"
 

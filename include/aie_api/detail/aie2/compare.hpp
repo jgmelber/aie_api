@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_COMPARE__HPP__
 #define __AIE_API_DETAIL_AIE2_COMPARE__HPP__
+
+#include <algorithm>
 
 #include "../../mask.hpp"
 #include "../broadcast.hpp"
@@ -43,22 +45,21 @@ struct compare_vector_traits {
     {
         return compare_vector_traits<get_derived(), T>::get_op();
     }
+
+    static constexpr auto get_post_op()
+    {
+        if constexpr (Op == CmpOp::NEQ)
+            return std::bit_not<>{};
+        else
+            return std::identity{};
+    }
 };
 
-template <CmpOp Op, typename T>
+template <CmpOp Op>
 struct compare_zero_traits {
     static constexpr auto get_op()
     {
-        if constexpr (is_unsigned_v<T>) {
-            // ltz intrinsic for unsigned vector types is wrong in AIE2(P)(PS). See CRVO-9293
-            if      constexpr (Op == CmpOp::LT)  return [](auto a) __aie_inline { return 0llu; };
-            else if constexpr (Op == CmpOp::GE)  return [](auto a) __aie_inline { return ~0llu; };
-            else if constexpr (Op == CmpOp::EQ)  return [](auto a) __aie_inline { return ::eqz(a); };
-            else if constexpr (Op == CmpOp::NEQ) return [](auto a) __aie_inline { return ::gtz(a); };
-            else if constexpr (Op == CmpOp::LE)  return [](auto a) __aie_inline { return ::eqz(a); };
-            else if constexpr (Op == CmpOp::GT)  return [](auto a) __aie_inline { return ::gtz(a); };
-        }
-        else if constexpr (Op == CmpOp::LT)  return [](auto a) __aie_inline { return ::ltz(a); };
+             if constexpr (Op == CmpOp::LT)  return [](auto a) __aie_inline { return ::ltz(a); };
         else if constexpr (Op == CmpOp::GE)  return [](auto a) __aie_inline { return ~::ltz(a); };
         else if constexpr (Op == CmpOp::EQ)  return [](auto a) __aie_inline { return ::eqz(a); };
         else if constexpr (Op == CmpOp::NEQ) return [](auto a) __aie_inline { return ~::eqz(a); };
@@ -70,40 +71,40 @@ struct compare_zero_traits {
     // returns that operator if that's the case.
     static constexpr bool is_derived()
     {
-        if constexpr (is_unsigned_v<T>) {
-            if constexpr (Op == CmpOp::GE) return true;
-        }
-        else {
-            if      constexpr (Op == CmpOp::GE)  return true;
-            else if constexpr (Op == CmpOp::NEQ) return true;
-            else if constexpr (Op == CmpOp::LE)  return true;
-        }
+        if      constexpr (Op == CmpOp::GE)  return true;
+        else if constexpr (Op == CmpOp::NEQ) return true;
+        else if constexpr (Op == CmpOp::LE)  return true;
         return false;
     }
 
     static constexpr CmpOp get_derived()
     {
-        if constexpr (is_unsigned_v<T>) {
-            if constexpr (Op == CmpOp::GE) return CmpOp::LT;
-        }
-        else {
-            if      constexpr (Op == CmpOp::GE)  return CmpOp::LT;
-            else if constexpr (Op == CmpOp::NEQ) return CmpOp::EQ;
-            else if constexpr (Op == CmpOp::LE)  return CmpOp::GT;
-        }
+        if      constexpr (Op == CmpOp::GE)  return CmpOp::LT;
+        else if constexpr (Op == CmpOp::NEQ) return CmpOp::EQ;
+        else if constexpr (Op == CmpOp::LE)  return CmpOp::GT;
         return Op;
     }
 
     static constexpr auto get_derived_op()
     {
-        return compare_zero_traits<get_derived(), T>::get_op();
+        return compare_zero_traits<get_derived()>::get_op();
+    }
+
+    static constexpr auto get_post_op()
+    {
+        if constexpr (is_derived())
+            return std::bit_not<>{};
+        else
+            return std::identity{};
     }
 };
 
-template <CmpOp Op, typename T, unsigned Elems>
-struct cmp_bits_impl<Op, 4, T, Elems>
+template <CmpOp Op, unsigned TypeBits, typename T, unsigned Elems>
+    requires (TypeBits < 8)
+struct cmp_bits_impl<Op, TypeBits, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T> / 2;
+    static constexpr unsigned subbyte_elems = 8 / TypeBits;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems> / subbyte_elems;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -120,14 +121,14 @@ struct cmp_bits_impl<Op, 4, T, Elems>
             return unpack_cmp<>::run(v1.unpack(), v2.unpack());
         }
         else {
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                m.insert(idx, unpack_cmp<native_elems>::run(v1.template extract<native_elems>(idx).unpack(),
-                                                            v2.template extract<native_elems>(idx).unpack()));
+                masks[idx] = unpack_cmp<native_elems>::run(v1.template extract<native_elems>(idx).unpack(),
+                                                           v2.template extract<native_elems>(idx).unpack());
             });
 
-            return m;
+            return mask_type::from_masks(masks);
         }
     }
 
@@ -144,40 +145,40 @@ struct cmp_bits_impl<Op, 4, T, Elems>
     }
 };
 
-template <CmpOp Op, typename T, unsigned Elems>
-struct cmp_zero_bits_impl<Op, 4, T, Elems>
+template <CmpOp Op, unsigned TypeBits, typename T, unsigned Elems>
+    requires (TypeBits < 8)
+struct cmp_zero_bits_impl<Op, TypeBits, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T> / 2;
+    static constexpr unsigned subbyte_elems = 8 / TypeBits;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems> / subbyte_elems;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
     using   mask_type = mask<Elems>;
     using   next_type = utils::get_next_integer_type_t<T>;
-    using   op_traits = compare_zero_traits<Op, T>;
+    using   op_traits = compare_zero_traits<Op>;
+
+    // Some operators such as ::ne negate the bits coming from another op (::eq) since we may need to combine multiple
+    // masks together, we use the original operator instead and then perform the bitwise negation once the combination
+    // is done
+    using native_impl = cmp_zero_bits_impl<op_traits::get_derived(), 8, next_type, native_elems>;
+    static constexpr auto derived_post_op = op_traits::get_post_op();
 
     __aie_inline
     static mask_type run(const vector_type &v)
     {
         if constexpr (Elems <= native_elems) {
-            using sub_op = cmp_zero_bits_impl<Op, 8, next_type, native_elems>;
-            auto m = sub_op::run(v.template grow<native_elems>().unpack());
-            return m.template extract<Elems>(0);
+            auto m = native_impl::run(v.template grow<native_elems>().unpack());
+            return derived_post_op(m.template extract<Elems>(0));
         }
         else {
-            constexpr bool is_derived = op_traits::is_derived();
-            constexpr CmpOp derived_op = op_traits::get_derived();
-            using sub_op = cmp_zero_bits_impl<derived_op, 8, next_type, native_elems>;
-
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                m.insert(idx, sub_op::run(v.template extract<native_elems>(idx).unpack()));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx).unpack());
             });
 
-            if constexpr (is_derived)
-                return ~m;
-            else
-                return m;
+            return derived_post_op(mask_type::from_masks(masks));
         }
     }
 };
@@ -185,33 +186,34 @@ struct cmp_zero_bits_impl<Op, 4, T, Elems>
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_bits_impl<Op, 8, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
-    using vector_type = vector<T, Elems>;
-    using   mask_type = mask<Elems>;
-    using   op_traits = compare_vector_traits<Op, T>;
-    using native_impl = cmp_bits_impl<Op, 8, T, native_elems>;
+    using      vector_type = vector<T, Elems>;
+    using        mask_type = mask<Elems>;
+    using        op_traits = compare_vector_traits<Op, T>;
+    using      native_impl = cmp_bits_impl<Op, 8, T, native_elems>;
+
 
     static constexpr auto op = op_traits::get_op();
 
     __aie_inline
     static mask_type run(const vector_type &v1, const vector_type &v2)
     {
-        if constexpr (Elems < native_elems) {
-            const uint64_t a = op(v1.template grow<native_elems>(), v2.template grow<native_elems>());
+        if constexpr (Elems <= native_elems) {
+            const auto a = op(v1.template grow<native_elems>(), v2.template grow<native_elems>());
 
-            return mask_type::from_uint32((unsigned)a);
+                return mask_type::from_uint64(a);
         }
         else {
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                m.insert(idx, mask<native_elems>::from_uint64(op(v1.template extract<native_elems>(idx),
-                                                                 v2.template extract<native_elems>(idx))));
+                masks[idx] = native_impl::run(v1.template extract<native_elems>(idx),
+                                              v2.template extract<native_elems>(idx));
             });
 
-            return m;
+            return mask_type::from_masks(masks);
         }
     }
 
@@ -221,13 +223,13 @@ struct cmp_bits_impl<Op, 8, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(vals, v.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(broadcast<T, Elems>::run(a), v);
@@ -240,13 +242,13 @@ struct cmp_bits_impl<Op, 8, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx), vals);
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(v, broadcast<T, Elems>::run(a));
@@ -257,12 +259,14 @@ struct cmp_bits_impl<Op, 8, T, Elems>
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_zero_bits_impl<Op, 8, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
-    using vector_type = vector<T, Elems>;
-    using   mask_type = mask<Elems>;
-    using   op_traits = compare_zero_traits<Op, T>;
+    using      vector_type = vector<T, Elems>;
+    using        mask_type = mask<Elems>;
+    using native_mask_type = mask<native_elems>;
+    using        op_traits = compare_zero_traits<Op>;
+    using        native_op = cmp_zero_bits_impl<Op, 8, T, native_elems>;
 
     static constexpr auto op = op_traits::get_op();
 
@@ -270,20 +274,22 @@ struct cmp_zero_bits_impl<Op, 8, T, Elems>
     static mask_type run(const vector_type &v)
     {
         if constexpr (Elems < native_elems) {
-            const uint64_t a = op(v.template grow<64>());
+            native_mask_type result = native_op::run(v.template grow<native_elems>());
+            return result.template extract<Elems>(0);
+        }
+        else if constexpr (Elems == native_elems) {
+            const auto a = op(v);
 
-            return mask_type::from_uint32((unsigned)a);
+                return mask_type::from_uint64(a);
         }
         else {
-            using sub_op = cmp_zero_bits_impl<Op, 8, T, native_elems>;
-
-            mask_type m;
+            native_mask_type masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                m.insert(idx, sub_op::run(v.template extract<native_elems>(idx)));
+                masks[idx] = native_op::run(v.template extract<native_elems>(idx));
             });
 
-            return m;
+            return mask_type::from_masks(masks);
         }
     }
 };
@@ -291,7 +297,7 @@ struct cmp_zero_bits_impl<Op, 8, T, Elems>
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_bits_impl<Op, 16, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -304,20 +310,31 @@ struct cmp_bits_impl<Op, 16, T, Elems>
     __aie_inline
     static mask_type run(const vector_type &v1, const vector_type &v2)
     {
-        if constexpr (Elems <= native_elems) {
-            const unsigned result = op(v1.template grow<32>(), v2.template grow<32>());
+        if constexpr (Elems < native_elems) {
+            mask<native_elems> result = native_impl::run(v1.template grow<native_elems>(),
+                                                         v2.template grow<native_elems>());
 
-            return mask_type::from_uint32(result);
+            return result.template extract<Elems>(0);
+        }
+        else if constexpr (Elems == native_elems) {
+            const auto result = op(v1, v2);
+
+            // Compare instructions for less than 32 vector lanes have all insignificant bits set to zero
+            static_assert(native_elems <= 64);
+            if constexpr (native_elems <= 32)
+                return mask_type::from_uint32(assume_zero_padding_t{}, result);
+            else
+                return mask_type::from_uint64(assume_zero_padding_t{}, result);
         }
         else {
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                ret.insert(idx, mask<native_elems>::from_uint32(op(v1.template extract<native_elems>(idx),
-                                                                   v2.template extract<native_elems>(idx))));
+                masks[idx] = native_impl::run(v1.template extract<native_elems>(idx),
+                                              v2.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
     }
 
@@ -327,13 +344,13 @@ struct cmp_bits_impl<Op, 16, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(vals, v.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(broadcast<T, Elems>::run(a), v);
@@ -346,13 +363,13 @@ struct cmp_bits_impl<Op, 16, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx), vals);
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(v, broadcast<T, Elems>::run(a));
@@ -363,40 +380,43 @@ struct cmp_bits_impl<Op, 16, T, Elems>
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_zero_bits_impl<Op, 16, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
     using   mask_type = mask<Elems>;
-    using   op_traits = compare_zero_traits<Op, T>;
+    using   op_traits = compare_zero_traits<Op>;
+
+    // Some operators such as ::ne negate the bits coming from another op (::eq) since we may need to combine multiple
+    // masks together, we use the original operator instead and then perform the bitwise negation once the combination
+    // is done
+    using native_impl = cmp_zero_bits_impl<op_traits::get_derived(), 16, T, native_elems>;
+    static constexpr auto derived_post_op = op_traits::get_post_op();
 
     __aie_inline
     static mask_type run(const vector_type &v)
     {
-        if constexpr (Elems <= native_elems) {
+        if constexpr (Elems < native_elems) {
+            auto result = native_impl::run(v.template grow<native_elems>());
+            return derived_post_op(result.template extract<Elems>(0));
+        } else if constexpr (Elems == native_elems) {
             constexpr auto op = op_traits::get_op();
-            const uint32_t a = op(v.template grow<native_elems>());
+            const auto a = op(v);
 
-            return mask_type::from_uint32(a);
+            static_assert(native_elems <= 64);
+            if constexpr (native_elems <= 32)
+                return mask_type::from_uint32(assume_zero_padding_t{}, a);
+            else
+                return mask_type::from_uint64(assume_zero_padding_t{}, a);
         }
         else {
-            // Some operators such as ::ne negate the bits coming from another op (::eq)
-            // since we need to mask some of the bits to combine the upper and lower 16bit,
-            // we use the original operator instead and then perform the bitwise negation once the combination is done
-            constexpr bool is_derived = op_traits::is_derived();
-            constexpr CmpOp derived_op = op_traits::get_derived();
-            using sub_op = cmp_zero_bits_impl<derived_op, 16, T, native_elems>;
-
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                m.insert(idx, sub_op::run(v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx));
             });
 
-            if constexpr (is_derived)
-                return ~m;
-            else
-                return m;
+            return derived_post_op(mask_type::from_masks(masks));
         }
     }
 };
@@ -431,7 +451,7 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
             return mask_type::from_uint32(result);
         }
         else {
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
                 accum<accfloat, native_elems> acc(v1.template extract<native_elems>(idx));
@@ -440,10 +460,10 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
                 const vector<T, acc_elems> v1_1 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(0), zero));
                 const vector<T, acc_elems> v1_2 = ::to_v16bfloat16(::add(acc.template extract<acc_elems>(1), zero));
 
-                m.insert(idx, mask<native_elems>::from_uint32(op(::concat(v1_1, v1_2), v2.template extract<native_elems>(idx))));
+                masks[idx] = mask<native_elems>::from_uint32(op(::concat(v1_1, v1_2), v2.template extract<native_elems>(idx)));
             });
 
-            return m;
+            return mask_type::from_masks(masks);
         }
     }
 
@@ -453,13 +473,13 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(vals, v.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(broadcast<T, Elems>::run(a), v);
@@ -472,20 +492,20 @@ struct cmp_bits_impl<Op, 16, bfloat16, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx), vals);
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(v, broadcast<T, Elems>::run(a));
         }
     }
 };
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 ||  __AIE_ARCH__ == 22
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_bits_impl_float16_common
 {
@@ -516,24 +536,29 @@ struct cmp_bits_impl_float16_common
             return mask_type::from_uint32(result);
         }
         else {
-            mask_type m;
+            mask<native_elems> masks[num_ops];
 
+            auto out_it = std::begin(masks);
             utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
                 accum<accfloat, acc_elems> acc(v1.template extract<acc_elems>(idx));
                 accum<accfloat, acc_elems> zero = zeros_acc<AccumClass::FP, 32, acc_elems>::run();
 
                 const accum<accfloat, acc_elems> acc_war = ::add(acc, zero);
 
-                const vector<T, native_elems> v1_1 = acc_war.template extract<native_elems>(0).template to_vector<T>();
-                const vector<T, native_elems> v1_2 = acc_war.template extract<native_elems>(1).template to_vector<T>();
+                vector<T, native_elems> v1_1, v1_2, v2_1, v2_2;
+                v1_1 = acc_war.template extract<native_elems>(0).template to_vector<T>();
+                v1_2 = acc_war.template extract<native_elems>(1).template to_vector<T>();
 
-                const unsigned result1 = op(v1_1, v2.template extract<native_elems>(0));
-                const unsigned result2 = op(v1_2, v2.template extract<native_elems>(1));
+                std::tie(v2_1, v2_2) = v2.template extract<acc_elems>(idx).template split<native_elems>();
 
-                m.insert(idx, mask<2 * native_elems>::from_uint32(result1, result2));
+                const unsigned result1 = op(v1_1, v2_1);
+                const unsigned result2 = op(v1_2, v2_2);
+
+                *out_it++ = mask<native_elems>::from_uint32(assume_zero_padding_t{}, result1);
+                *out_it++ = mask<native_elems>::from_uint32(assume_zero_padding_t{}, result2);
             });
 
-            return m;
+            return mask_type::from_masks(masks);
         }
     }
 
@@ -543,13 +568,13 @@ struct cmp_bits_impl_float16_common
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(vals, v.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(broadcast<T, Elems>::run(a), v);
@@ -562,13 +587,13 @@ struct cmp_bits_impl_float16_common
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx), vals);
             });
 
-            return ret;
+            return mask_type::from_masks(masks);
         }
         else {
             return run(v, broadcast<T, Elems>::run(a));
@@ -579,53 +604,60 @@ struct cmp_bits_impl_float16_common
 template <CmpOp Op, unsigned Elems>
 struct cmp_bits_impl<Op, 16, bfloat16, Elems> : public cmp_bits_impl_float16_common<Op, bfloat16, Elems> {};
 
+#if __AIE_API_FP16_SUPPORT__
+template <CmpOp Op, unsigned Elems>
+struct cmp_bits_impl<Op, 16,  float16, Elems> : public cmp_bits_impl_float16_common<Op,  float16, Elems> {};
+#endif
+
 #endif
 
 template <CmpOp Op, typename T, unsigned Elems>
 struct cmp_bits_impl<Op, 32, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
     using   mask_type = mask<Elems>;
     using   op_traits = compare_vector_traits<Op, T>;
-    using native_impl = cmp_bits_impl<Op, 32, T, native_elems>;
+
+    // Some operators such as ::ne negate the bits coming from another op (::eq) since we may need to combine multiple
+    // masks together, we use the original operator instead and then perform the bitwise negation once the combination
+    // is done
+    using native_impl = cmp_bits_impl<op_traits::get_derived(), 32, T, native_elems>;
+    static constexpr auto derived_post_op = op_traits::get_post_op();
 
     __aie_inline
     static mask_type run(const vector_type &v1, const vector_type &v2)
     {
+
         if constexpr (vector_type::is_complex()) {
             return cmp_bits_impl<Op, 32, int32, Elems>::run(v1.template cast_to<int32>(), v2.template cast_to<int32>());
         }
+        else if constexpr (Elems < native_elems) {
+            mask<native_elems> result = native_impl::run(v1.template grow<native_elems>(),
+                                                         v2.template grow<native_elems>());
+            return derived_post_op(result.template extract<Elems>(0));
+        }
+        else if constexpr (Elems == native_elems) {
+            auto op = op_traits::get_op();
+            const auto result = op(v1, v2);
+
+            static_assert(native_elems <= 64);
+            if constexpr (native_elems <= 32)
+                return mask_type::from_uint32(assume_zero_padding_t{}, result);
+            else
+                return mask_type::from_uint64(assume_zero_padding_t{}, result);
+        }
         else {
-            if constexpr (Elems <= native_elems) {
-                auto op = op_traits::get_op();
-                const unsigned result = op(v1.template grow<native_elems>(), v2.template grow<native_elems>());
+            mask<native_elems> masks[num_ops];
 
-                return mask_type::from_uint32(result);
-            }
-            else {
-                // Some operators such as ::ne negate the bits coming from another op (::eq)
-                // since we need to mask some of the bits to combine the upper and lower 16bit,
-                // we use the original operator instead and then perform the bitwise negation once the combination is done
-                constexpr bool is_derived = op_traits::is_derived();
-                constexpr auto op = op_traits::get_derived_op();
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                masks[idx] = native_impl::run(v1.template extract<native_elems>(idx),
+                                              v2.template extract<native_elems>(idx));
+            });
 
-                mask_type m;
-
-                utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
-                    const unsigned result1 = op(v1.template extract<16>(2 * idx + 0), v2.template extract<16>(2 * idx + 0));
-                    const unsigned result2 = op(v1.template extract<16>(2 * idx + 1), v2.template extract<16>(2 * idx + 1));
-
-                    m.insert(idx, mask<2 * native_elems>::from_uint32(result2 << 16 | result1));
-                });
-
-                if constexpr (is_derived)
-                    return ~m;
-                else
-                    return m;
-            }
+            return derived_post_op(mask_type::from_masks(masks));
         }
     }
 
@@ -635,13 +667,13 @@ struct cmp_bits_impl<Op, 32, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
+                masks[idx] = native_impl::run(vals, v.template extract<native_elems>(idx));
             });
 
-            return ret;
+            return derived_post_op(mask_type::from_masks(masks));
         }
         else {
             return run(broadcast<T, Elems>::run(a), v);
@@ -654,13 +686,13 @@ struct cmp_bits_impl<Op, 32, T, Elems>
         if constexpr (Elems > native_elems) {
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
-            mask_type ret;
+            mask<native_elems> masks[num_ops];
 
             utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx), vals);
             });
 
-            return ret;
+            return derived_post_op(mask_type::from_masks(masks));
         }
         else {
             return run(v, broadcast<T, Elems>::run(a));
@@ -672,12 +704,18 @@ template <CmpOp Op, typename T, unsigned Elems>
     requires(!is_floating_point_v<T>)
 struct cmp_zero_bits_impl<Op, 32, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
     using   mask_type = mask<Elems>;
-    using   op_traits = compare_zero_traits<Op, T>;
+    using   op_traits = compare_zero_traits<Op>;
+
+    // Some operators such as ::ne negate the bits coming from another op (::eq) since we may need to combine multiple
+    // masks together, we use the original operator instead and then perform the bitwise negation once the combination
+    // is done
+    using native_impl = cmp_zero_bits_impl<op_traits::get_derived(), 32, T, native_elems>;
+    static constexpr auto derived_post_op = op_traits::get_post_op();
 
     __aie_inline
     static mask_type run(const vector_type &v)
@@ -685,38 +723,33 @@ struct cmp_zero_bits_impl<Op, 32, T, Elems>
         if constexpr (vector_type::is_complex()) {
             return cmp_zero_bits_impl<Op, 32, int32, Elems>::run(v.template cast_to<int32>());
         }
+        else if constexpr (Elems < native_elems) {
+            mask<native_elems> result = native_impl::run(v.template grow<native_elems>());
+            return derived_post_op(result.template extract<Elems>(0));
+        }
+        else if constexpr (Elems == native_elems) {
+            constexpr auto op = op_traits::get_op();
+            const auto result = op(v);
+
+            static_assert(native_elems <= 64);
+            if constexpr (native_elems <= 32)
+                return mask_type::from_uint32(assume_zero_padding_t{}, result);
+            else
+                return mask_type::from_uint64(assume_zero_padding_t{}, result);
+        }
         else {
-            if constexpr (Elems <= native_elems) {
-                constexpr auto op = op_traits::get_op();
-                const unsigned result = op(v.template grow<16>());
 
-                return mask_type::from_uint32(result);
-            }
-            else {
-                // Some operators such as ::ne negate the bits coming from another op (::eq)
-                // since we need to mask some of the bits to combine the upper and lower 16bit,
-                // we use the original operator instead and then perform the bitwise negation once the combination is done
-                constexpr bool is_derived = op_traits::is_derived();
-                constexpr auto op = op_traits::get_derived_op();
+            mask<native_elems> masks[num_ops];
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                masks[idx] = native_impl::run(v.template extract<native_elems>(idx));
+            });
 
-                mask_type m;
-
-                utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
-                    const unsigned result1 = op(v.template extract<native_elems>(2 * idx + 0));
-                    const unsigned result2 = op(v.template extract<native_elems>(2 * idx + 1));
-
-                    m.insert(idx, mask<2 * native_elems>::from_uint32(result2 << 16 | result1));
-                });
-
-                if constexpr (is_derived)
-                    return ~m;
-                else
-                    return m;
-            }
+            return derived_post_op(mask_type::from_masks(masks));
         }
     }
 };
 
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 // We need this specialisation because comparisons against zero have support for
 // an additional comparison mode (GT, and the complementary LE)
 // None of the zero comparators are available for float, so we fall back to vector
@@ -745,12 +778,14 @@ struct cmp_zero_bits_impl<Op, 32, T, Elems>
         }
     }
 };
+#endif
 
+#if __AIE_API_CINT_SUPPORT__
 template <CmpOp Op, unsigned Elems>
 struct cmp_bits_impl<Op, 64, cint32, Elems>
 {
     static constexpr unsigned native_elems = native_vector_length_v<cint32>;
-    static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
+    static constexpr unsigned      num_ops = std::max(1u, Elems / 16);
 
     using           T = cint32;
     using vector_type = vector<T, Elems>;
@@ -763,79 +798,79 @@ struct cmp_bits_impl<Op, 64, cint32, Elems>
     __aie_inline
     static mask_type run(const vector_type &v1, const vector_type &v2)
     {
+        constexpr auto base_op = op_traits::get_derived_op();
+        constexpr auto post_op = op_traits::get_post_op();
         if constexpr (Elems <= native_elems) {
             // TODO: investigate performance optimizations for vectors smaller than 16
-            vector<int32, 16> v1_r = (v16int32)::shuffle(v1.template grow<8>(), vector<cint32, 8>(), DINTLV_lo_32o64);
-            vector<int32, 16> v1_i = (v16int32)::shuffle(v1.template grow<8>(), vector<cint32, 8>(), DINTLV_hi_32o64);
-            vector<int32, 16> v2_r = (v16int32)::shuffle(v2.template grow<8>(), vector<cint32, 8>(), DINTLV_lo_32o64);
-            vector<int32, 16> v2_i = (v16int32)::shuffle(v2.template grow<8>(), vector<cint32, 8>(), DINTLV_hi_32o64);
+            vector<int32, native_elems> v1_r, v1_i, v2_r, v2_i;
+            std::tie(v1_r, v1_i) = unzip_complex(v1.template grow<native_elems>());
+            std::tie(v2_r, v2_i) = unzip_complex(v2.template grow<native_elems>());
 
-            const unsigned result_r = op(v1_r, v2_r);
-            const unsigned result_i = op(v1_i, v2_i);
+            const unsigned result_r = base_op(v1_r.template grow<16>(), v2_r.template grow<16>());
+            const unsigned result_i = base_op(v1_i.template grow<16>(), v2_i.template grow<16>());
 
-            if constexpr (Op == CmpOp::NEQ)
-                return mask_type::from_uint32(result_r | result_i);
-            else
-                return mask_type::from_uint32(result_r & result_i);
+            return post_op(mask_type::from_uint32(result_r & result_i));
         }
         else {
-            mask_type m;
+            mask<16> masks[num_ops];
 
-            utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
-                vector<int32, 16> v1_r = (v16int32)::shuffle(v1.template extract<8>(2 * idx + 0), v1.template extract<8>(2 * idx + 1), DINTLV_lo_32o64);
-                vector<int32, 16> v1_i = (v16int32)::shuffle(v1.template extract<8>(2 * idx + 0), v1.template extract<8>(2 * idx + 1), DINTLV_hi_32o64);
-                vector<int32, 16> v2_r = (v16int32)::shuffle(v2.template extract<8>(2 * idx + 0), v2.template extract<8>(2 * idx + 1), DINTLV_lo_32o64);
-                vector<int32, 16> v2_i = (v16int32)::shuffle(v2.template extract<8>(2 * idx + 0), v2.template extract<8>(2 * idx + 1), DINTLV_hi_32o64);
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                vector<int32, 16> v1_r, v1_i, v2_r, v2_i;
+                std::tie(v1_r, v1_i) = unzip_complex(v1.template extract<16>(idx));
+                std::tie(v2_r, v2_i) = unzip_complex(v2.template extract<16>(idx));
 
-                const unsigned result_r = op(v1_r, v2_r);
-                const unsigned result_i = op(v1_i, v2_i);
+                const unsigned result_r = base_op(v1_r, v2_r);
+                const unsigned result_i = base_op(v1_i, v2_i);
 
-                if constexpr (Op == CmpOp::NEQ)
-                    m.insert(idx, mask<2 * native_elems>::from_uint32(result_r | result_i));
-                else
-                    m.insert(idx, mask<2 * native_elems>::from_uint32(result_r & result_i));
+                masks[idx] = mask<16>::from_uint32(assume_zero_padding_t{}, result_r & result_i);
             });
 
-            return m;
+            return post_op(mask_type::from_masks(masks));
         }
     }
 
     __aie_inline
     static mask_type run(T a, const vector_type &v)
     {
-        if constexpr (Elems > native_elems) {
-            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+        constexpr unsigned base_elems   = native_vector_length_v<int32>;
+        constexpr unsigned base_num_ops = std::max(1u, Elems / base_elems);
+        constexpr auto post_op          = op_traits::get_post_op();
 
-            mask_type ret;
+        using base_impl = cmp_bits_impl<op_traits::get_derived(), 32, int32, base_elems>;
 
-            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(vals, v.template extract<native_elems>(idx)));
-            });
+        mask<base_elems> masks[base_num_ops];
+        utils::unroll_times<base_num_ops>([&](unsigned idx) __aie_inline {
+            auto [real, imag] = unzip_complex(v.template grow_extract<base_elems>(idx));
+            masks[idx] = base_impl::run(a.real, real)
+                       & base_impl::run(a.imag, imag);
+        });
 
-            return ret;
-        }
-        else {
-            return run(broadcast<T, Elems>::run(a), v);
-        }
+        if constexpr (Elems < base_elems)
+            return post_op(masks[0].template extract<Elems>(0));
+        else
+            return post_op(mask_type::from_masks(masks));
     }
 
     __aie_inline
     static mask_type run(const vector_type &v, T a)
     {
-        if constexpr (Elems > native_elems) {
-            const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
+        constexpr unsigned base_elems   = native_vector_length_v<int32>;
+        constexpr unsigned base_num_ops = std::max(1u, Elems / base_elems);
+        constexpr auto post_op          = op_traits::get_post_op();
 
-            mask_type ret;
+        using base_impl = cmp_bits_impl<op_traits::get_derived(), 32, int32, base_elems>;
 
-            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
-                ret.template insert<native_elems>(idx, native_impl::run(v.template extract<native_elems>(idx), vals));
-            });
+        mask<base_elems> masks[base_num_ops];
+        utils::unroll_times<base_num_ops>([&](unsigned idx) __aie_inline {
+            auto [real, imag] = unzip_complex(v.template grow_extract<base_elems>(idx));
+            masks[idx] = base_impl::run(real, a.real)
+                       & base_impl::run(imag, a.imag);
+        });
 
-            return ret;
-        }
-        else {
-            return run(v, broadcast<T, Elems>::run(a));
-        }
+        if constexpr (Elems < base_elems)
+            return post_op(masks[0].template extract<Elems>(0));
+        else
+            return post_op(mask_type::from_masks(masks));
     }
 };
 
@@ -843,57 +878,49 @@ template <CmpOp Op, unsigned Elems>
 struct cmp_zero_bits_impl<Op, 64, cint32, Elems>
 {
     static constexpr unsigned native_elems = native_vector_length_v<cint32>;
-    static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
+    static constexpr unsigned      num_ops = std::max(1u, Elems / 16);
 
     using           T = cint32;
     using vector_type = vector<T, Elems>;
     using   mask_type = mask<Elems>;
-    using   op_traits = compare_zero_traits<Op, T>;
+    using   op_traits = compare_zero_traits<Op>;
 
     static constexpr auto op = op_traits::get_op();
 
     __aie_inline
     static mask_type run(const vector_type &v)
     {
+        constexpr auto base_op = op_traits::get_derived_op();
+        constexpr auto post_op = op_traits::get_post_op();
+
         if constexpr (Elems <= native_elems) {
             // TODO: investigate performance optimizations for vectors smaller than 16
-            // TODO: use detail::unzip_complex
-            auto lo = v.template cast_to<int32>().template grow<16>();
-            vector<int32, 16> v_r = ::shuffle(lo, {}, DINTLV_lo_32o64);
-            vector<int32, 16> v_i = ::shuffle(lo, {}, DINTLV_hi_32o64);
+            auto [v_r, v_i] = unzip_complex(v.template grow<native_elems>());
 
-            const unsigned result_r = op(v_r);
-            const unsigned result_i = op(v_i);
+            const unsigned result_r = base_op(v_r.template grow<16>());
+            const unsigned result_i = base_op(v_i.template grow<16>());
 
-            if constexpr (Op == CmpOp::NEQ)
-                return mask_type::from_uint32(result_r | result_i);
-            else
-                return mask_type::from_uint32(result_r & result_i);
+            return post_op(mask_type::from_uint32(result_r & result_i));
         }
         else {
-            mask_type m;
+            mask<16> masks[num_ops];
 
-            utils::unroll_times<num_ops / 2>([&](unsigned idx) __aie_inline {
-                auto [lo, hi] = v.template extract<16>(idx)
-                                 .template cast_to<int32>()
-                                 .template split<16>();
-                vector<int32, 16> v_r = ::shuffle(lo, hi, DINTLV_lo_32o64);
-                vector<int32, 16> v_i = ::shuffle(lo, hi, DINTLV_hi_32o64);
+            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
+                auto [v_r, v_i] = unzip_complex(v.template extract<16>(idx));
 
-                const unsigned result_r = op(v_r);
-                const unsigned result_i = op(v_i);
+                const unsigned result_r = base_op(v_r);
+                const unsigned result_i = base_op(v_i);
 
-                if constexpr (Op == CmpOp::NEQ)
-                    m.insert(idx, mask<16>::from_uint32(result_r | result_i));
-                else
-                    m.insert(idx, mask<16>::from_uint32(result_r & result_i));
+                masks[idx] = mask<16>::from_uint32(assume_zero_padding_t{}, result_r & result_i);
             });
 
-            return m;
+            return post_op(mask_type::from_masks(masks));
         }
     }
 };
+#endif
 
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 template <CmpOp Op, unsigned TypeBits, typename T, unsigned Elems>
 struct cmp_bits_impl_float_common
 {
@@ -945,11 +972,100 @@ struct cmp_bits_impl<CmpOp::EQ,  32, float,    Elems> : public cmp_bits_impl_flo
 
 template <unsigned Elems>
 struct cmp_bits_impl<CmpOp::NEQ, 32, float,    Elems> : public cmp_bits_impl_float_common<CmpOp::NEQ, 32, float,    Elems> {};
+#endif
+
+#if __AIE_API_CFP32_SUPPORT__
+template <CmpOp Op, typename T, unsigned Elems>
+struct cmp_bits_impl_cplx_float
+{
+    using vector_type = vector<T, Elems>;
+    using   mask_type = mask<Elems>;
+
+    static constexpr unsigned tmp_elems = std::max(512 / type_bits_v<T>, Elems);
+    using mask_tmp_type = mask<tmp_elems>;
+
+    using component_type = decltype(T().real);
+
+    __aie_inline
+    static mask_type run(const vector_type &v1, const vector_type &v2)
+    {
+        auto [v1_real, v1_imag] = interleave_unzip<component_type, tmp_elems>::run(
+            v1.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(0),
+            v1.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(1),
+            1
+        );
+
+        auto [v2_real, v2_imag] = interleave_unzip<component_type, tmp_elems>::run(
+            v2.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(0),
+            v2.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(1),
+            1
+        );
+
+        mask_tmp_type m1 = cmp_impl<Op, component_type, tmp_elems>::run(v1_real, v2_real);
+        mask_tmp_type m2 = cmp_impl<Op, component_type, tmp_elems>::run(v1_imag, v2_imag);
+
+        if      constexpr (Op == CmpOp::EQ)
+            return mask_type::from_uint32(m1.to_uint32(0) & m2.to_uint32(0));
+        else if constexpr (Op == CmpOp::NEQ)
+            return mask_type::from_uint32(m1.to_uint32(0) | m2.to_uint32(0));
+    }
+
+    __aie_inline
+    static mask_type run(T a, const vector_type &v)
+    {
+        auto [v_real, v_imag] = interleave_unzip<component_type, tmp_elems>::run(
+            v.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(0),
+            v.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(1),
+            1
+        );
+
+        mask_tmp_type m1 = cmp_impl<Op, component_type, tmp_elems>::run(a.real, v_real);
+        mask_tmp_type m2 = cmp_impl<Op, component_type, tmp_elems>::run(a.imag, v_imag);
+
+        if      constexpr (Op == CmpOp::EQ)
+            return mask_type::from_uint32(m1.to_uint32(0) & m2.to_uint32(0));
+        else if constexpr (Op == CmpOp::NEQ)
+            return mask_type::from_uint32(m1.to_uint32(0) | m2.to_uint32(0));
+    }
+
+    __aie_inline
+    static mask_type run(const vector_type &v, T a)
+    {
+        auto [v_real, v_imag] = interleave_unzip<component_type, tmp_elems>::run(
+            v.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(0),
+            v.template grow<tmp_elems>().template cast_to<component_type>().template extract<tmp_elems>(1),
+            1
+        );
+
+        mask_tmp_type m1 = cmp_impl<Op, component_type, tmp_elems>::run(v_real, a.real);
+        mask_tmp_type m2 = cmp_impl<Op, component_type, tmp_elems>::run(v_imag, a.imag);
+
+        if      constexpr (Op == CmpOp::EQ)
+            return mask_type::from_uint32(m1.to_uint32(0) & m2.to_uint32(0));
+        else if constexpr (Op == CmpOp::NEQ)
+            return mask_type::from_uint32(m1.to_uint32(0) | m2.to_uint32(0));
+    }
+};
+
+template <unsigned Elems>
+struct cmp_bits_impl<CmpOp::EQ,  64, cfloat,    Elems> : public cmp_bits_impl_cplx_float<CmpOp::EQ,  cfloat, Elems> {};
+
+template <unsigned Elems>
+struct cmp_bits_impl<CmpOp::NEQ, 64, cfloat,    Elems> : public cmp_bits_impl_cplx_float<CmpOp::NEQ, cfloat, Elems> {};
+
+#if __AIE_API_CBF16_SUPPORT__
+template <unsigned Elems>
+struct cmp_bits_impl<CmpOp::EQ,  32, cbfloat16, Elems> : public cmp_bits_impl_cplx_float<CmpOp::EQ,  cbfloat16, Elems> {};
+
+template <unsigned Elems>
+struct cmp_bits_impl<CmpOp::NEQ, 32, cbfloat16, Elems> : public cmp_bits_impl_cplx_float<CmpOp::NEQ, cbfloat16, Elems> {};
+#endif
+#endif
 
 template <typename T, unsigned Elems>
 struct equal_bits_impl<4, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T> / 2;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems> / 2;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -1003,7 +1119,7 @@ struct equal_bits_impl<4, T, Elems>
 template <typename T, unsigned Elems>
 struct equal_bits_impl<8, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -1057,7 +1173,7 @@ struct equal_bits_impl<8, T, Elems>
 template <typename T, unsigned Elems>
 struct equal_bits_impl<16, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -1124,7 +1240,7 @@ struct equal_bits_impl<16, T, Elems>
 template <typename T, unsigned Elems>
 struct equal_bits_impl<32, T, Elems>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -1185,7 +1301,7 @@ struct equal_bits_impl<32, float, Elems>
     using           T = float;
     using vector_type = vector<T, Elems>;
 
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using native_impl = equal_bits_impl<32, T, native_elems>;
@@ -1240,7 +1356,7 @@ struct equal_bits_impl<64, T, Elems>
 {
     using vector_type = vector<T, Elems>;
 
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using native_impl = equal_bits_impl<64, T, native_elems>;

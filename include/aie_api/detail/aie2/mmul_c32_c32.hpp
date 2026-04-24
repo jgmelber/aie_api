@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_MMUL_C32_C32__HPP__
 #define __AIE_API_DETAIL_AIE2_MMUL_C32_C32__HPP__
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 
 #include "../broadcast.hpp"
 
@@ -53,4 +55,5 @@ struct mmul<M, K, N, cint32, cint32, 64> : public mmul_c32_c32<M, K, N, 64> { us
 
 }
 
-#endif
+#endif // __AIE_API_COMPLEX_VECTOR_SUPPORT__
+#endif // __AIE_API_DETAIL_AIE2_MMUL_C32_C32__HPP__

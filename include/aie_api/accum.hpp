@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -25,7 +25,7 @@
 
 #include "detail/aie2/accum.hpp"
 
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
  
 #include "detail/aie2p/accum.hpp"
  
@@ -382,7 +382,7 @@ public:
      * \brief Applies shift-round-saturate to the elements of the accumulator and stores the result into a vector of the
      * requested type, keeping the original values unchanged.
      *
-     * \note On AIE-ML/XDNA 1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
+     * \note On AIE-ML/XDNA1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
      * is selected or saturation against 0 is required.
      *
      * @param shift Number of bits that need to be downshifted.
@@ -409,8 +409,8 @@ public:
      *
      * The original values are left unchanged.
      *
-     * \note Currently functional on AIE-ML/XDNA 1 or later architectures only.
-     * \note On AIE-ML/XDNA 1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
+     * \note Currently functional on AIE-ML/XDNA1 or later architectures only.
+     * \note On AIE-ML/XDNA1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
      * is selected or saturation against 0 is required.
      *
      * @param v_sign Returned vector is signed or not, regardless of the underlying type.
@@ -498,7 +498,7 @@ public:
      *
      * Allows for dynamic control of whether the values are considered signed or not.
      *
-     * \note Currently functional on AIE-ML/XDNA 1 or later architectures only.
+     * \note Currently functional on AIE-ML/XDNA1 or later architectures only.
      *
      * @param v      Input vector.
      * @param v_sign Values are considered signed or not, regardless of the underlying type.

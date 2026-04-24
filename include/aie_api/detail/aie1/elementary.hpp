@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_ELEMENTARY__HPP__
 #define __AIE_API_DETAIL_AIE1_ELEMENTARY__HPP__
+
+#include <algorithm>
 
 #include "../vector.hpp"
 
@@ -162,9 +164,9 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 32, TR, float, N>
             const vector<TR, 16> tmp = ::float2fix_vectorized(v.template grow_extract<16>(i), shift);
 
             if constexpr (N < 16)
-                ret.template insert(i, tmp.template extract<N>(i));
+                ret.insert(i, tmp.template extract<N>(i));
             else
-                ret.template insert(i, tmp);
+                ret.insert(i, tmp);
         });
 
         return ret;
@@ -191,9 +193,9 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 32, TR, float, N>
                 tmp = ::float2fix(v.template grow_extract<8>(i), shift);
 
             if constexpr (N == 4)
-                ret.template insert(i, tmp.template extract<4>(i));
+                ret.insert(i, tmp.template extract<4>(i));
             else
-                ret.template insert(i, tmp);
+                ret.insert(i, tmp);
         });
 
         return ret;
@@ -218,9 +220,9 @@ struct elementary_vector_bits_impl<ElementaryOp::Fix2Float, Bits, float, T, N>
             const vector<float, 16> tmp = ::fix2float_vectorized(v.template grow_extract<16>(i), shift);
 
             if constexpr (N < 16)
-                ret.template insert(i, tmp.template extract<N>(i));
+                ret.insert(i, tmp.template extract<N>(i));
             else
-                ret.template insert(i, tmp);
+                ret.insert(i, tmp);
         });
 
         return ret;
@@ -243,9 +245,9 @@ struct elementary_vector_bits_impl<ElementaryOp::Fix2Float, Bits, float, T, N>
             const vector<float, 8> tmp = ::fix2float(v.template grow_extract<8>(i), shift);
 
             if constexpr (N == 4)
-                ret.template insert(i, tmp.template extract<4>(i));
+                ret.insert(i, tmp.template extract<4>(i));
             else
-                ret.template insert(i, tmp);
+                ret.insert(i, tmp);
         });
 
         return ret;

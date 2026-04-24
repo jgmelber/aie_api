@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -97,11 +97,11 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
     using     vector_type = vector<T, N>;
 
     __aie_inline
-    static vector_ret_type run(const vector_type &v, int shift = 0, bool sign_dummy = false)
+    static vector_ret_type run(const vector_type &v, int shift = 0, bool v_sign = false)
     {
         constexpr unsigned N_Op = std::max(N, 32u);
 
-        using upper_t = std::conditional_t<std::is_signed_v<T>, int16, uint16>;
+        using upper_t = std::conditional_t<std::is_signed_v<TR>, int16, uint16>;
 
         using acc_fp_t  = aie::accum<accfloat, N_Op>;
         using acc_int_t = aie::accum<acc32, N_Op>;
@@ -175,10 +175,10 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
             acc_t tmp;
             tmp = add_accum<acc64, N_Op>::run(acc_t(out_h, 16), false, acc_t(out_lp));
             auto acc = sub_accum<acc64, N_Op>::run(tmp, false, acc_t(out_ln));
-            output = acc.template to_vector<TR>().template extract<N>(0);
+            output = acc.template to_vector_sign<TR>(v_sign).template extract<N>(0);
         }
         else {
-            output = vint.template to_vector<TR>().template extract<N>(0);
+            output = vint.template to_vector_sign<TR>(v_sign).template extract<N>(0);
         }
 
         tile::current().set_saturation(sat);
@@ -188,7 +188,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, Bits, TR, T, N>
 };
 
 template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int16, bfloat16, N>
+struct elementary_vector_bits_impl<ElementaryOp::Float2FixFloor, 16, int16, bfloat16, N>
 {
     using vector_ret_type = vector<int16, N>;
     using     vector_type = vector<bfloat16, N>;
@@ -221,7 +221,7 @@ struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int16, bfloat16,
 };
 
 template <unsigned N>
-struct elementary_vector_bits_impl<ElementaryOp::Float2Fix, 16, int32, bfloat16, N>
+struct elementary_vector_bits_impl<ElementaryOp::Float2FixFloor, 16, int32, bfloat16, N>
 {
     using vector_ret_type = vector<int32, N>;
     using     vector_type = vector<bfloat16, N>;

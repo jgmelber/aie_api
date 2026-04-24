@@ -1,19 +1,222 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 /**
 @page changelog Changelog
 
 @tableofcontents{html,latex}
 
-@section jan_2025 January 2025
+@section vitis_2026_1 Vitis 2026.1
+
+<h3>Documentation changes</h3>
+
+<ul>
+<li>Update FFT support matrix</li>
+<li>Add note to operator[] referencing the get function</li>
+<li>Add documentation to make_tensor_buffer_stream functions</li>
+<li>Miscellaneous doxygen build fixes</li>
+</ul>
 
 <h3>Global AIE API changes</h3>
 
 <ul>
-<li>Added XDNA2 support</li>
+<li>Use compiler-injected device topology defines in place of hand-maintained macros</li>
+<li>Fix stack overflow in int32 x int16 conv_corr</li>
 </ul>
+
+<h3>Changes to data types</h3>
+
+<ul>
+<li>vector: Improve vector concat from 128b chunks</li>
+<li>vector: Fix 64b extract index calculation</li>
+<li>accum: Fix ambiguous locate_in_register for accumulators</li>
+<li>mask: Simplify mask construction functions</li>
+<li>mask: Specialise 64b aie::mask implementation</li>
+<li>multidim: Add thin multidim wrappers</li>
+<li>multidim: Add dims_*d_t to aie::dim_*d conversion constructors</li>
+<li>multidim: Add definitions for multidim types on AIE1 and remove stale dims_*d_t references</li>
+<li>block_vector: Replace ::insert intrinsic with ::update for block vectors on __AIE_ARCH__=22</li>
+<li>Tensor buffer streams: Add a memory-cache-backed stream TBS implementation</li>
+<li>Tensor buffer streams: Add flush interface</li>
+<li>Tensor buffer streams: Add scalar support</li>
+<li>Tensor buffer streams: Add mask support</li>
+<li>Tensor buffer streams: Add data layout tags</li>
+<li>Tensor buffer streams: Allow creation of tensor descriptors with a contiguous_dim</li>
+<li>Tensor buffer streams: Change the direct stream TBS factory method</li>
+<li>Tensor buffer streams: Fix fifo_ld_fill in TBS implementation</li>
+<li>Tensor buffer streams: Fix scalar TBS on native</li>
+<li>Tensor buffer streams: Add resource annotation to fifo-based stream TBS implementations</li>
+<li>streams: Add support for new parallel stream</li>
+</ul>
+
+<h3>Changes to operations</h3>
+
+<ul>
+<li>filter: Optimize filter_bits_impl to compute only the needed half using hardcoded offsets</li>
+<li>unpack/pack/interleave_unzip: Optimize unpack + int16_interleave_unzip + pack for 8-bit step=1 on AIE1</li>
+<li>unpack: Unpack to int32 using VUPS</li>
+<li>to_fixed: Add bfloat16 to int16 conversion using 512b vectors</li>
+<li>to_fixed: Convert fp16/bf16 to int16 directly</li>
+<li>to_fixed: Add overload accepting a dynamic sign</li>
+<li>mul/mac: Add aie::op_neg control for sub_mul and sub_acc on element-wise muls</li>
+<li>mul: Fix 64-lane mul and scalar TBS push</li>
+<li>reduce_add/add_reduce: Fix reduce_add implementation argument order</li>
+<li>sliding_mul_ch: Native path fix</li>
+<li>sliding_mul_ch: Add set_convo_mode call to 32-channel cases</li>
+<li>set_convo_mode: Remove implicit set_convo_mode calls; callers must now set the mode explicitly</li>
+
+</ul>
+
+<h3>ADF integration</h3>
+
+<ul>
+</ul>
+
+@section vitis_2025_2 Vitis 2025.2
+
+<h3>Documentation changes</h3>
+
+<ul>
+<li>Add introduction section</li>
+<li>Examples moved to separated files that can be compiled individually</li>
+<li>Expanded section on block floating point vectors</li>
+<li>Misc aesthetic improvements</li>
+</ul>
+
+<h3>Global AIE API changes</h3>
+
+<ul>
+<li>Improved support for pipelined_loop(s) including constexpr detection of peeled sections (in_front, in_back, in_loop member functions)</li>
+<li>Leverage vector-scalar muls across the API on AIE-MLv2</li>
+</ul>
+
+<h3>Changes to data types</h3>
+
+<ul>
+<li>Tensor buffer streams: Enable user-configuration of dimension splits</li>
+<li>Tensor buffer streams: Add block type support on XDNA2 (bfp16ebs8) and AIE-MLv2 (mx9)</li>
+<li>Tensor buffer streams: Add acquire/release semantics when created with async io_buffers</li>
+<li>block_vector: Add support for arbitrary sized block_vectors</li>
+<li>vector: Improve simple element pushed to large vectors</li>
+</ul>
+
+<h3>Changes to operations</h3>
+
+<ul>
+<li>add_reduce: Accept accumulator inputs</li>
+<li>add_reduce: Optimize bfloat16 reductions</li>
+<li>add_reduce: Implemented tree reduction for inputs composed of multiple vector registers</li>
+<li>broadcast: Add broadcast_vector that initializes a large vector from a repeating sequence of values</li>
+<li>broadcast: Add overload accepting a list of scalar values, allowing vector initialization from a small repeating sequence of values</li>
+<li>cast: Reduce overhead of accumulator-vector conversions with same element representation (e.g. acc32-int32)</li>
+<li>compare: Improve efficiency of scalar floating point comparisons</li>
+<li>fft: Add cbfloat16 radix 3 and radix 5 support on AIE-ML and AIE-MLv2</li>
+<li>fft: Add cfloat radix 4 support on AIE-ML and AIE-MLv2</li>
+<li>filter: Expand filter_odd/filter_even to accept precomputed shuffle mode, allowing runtime selection of filter mode and step</li>
+<li>mmul: Add 2*8*2 modes for cbfloat16 and cfloat on AIE-ML</li>
+<li>mmul: Add 2*8*4 modes for cbfloat16 and cfloat on AIE-MLv2</li>
+<li>mac/mscmac_square: Add dynamic zeroization support with aie::op_zero</li>
+<li>sliding_mul: Add partial_sliding_mul, an object oriented interface that stores intermediate results in an optimal internal representation. This is specially beneficial when complex multiplications are emulated</li>
+<li>sliding_mul: Improved performance for cint16 x int16</li>
+<li>sliding_mul: Improved performance of emulated int32 and cint32 sliding_mul implementations on AIE-MLv2</li>
+<li>sliding_mul: Add dynamic zeroization support with aie::op_zero</li>
+</ul>
+
+<h3>ADF integration</h3>
+
+<ul>
+<li>Add APIs to create tensor buffer streams directly from ADF objects</li>
+</ul>
+
+
+@section vitis_2025_1 Vitis 2025.1
+
+<h3>Documentation changes</h3>
+
+<ul>
+<li>Document minimum point size for FFTs</li>
+<li>Add notes on emulated mmul modes</li>
+<li>Clarify lane requirements for complex * real sliding_muls</li>
+<li>Clarify requirement of using only native accum types with ADF APIs</li>
+<li>Update CSS rules for tables</li>
+<li>Clarify sparse_vector::extract_data behavior</li>
+<li>Invert AMD logo when viewing docs in dark mode</li>
+<li>Correct rounding modes in to_fixed documentation</li>
+<li>Move examples into separate files</li>
+<li>Document rounding/saturation mode APIs</li>
+</ul>
+
+<h3>Global AIE API changes</h3>
+
+<ul>
+<li>Expose the following helper functions</li>
+    <ul>
+    <li>unroll_for</li>
+    <li>unroll_times</li>
+    <li>locate_in_register</li>
+    <li>pipelined_loop</li>
+    <li>pipelined_loops</li>
+    </ul>
+<li>Add store_floor_v and store_floor_bytes_v APIs</li>
+<li>Add compile flag to disable default scalar implementations: __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__</li>
+<li>Change default behavior of to_fixed for bfloat16 to be in line with other types</li>
+<li>Add to_fixed_floor API for AIE-ML onwards</li>
+<li>Update inv/invsqrt implementation of XDNA2 and AIE-MLv2 to leverage scalar hardware implementation for improved accuracy</li>
+<li>Add zeroization support using aie::op_zero to mac, msc, mac_square, msc_square, sliding_mac, and sliding_msc</li>
+<li>Optimize unaligned loads for AIE-ML onwards</li>
+</ul>
+
+<h3>Changes to data types</h3>
+
+<ul>
+<li>Unaligned input stream: Fix fifo-based implementation on XDNA2 and AIE-MLv2</li>
+<li>Unaligned input stream: Add arbitrary vector size support</li>
+<li>Add float8 and float16 support on AIE-MLv2</li>
+<li>Add cbfloat16 support on AIE-MLv2</li>
+<li>Add scoped_mode RAII types for temporarily setting saturation/rounding modes</li>
+</ul>
+
+<h3>Changes to operations</h3>
+
+<ul>
+<li></li>
+<li>abs_square: Add support for AIE-ML onwards</li>
+<li>add/sub: Support arbitrary vector sizes</li>
+<li>add_reduce: Support arbitrary vector sizes</li>
+<li>compare: Add support for cbfloat16 and cfloat</li>
+<li>conj: Add support for cbfloat16 and cfloat</li>
+<li>fft: Optimize output stage for radix 4 FFTs taking cint16 input on AIE</li>
+<li>fft: Fix radix 2 and radix 4 upscaler stages on AIE</li>
+<li>fft: Leverage sub_mask for cbfloat16 FFTs improving performance</li>
+<li>fft: Add cfloat radix 2 support on AIE-ML and AIE-MLv2</li>
+<li>fft: Add integral mixed radix support on AIE-MLv2</li>
+<li>fft: Add cbfloat16 radix 2, 3, 4, and 5 support on AIE-ML</li>
+<li>min/max: Support arbitrary vector sizes</li>
+<li>min/max: Fix 4b implementations for dynamic sign and reductions</li>
+<li>mul/mac/msc: Add cbfloat16 support where support is available</li>
+<li>mmul: Add 4x2x4, 4x4x4 modes for c32b*c16b types and 4x2x4 for c32b*c32b types on AIE-ML</li>
+<li>mmul: Add 2x8x8 mode for 8b*8b types</li>
+<li>mmul: Add 8x8x8 mode for bfloat16*bfloat16 on XDNA2</li>
+<li>mmul: Add 8x8x8 mode for bfloat16*bfp16ebs8 on XDNA2</li>
+<li>mmul: Add cbfloat16 support where support is available</li>
+<li>mmul: Add 4*16*16 mode for 8b*4b on AIE-MLv2</li>
+<li>mmul: Add 4*8*8, 8x4x8 modes for 16b*8b on AIE-MLv2</li>
+<li>mmul: Support mixed bfloat16 * float16 modes on AIE-MLv2</li>
+<li>neg: Support arbitrary vector sizes</li>
+<li>parallel_lookup: Fix optimization application for large unsigned keys</li>
+<li>print: Enable for block_vectors on AIE-MLv2</li>
+<li>sliding_mul: Optimize complex * real operations on AIE-ML</li>
+<li>sliding_mul: Add float16 support on AIE-MLv2</li>
+<li>to_fixed: Change to default behaviour for bfloat16: default rounding mode was floor and is now conv_even</li>
+<li>to_fixed_floor: New function to expose floor rounding mode for bfloat16 values</li>
+</ul>
+
+<h3>ADF integration</h3>
+
+<ul>
+</ul>
+
 
 @section vitis_2024_2 Vitis 2024.2
 

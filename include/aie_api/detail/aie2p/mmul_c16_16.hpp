@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_MMUL_C16_16__HPP__
 #define __AIE_API_DETAIL_AIE2P_MMUL_C16_16__HPP__
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
+
 #include "../accum.hpp"
 #include "../interleave.hpp"
 #include "../vector.hpp"
 #include "../filter.hpp"
+#include "../mul.hpp"
 
 namespace aie::detail {
 
@@ -37,14 +40,7 @@ struct C_block_c16_16_interleave
     C_block_c16_16_interleave(const accum_type &acc, bool to_zero = false)
     {
         zero = to_zero;
-        constexpr unsigned num_op = Lanes / 8;
-
-        utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-            v4cacc64 tmp1 = acc.template extract<4>(2 * idx);
-            v4cacc64 tmp2 = acc.template extract<4>(2 * idx + 1);
-            real.template insert<8>(idx, (v8acc64)::shuffle((v8cint32)tmp1, (v8cint32)tmp2, DINTLV_lo_64o128));
-            imag.template insert<8>(idx, (v8acc64)::shuffle((v8cint32)tmp1, (v8cint32)tmp2, DINTLV_hi_64o128));
-        });
+        std::tie(real, imag) = unzip_complex(acc);
     }
 
     template <typename TR>
@@ -56,18 +52,7 @@ struct C_block_c16_16_interleave
     __aie_inline
     accum_type to_accum() const
     {
-        accum_type ret;
-
-        constexpr unsigned num_op = Lanes / 8;
-
-        utils::unroll_times<num_op>([&](auto idx) __aie_inline {
-            v8acc64 tmp_r = real.template extract<8>(idx);
-            v8acc64 tmp_i = imag.template extract<8>(idx);
-            ret.template insert<4>(2 * idx,     (v4cacc64)::shuffle((v8cint32)tmp_r, (v8cint32)tmp_i, INTLV_lo_64o128));
-            ret.template insert<4>(2 * idx + 1, (v4cacc64)::shuffle((v8cint32)tmp_r, (v8cint32)tmp_i, INTLV_hi_64o128));
-        });
-
-
+        accum_type ret = combine_into_complex(real, imag);
         return ret;
     }
 
@@ -158,4 +143,5 @@ struct mmul<M, K, N, cint16, int16, 64>  : public mmul_c16_16<M, K, N,  int16, 6
 
 }
 
-#endif
+#endif // __AIE_API_COMPLEX_VECTOR_SUPPORT__
+#endif // __AIE_API_DETAIL_AIE2P_MMUL_C16_16__HPP__

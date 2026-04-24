@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_ADD_ACCUM__HPP__
 #define __AIE_API_DETAIL_AIE2P_ADD_ACCUM__HPP__
+
+#include <algorithm>
 
 #include "../add.hpp"
 #include "../vector.hpp"
@@ -220,12 +222,32 @@ struct add_sub_accum_vector_bits_impl_float_common
 template <unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_vector_bits_impl<32, 16, bfloat16, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common<bfloat16, Elems, Op> {};
 
+#if __AIE_API_BF8_SUPPORT__
+template <unsigned Elems, AddSubOperation Op>
+struct add_sub_accum_vector_bits_impl<32,  8, bfloat8, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common<bfloat8, Elems, Op> {};
+#endif
+
+#if __AIE_API_FP8_SUPPORT__
+template <unsigned Elems, AddSubOperation Op>
+struct add_sub_accum_vector_bits_impl<32,  8,  float8, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common< float8, Elems, Op> {};
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+template <unsigned Elems, AddSubOperation Op>
+struct add_sub_accum_vector_bits_impl<32, 16,  float16, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common< float16, Elems, Op> {};
+#endif
+
 #if __AIE_API_FP32_EMULATION__
 template <unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_vector_bits_impl<32, 32, float, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common<float, Elems, Op> {};
 #endif
 
 #if __AIE_API_COMPLEX_FP32_EMULATION__
+#if __AIE_API_CBF16_SUPPORT__
+template <unsigned Elems, AddSubOperation Op>
+struct add_sub_accum_vector_bits_impl<32, 32, cbfloat16, Elems, Op> : public add_sub_accum_vector_bits_impl_float_common<cbfloat16, Elems, Op> {};
+#endif
+
 template <unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_vector_bits_impl<32, 64, cfloat,   Elems, Op> : public add_sub_accum_vector_bits_impl_float_common<cfloat, Elems, Op> {};
 #endif

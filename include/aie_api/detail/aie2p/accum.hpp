@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -90,6 +90,7 @@ static __aie_inline accum_storage_t<Class, Bits, DstElems> accum_cast_helper(T &
         if constexpr (DstElems == 64)                return v64accfloat(from);
         if constexpr (DstElems >= 128)               return utils::make_array<Chunks>([](auto f) __aie_inline { return v64accfloat(f); }, from);
     }
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
     else if constexpr (Class == AccumClass::CInt) {
         if constexpr (DstElems == 2)                 return v2cacc64(from);
         if constexpr (DstElems == 4)                 return v4cacc64(from);
@@ -97,6 +98,7 @@ static __aie_inline accum_storage_t<Class, Bits, DstElems> accum_cast_helper(T &
         if constexpr (DstElems == 16)                return v16cacc64(from);
         if constexpr (DstElems >= 32)                return utils::make_array<Chunks>([](auto f) __aie_inline { return v16cacc64(f); }, from);
     }
+#endif
 #if __AIE_API_COMPLEX_FP32_EMULATION__
     else if constexpr (Class == AccumClass::CFP) {
         if constexpr (DstElems == 2)                 return v4caccfloat(from);
@@ -133,6 +135,7 @@ template <> inline __aie_inline auto accum_extract<8,   v8acc64>(const  v8acc64&
 template <> inline __aie_inline auto accum_extract<4,   v8acc64>(const  v8acc64& acc, unsigned idx) { return ::extract_v4acc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<4,   v4acc64>(const  v4acc64& acc, unsigned idx) { return acc; }
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> inline __aie_inline auto accum_extract<16, v16cacc64>(const v16cacc64& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<8 , v16cacc64>(const v16cacc64& acc, unsigned idx) { return ::extract_v8cacc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<4,  v16cacc64>(const v16cacc64& acc, unsigned idx) { return ::extract_v4cacc64(acc, idx); }
@@ -143,6 +146,7 @@ template <> inline __aie_inline auto accum_extract<2,   v8cacc64>(const  v8cacc6
 template <> inline __aie_inline auto accum_extract<4,   v4cacc64>(const  v4cacc64& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<2,   v4cacc64>(const  v4cacc64& acc, unsigned idx) { return ::extract_v2cacc64(acc, idx); }
 template <> inline __aie_inline auto accum_extract<2,   v2cacc64>(const  v2cacc64& acc, unsigned idx) { return acc; }
+#endif
 
 template <> inline __aie_inline auto accum_extract<64, v64accfloat>(const v64accfloat& acc, unsigned idx) { return acc; }
 template <> inline __aie_inline auto accum_extract<32, v64accfloat>(const v64accfloat& acc, unsigned idx) { return ::extract_v32accfloat(acc, idx); }
@@ -188,10 +192,12 @@ template <> struct accum_set<AccumClass::Int,  64,  4> { static v8acc64      run
 template <> struct accum_set<AccumClass::Int,  64,  8> { static v8acc64      run(const auto &acc) __aie_inline { return ::set_v8acc64(0, acc);      } };
 template <> struct accum_set<AccumClass::Int,  64, 16> { static v16acc64     run(const auto &acc) __aie_inline { return ::set_v16acc64(0, acc);     } };
 template <> struct accum_set<AccumClass::Int,  64, 32> { static v32acc64     run(const auto &acc) __aie_inline { return ::set_v32acc64(0, acc);     } };
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct accum_set<AccumClass::CInt, 64,  2> { static v2cacc64     run(const auto &acc) __aie_inline { return acc;                        } };
 template <> struct accum_set<AccumClass::CInt, 64,  4> { static v4cacc64     run(const auto &acc) __aie_inline { return ::set_v4cacc64(0, acc);     } };
 template <> struct accum_set<AccumClass::CInt, 64,  8> { static v8cacc64     run(const auto &acc) __aie_inline { return ::set_v8cacc64(0, acc);     } };
 template <> struct accum_set<AccumClass::CInt, 64, 16> { static v16cacc64    run(const auto &acc) __aie_inline { return ::set_v16cacc64(0, acc);    } };
+#endif
 template <> struct accum_set<AccumClass::FP,   32,  8> { static v8accfloat   run(const auto &acc) __aie_inline { return acc;                        } };
 template <> struct accum_set<AccumClass::FP,   32, 16> { static v16accfloat  run(const auto &acc) __aie_inline { return ::set_v16accfloat(0, acc);  } };
 template <> struct accum_set<AccumClass::FP,   32, 32> { static v32accfloat  run(const auto &acc) __aie_inline { return ::set_v32accfloat(0, acc);  } };
@@ -222,6 +228,9 @@ class accum_base
     template <AccumClass C2, unsigned MN2, unsigned E2>
     friend class accum_base;
 
+    // Returned when UPS/SRS argument type is not supported (e.g. acc32 for input complex vectors)
+    struct unsupported_ups {};
+    struct unsupported_srs {};
 public:
     using value_type = accum_tag_t<Class, MinBits>;
     using storage_t  = accum_storage_t<Class, Bits, Elems>;
@@ -413,7 +422,11 @@ public:
                 if constexpr (bits() == 256) {
                     using return_type        = accum_base<Class, Bits, Elems * 2>;
                     using native_return_type = typename return_type::storage_t;
+#if __AIE_ARCH__ == 21
                     using shuffle_type = v16acc32;
+#else
+                    using shuffle_type = v16int32;
+#endif
                     tmp.insert(0, return_type((native_return_type)::shuffle((shuffle_type)this->template grow<Elems * 2>(),
                                                                             (shuffle_type)this->template grow<Elems * 2>(),
                                                                             T256_2x2_lo)));
@@ -554,10 +567,21 @@ public:
                     v.insert(idx % 2, v_in);
                     tmp = v.template cast_to<vector_elem_type>();
 
-                    self.template insert(idx / 2, tmp);
+                    self.insert(idx / 2, tmp);
                     return self;
                 }
                 else
+#if __AIE_ARCH__ == 22
+                // Note: 256b insertion into 2k accum is now emulated inside the intrinsic (except AIE2ps)
+                if constexpr (value_bits() * E1 == 2048 && value_bits() * E2 == 256) {
+                    constexpr unsigned ratio = E1 / E2 / 2;
+                    auto tmp = self.template extract<E1 / 2>(idx / ratio);
+                    tmp = ::insert(tmp, idx % ratio, in);
+                    self.insert(idx / ratio, tmp);
+                    return self;
+                }
+                else
+#endif
                 {
                     self = ::insert(self, idx, in);
                     return self;
@@ -601,6 +625,7 @@ public:
         return insert(idx, in);
     }
 
+#if AIE_API_ML_VERSION >= 210
     template <typename T> requires(is_valid_block_type_v<T>)
     __aie_inline
     block_vector<T, Elems> to_vector_sign(bool v_sign, int shift = 0) const
@@ -609,31 +634,29 @@ public:
 
         block_vector<T, Elems> ret;
 
-        if constexpr (Elems == 64) {
-            ret = fn(data, shift, v_sign);
-        }
-        else {
-            //TODO: Change to insert once insert support added (CRVO-4892)
-            constexpr unsigned num_ops = (Elems / 64) / 2;
-            utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                ret.template insert<128>(idx, ::concat(fn(extract<64>(2 * idx + 0), shift, v_sign),
-                                                       fn(extract<64>(2 * idx + 1), shift, v_sign)));
-            });
-        }
+        utils::unroll_times<Elems / 64>([&](unsigned idx) __aie_inline {
+            block_vector<T, 64> tmp = fn(extract<64>(idx), shift, v_sign);
+            ret.insert(idx, tmp);
+        });
 
         return ret;
     }
+#endif
 
     template <typename T>
     __aie_inline
     vector<T, Elems> to_vector_sign(bool v_sign, int shift = 0) const
     {
-        if constexpr (utils::is_one_of_v<T, int4, uint4>) {
-            return to_vector_sign<utils::get_next_integer_type_t<T>>(v_sign, shift).pack_sign(v_sign);
+        constexpr auto srs_fn        = get_srs<T>();
+        using srs_fn_t               = std::remove_cvref_t<decltype(srs_fn)>;
+        constexpr bool requires_pack = std::is_same_v<srs_fn_t, unsupported_srs>
+                                       && utils::is_one_of_v<T, int4, uint4, int8, uint8>;
+
+        if constexpr (requires_pack) {
+            using promoted_type = utils::get_next_integer_type_t<T>;
+            return to_vector_sign<promoted_type>(v_sign, shift).pack_sign(v_sign);
         }
         else {
-            constexpr auto srs_fn = get_srs<T>();
-
             using srs_fn_t  = std::remove_cvref_t<decltype(srs_fn)>;
             using srs_acc_t = std::remove_cvref_t<invoke_arg_t<0, srs_fn_t>>;
 
@@ -652,12 +675,14 @@ public:
         }
     }
 
+#if AIE_API_ML_VERSION >= 210
     template <typename T> requires(is_valid_block_type_v<T>)
     __aie_inline
     block_vector<T, Elems> to_vector(int shift = 0) const
     {
         return to_vector_sign<T>(true, shift);
     }
+#endif
 
     template <typename T>
     __aie_inline
@@ -670,55 +695,42 @@ public:
     __aie_inline
     void from_vector_sign(const vector<T, Elems> &v, bool v_sign, int shift = 0)
     {
-        constexpr unsigned ups_max_vec_bits = 512;
-        constexpr unsigned ups_native_elems = ups_max_vec_bits / type_bits_v<T>;
+        constexpr unsigned chunks      = utils::num_elems_v<storage_t>;
+        constexpr auto ups_fn          = get_ups<T, Elems>();
+        using ups_fn_t                 = std::remove_cvref_t<decltype(ups_fn)>;
+        constexpr bool requires_unpack = std::is_same_v<ups_fn_t, unsupported_ups>
+                                         && utils::is_one_of_v<T,
+                                                               int4, uint4, int8, uint8>;
 
-        // Elems maximum value is 128, so 1024b int4/uint4 vectors are not allowed
-        // TODO: there isn't any constraint in the class that captures this size limitation
-        constexpr bool unpack_vector = utils::is_one_of_v<T, int4, uint4> ||
-                                       (utils::is_one_of_v<T, int8, uint8> && Bits > 32);
-        if constexpr (unpack_vector) {
+        if constexpr (requires_unpack) {
             from_vector_sign(v.unpack_sign(v_sign), v_sign, shift);
         }
+        else if constexpr (chunks > 1) {
+            utils::unroll_times<chunks>([&](unsigned idx) __aie_inline {
+                constexpr unsigned chunk_elems = Elems / chunks;
+                accum_base<Class, MinBits, chunk_elems> acc;
+                acc.from_vector_sign(v.template extract<chunk_elems>(idx), v_sign, shift);
+                insert(idx, acc);
+            });
+        }
         else {
-            auto upshift_fn = [&](auto &&v) __aie_inline {
-                constexpr auto fn = get_ups<T, std::min(Elems, ups_native_elems)>();
-                return fn(v, shift, v_sign);
-            };
+            using ups_vec_t                  = std::remove_cvref_t<invoke_arg_t<0, ups_fn_t>>;
+            constexpr unsigned elems_per_ups = ups_vec_t::size();
+            using ups_acc_t                  = accum_base<Class, MinBits, elems_per_ups>;
 
-            auto upshift_concat = [&](auto&&... args) __aie_inline {
-                return concat_helper<Class, MinBits, std::decay_t<decltype(args)>::size()...>(upshift_fn(args)...);
-            };
-
-            if constexpr (utils::num_elems_v<storage_t> == 1) {
-                if constexpr (vector<T, Elems>::bits() == 128) {
-                    data = upshift_fn(v.template grow<Elems * 2>());
-                }
-                else if constexpr (Elems <= ups_native_elems) {
-                    data = upshift_fn(v);
-                }
-                else {
-                    data = utils::apply_tuple(upshift_concat, v.template split<ups_native_elems>());
-                }
+            if constexpr (Elems <= elems_per_ups) {
+                ups_acc_t acc = ups_fn(v.template grow<elems_per_ups>(), shift, v_sign);
+                *this = acc.template extract<Elems>(0);
             }
             else {
-                // TODO: move all these constants to a traits struct
-                constexpr unsigned chunks              = utils::num_elems_v<storage_t>;
-                constexpr unsigned native_accum_elems  = 2048 / value_bits();
-                constexpr unsigned native_vector_elems = native_vector_length_v<T>;
-                constexpr unsigned elems_per_ups       = std::min({ups_native_elems,
-                                                                   native_accum_elems,
-                                                                   native_vector_elems});
-
-                utils::unroll_times<chunks>([&](unsigned idx) __aie_inline {
-                    auto chunk = v.template extract<Elems / chunks>(idx);
-                    if constexpr (chunk.size() > elems_per_ups) {
-                        insert(idx, utils::apply_tuple(upshift_concat, chunk.template split<elems_per_ups>()));
-                    }
-                    else {
-                        insert(idx, upshift_fn(chunk));
-                    }
+                std::array<ups_acc_t, Elems / elems_per_ups> chunks;
+                utils::unroll_times<Elems / elems_per_ups>([&](unsigned idx) __aie_inline {
+                    chunks[idx] = ups_fn(v.template extract<elems_per_ups>(idx), shift, v_sign);
                 });
+                auto apply_array = [this, &chunks]<unsigned... Is>(std::integer_sequence<unsigned, Is...>) __aie_inline {
+                    *this = concat_helper(chunks[Is]...);
+                };
+                apply_array(std::make_integer_sequence<unsigned, Elems / elems_per_ups>());
             }
         }
     }
@@ -730,6 +742,7 @@ public:
         from_vector_sign(v, is_signed_v<T>, shift);
     }
 
+#if __AIE_ARCH__ == 21
     template <typename T> requires(detail::is_valid_block_type_v<T> &&
                                    std::is_same_v<T, bfp16ebs8>) //FIXME: CRVO-9745 support bfp16ebs16
     __aie_inline
@@ -753,6 +766,87 @@ public:
             data[1] = ::mul_8x8_8x8T((native_type)v.template extract<64>(1), eye);
         }
     }
+#elif __AIE_ARCH__ == 22
+    template <typename T> requires(detail::is_valid_block_type_v<T>)
+    __aie_inline
+    void from_vector(const block_vector<T, Elems> &v, int shift = 0)
+    {
+        constexpr unsigned native_elems = 64;
+
+        if constexpr (std::is_same_v<T, mx9>) {
+            block_vector<T, 256> eye;
+            block_vector<T, 128> eye_tmp;
+
+            // MMUL with identity to convert
+            eye_tmp = ::insert(eye_tmp, 0, 0x01010101 * (127 + shift)); // Exponent
+            eye_tmp = ::insert(eye_tmp, 1, 0x01010101 * (127 + shift)); // Exponent
+            eye_tmp = ::insert(eye_tmp, 2, 0x01010101 * (127 + shift)); // Exponent
+            eye_tmp = ::insert(eye_tmp, 3, 0x01010101 * (127 + shift)); // Exponent
+            eye_tmp = ::insert(eye_tmp, 0, ::set_v4int8(0, 0)); // Prime
+            eye_tmp = ::insert(eye_tmp, 1, ::set_v4int8(0, 0)); // Prime
+            eye_tmp = ::insert(eye_tmp, 2, ::set_v4int8(0, 0)); // Prime
+            eye_tmp = ::insert(eye_tmp, 3, ::set_v4int8(0, 0)); // Prime
+
+            eye_tmp = ::insert(eye_tmp, 0, ::sel(::broadcast_zero_to_v64int8(), // Data
+                                                 ::broadcast_to_v64int8(0x40),
+                                                 0x0008000400020001ll));
+            eye_tmp = ::insert(eye_tmp, 1, ::sel(::broadcast_zero_to_v64int8(), // Data
+                                                 ::broadcast_to_v64int8(0x40),
+                                                 0x0080004000200010ll));
+            //TODO: Update eye_tmp definition to remove shuffles
+            eye = ::insert(eye, 0, ::shuffle(::extract_v64mx9(eye_tmp, 0), ::extract_v64mx9(eye_tmp, 1), T64_8x2_lo));
+            eye = ::insert(eye, 2, ::shuffle(::extract_v64mx9(eye_tmp, 0), ::extract_v64mx9(eye_tmp, 1), T64_8x2_hi));
+
+            eye_tmp = ::insert(eye_tmp, 0, ::sel(::broadcast_zero_to_v64int8(), // Data
+                                                 ::broadcast_to_v64int8(0x40),
+                                                 0x0800040002000100ll));
+            eye_tmp = ::insert(eye_tmp, 1, ::sel(::broadcast_zero_to_v64int8(), // Data
+                                                 ::broadcast_to_v64int8(0x40),
+                                                 0x8000400020001000ll));
+            //TODO: Update eye_tmp definition to remove shuffles
+            eye = ::insert(eye, 1, ::shuffle(::extract_v64mx9(eye_tmp, 0), ::extract_v64mx9(eye_tmp, 1), T64_8x2_lo));
+            eye = ::insert(eye, 3, ::shuffle(::extract_v64mx9(eye_tmp, 0), ::extract_v64mx9(eye_tmp, 1), T64_8x2_hi));
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                insert<native_elems>(idx, ::mul_4x16_16x16T(::shuffle(v.template extract<native_elems>(idx), T64_4x2), eye));
+            });
+        }
+        else {
+            block_vector<T, 128> eye_lower;
+            block_vector<T, 128> eye_upper;
+            block_vector<T, 64> eye_tmp;
+
+            eye_tmp = ::insert(eye_tmp, 0, 0x01010101 * (127 + shift)); // Exponent
+            eye_tmp = ::insert(eye_tmp, 1, 0); // Prime
+            eye_tmp = ::insert(eye_tmp, ::set_v16int4(0, 0)); // Sign
+
+            v64int8 tmp1, tmp2;
+
+            tmp1 = ::sel(::broadcast_to_v64int8(0x80), ::broadcast_to_v64int8(0x08), 0x0008000400020001ll);
+            tmp2 = ::sel(::broadcast_zero_to_v64int8(), tmp1, 0x0808040402020101ll);
+
+            eye_tmp = ::insert(eye_tmp, (v64int4)::extract_v32int8(tmp2, 0)); // Data
+            eye_lower = ::insert(eye_lower, 0, eye_tmp);
+
+            eye_tmp = ::insert(eye_tmp, (v64int4)::extract_v32int8(tmp2, 1)); // Data
+            eye_lower = ::insert(eye_lower, 1, eye_tmp);
+
+            tmp1 = ::sel(::broadcast_to_v64int8(0x80), ::broadcast_to_v64int8(0x08), 0x0080004000200010ll);
+            tmp2 = ::sel(::broadcast_zero_to_v64int8(), tmp1, 0x8080404020201010ll);
+
+            eye_tmp = ::insert(eye_tmp, (v64int4)::extract_v32int8(tmp2, 0)); // Data
+            eye_upper = ::insert(eye_upper, 0, eye_tmp);
+
+            eye_tmp = ::insert(eye_tmp, (v64int4)::extract_v32int8(tmp2, 1)); // Data
+            eye_upper = ::insert(eye_upper, 1, eye_tmp);
+
+            utils::unroll_times<Elems / native_elems>([&](unsigned idx) __aie_inline {
+                insert<native_elems>(idx, ::mul_4x16_16x16T(v.template extract<native_elems>(idx).template grow<128>(),
+                                                            ::concat(eye_lower, eye_upper)));
+            });
+        }
+    }
+#endif
 
     template <typename T>
     __aie_inline
@@ -824,123 +918,221 @@ public:
     }
 
 private:
-    template <typename T, unsigned Elems2>
+    template <typename T, unsigned Elems2 = Elems>
     static constexpr auto get_ups()
     {
-        using result_type = accum_base<Class, Bits, Elems2>;
+#if __AIE_API_USE_UPS_TO__
+#define UPSHIFT_FN(acc_type) ::ups_to_##acc_type
+#else
+#define UPSHIFT_FN(acc_type) ::to_##acc_type
+#endif
+        // Conversions using large intrinsic types may not be appropriate if 1k vector backend is disabled.
+        constexpr bool disabled_1k_storage = max_intrinsic_vector_bits::value < 1024;
+
         if constexpr (std::is_same_v<T, bfloat16>) {
-            if constexpr      (Elems2 == 8)
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return ::extract_v8accfloat(::ups_to_v16accfloat(v), 0); };
-            else if constexpr (Elems2 == 16)
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return ::ups_to_v16accfloat(v); };
+            if constexpr (Elems2 <= 16)
+                return [](const vector<T, 16> &v, int, bool) __aie_inline { return UPSHIFT_FN(v16accfloat)(v); };
             else
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return ::ups_to_v32accfloat(v); };
+                return [](const vector<T, 32> &v, int, bool) __aie_inline { return UPSHIFT_FN(v32accfloat)(v); };
         }
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_BF8_SUPPORT__
+        else if constexpr (std::is_same_v<T, bfloat8>) {
+            return [](const vector<T, 64> &v, int, bool) __aie_inline {
+                // Create 8x8 identity matrix
+                // There is no ups instruction for bfloat8 -> float conversion. Instead multiply by identity.
+                vector<bfloat8, 64> ident = ::sel(broadcast_zero_to_v64bfloat8(),
+                                                  broadcast_one_to_v64bfloat8(),
+                                                  0x80402010'08040201ull);
+
+                accum_base<AccumClass::FP, 32, 64> ret = ::mul_8x8_8x8(v, ident);
+                return ret;
+            };
+        }
+#endif
+#if __AIE_API_FP8_SUPPORT__
+        else if constexpr (std::is_same_v<T, float8>) {
+            // There is no ups instruction for float8 -> float conversion. Instead multiply by 1.
+            return [](const vector<T, 64> &v, int, bool) __aie_inline {
+                // Create a 8x8 identity matrix
+                vector<float8, 64> ident = ::sel(broadcast_zero_to_v64float8(),
+                                                 broadcast_one_to_v64float8(),
+                                                 0x80402010'08040201ull);
+
+                accum_base<AccumClass::FP, 32, 64> ret =::mul_8x8_8x8(v, ident);
+                return ret;
+            };
+        }
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+        else if constexpr (std::is_same_v<T, float16>) {
+            return [](const vector<T, 32> &v, int, bool) __aie_inline { return ::to_v32accfloat(v); };
+        }
+#endif
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
         else if constexpr (std::is_same_v<T, float>) {
-            if constexpr      (Elems == 4 || Elems2 == 8)
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return  (v8accfloat)(v); };
-            else if constexpr (Elems2 == 16)
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return (v16accfloat)(v); };
+            if constexpr      (Elems2 <= 8) // v4accfloat is represented with v8accfloat
+                return [](const vector<T, Elems2> &v, int, bool) __aie_inline { return (v8accfloat)(v.template grow<8>()); };
+            else if constexpr (Elems2 == 16 || disabled_1k_storage)
+                return [](const vector<T, 16> &v, int, bool) __aie_inline { return (v16accfloat)(v); };
             else
-                return [](const auto &v, int, bool) __aie_inline -> result_type { return (v32accfloat)(v); };
+                return [](const vector<T, 32> &v, int, bool) __aie_inline { return (v32accfloat)(v); };
         }
 #endif
 #if __AIE_API_COMPLEX_FP32_EMULATION__
-        else if constexpr (std::is_same_v<T, cfloat>) {
-            if constexpr      (Elems == 2 || Elems2 == 4)
-                return [](const auto &v, int, bool) __aie_inline -> result_type{ return (v4caccfloat)(v);  };
+#if __AIE_API_CBF16_SUPPORT__
+        else if constexpr (std::is_same_v<T, cbfloat16>) {
+            if constexpr      (Elems2 == 4)
+                return [](const vector<T, 4> &v, int, bool) __aie_inline { return ::extract_v4caccfloat(::to_v8caccfloat(v.template grow<8>()), 0); };
             else if constexpr (Elems2 == 8)
-                return [](const auto &v, int, bool) __aie_inline -> result_type{ return (v8caccfloat)(v);  };
-            else if constexpr (Elems2 == 16)
-                return [](const auto &v, int, bool) __aie_inline -> result_type{ return (v16caccfloat)(v); };
-            else if constexpr (Elems2 == 32)
-                return [](const auto &v, int, bool) __aie_inline -> result_type{ return (v32caccfloat)(v); };
+                return [](const vector<T, 8> &v, int, bool) __aie_inline { return ::to_v8caccfloat(v); };
+            else
+                return [](const vector<T, 16> &v, int, bool) __aie_inline { return ::to_v16caccfloat(v); };
+        }
+#endif
+        else if constexpr (std::is_same_v<T, cfloat>) {
+            if constexpr      (Elems2 <= 4) // v2caccfloat is represented with v4caccfloat
+                return [](const vector<T, Elems2> &v, int, bool) __aie_inline { return (v4caccfloat)(v.template grow<4>());  };
+            else if constexpr (Elems2 == 8)
+                return [](const vector<T, 8> &v, int, bool) __aie_inline { return (v8caccfloat)(v.to_native());  };
+            else
+                return [](const vector<T, 16> &v, int, bool) __aie_inline { return (v16caccfloat)(v.to_native()); };
+            // Note: v32caccfloat exists but vector<cfloat, 32>::storage_t is always an std::array, so we need to
+            // perform upshift operation one array element at a time.
         }
 #endif
         else if constexpr (utils::is_one_of_v<T, int8, uint8>) {
-            if constexpr (Elems2 == 16)
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v16acc32(::ups_to_v32acc32(v, shift, sign), 0); };
-            else if constexpr (Elems2 == 32)
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v32acc32(v, shift, sign); };
+            if constexpr (Bits != 32 )
+                return unsupported_ups{};
+            else if constexpr (Elems2 <= 32)
+                return [](const vector<T, 32> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v32acc32)(v, shift, sign); };
             else
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v64acc32(v, shift, sign); };
+                return [](const vector<T, 64> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v64acc32)(v, shift, sign); };
         }
         else if constexpr (utils::is_one_of_v<T, int16, uint16>) {
             if constexpr (Bits == 32) {
-                if constexpr (Elems2 == 8)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v8acc32(::ups_to_v16acc32(v, shift, sign), 0); };
-                else if constexpr (Elems2 == 16)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v16acc32(v, shift, sign); };
+                if constexpr (Elems2 <= 16)
+                    return [](const vector<T, 16> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v16acc32)(v, shift, sign); };
                 else
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v32acc32(v, shift, sign); };
+                    return [](const vector<T, 32> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v32acc32)(v, shift, sign); };
             }
             else if constexpr (Bits == 64) {
-                if constexpr (Elems2 == 8)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v8acc64(::ups_to_v16acc64(v, shift, sign), 0); };
-                else if constexpr (Elems2 == 16)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v16acc64(v, shift, sign); };
+                if constexpr (Elems2 <= 16)
+                    return [](const vector<T, 16> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v16acc64)(v, shift, sign); };
                 else
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v32acc64(v, shift, sign); };
+                    return [](const vector<T, 32> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v32acc64)(v, shift, sign); };
+            }
+            else {
+                return unsupported_ups{};
             }
         }
         else if constexpr (utils::is_one_of_v<T, int32, uint32>) {
-            if constexpr (Bits == 64) {
-                if constexpr (Elems2 == 4)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v4acc64(::ups_to_v8acc64(v, shift, sign), 0); };
-                else if constexpr (Elems2 == 8)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v8acc64(v, shift, sign); };
-                else
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v16acc64(v, shift, sign); };
-            }
-            else if constexpr (Bits == 32) {
+            if constexpr (Bits == 32) {
                 // TODO: should we add support for shift != 0 in this scenario?
-                if      constexpr (Elems2 == 8)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { REQUIRES(shift == 0); return (v8acc32)v; };
-                else if constexpr (Elems2 == 16)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { REQUIRES(shift == 0); return (v16acc32)v; };
+                if constexpr (Elems2 <= 8)
+                    return [](const vector<T, 8> &v, int shift, bool) __aie_inline { REQUIRES(shift == 0); return (v8acc32)v; };
+                else if constexpr (Elems2 == 16 || disabled_1k_storage)
+                    return [](const vector<T, 16> &v, int shift, bool) __aie_inline { REQUIRES(shift == 0); return (v16acc32)v; };
+                else
+                    return [](const vector<T, 32> &v, int shift, bool) __aie_inline { REQUIRES(shift == 0); return (v32acc32)v; };
+            }
+            else if constexpr (Bits == 64) {
+                if constexpr (Elems2 <= 8)
+                    return [](const vector<T, 8> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v8acc64)(v, shift, sign); };
+                else
+                    return [](const vector<T, 16> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v16acc64)(v, shift, sign); };
+            }
+            else {
+                return unsupported_ups{};
             }
         }
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
         else if constexpr (utils::is_one_of_v<T, cint16>) {
             if constexpr (Bits == 64) {
-                if constexpr (Elems2 == 4)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v4cacc64(::ups_to_v8cacc64(v, shift, sign), 0); };
-                else if constexpr (Elems2 == 8)
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v8cacc64(v, shift, sign);  };
+                if constexpr (Elems2 <= 8)
+                    return [](const vector<T, 8> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v8cacc64)(v, shift, sign);  };
                 else
-                    return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v16cacc64(v, shift, sign);  };
+                    return [](const vector<T, 16> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v16cacc64)(v, shift, sign);  };
+            }
+            else {
+                return unsupported_ups{};
             }
         }
         else if constexpr (utils::is_one_of_v<T, cint32>) {
-            if constexpr (Elems2 == 2)
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::extract_v2cacc64(::ups_to_v4cacc64(v, shift, sign), 0); };
-            else if constexpr (Elems2 == 4)
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v4cacc64(v, shift, sign);  };
-            else
-                return [](const auto &v, int shift, bool sign) __aie_inline -> result_type { return ::ups_to_v8cacc64(v, shift, sign);  };
+            if constexpr (Bits == 64) {
+                if constexpr (Elems2 <= 4)
+                    return [](const vector<T, 4> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v4cacc64)(v, shift, sign);  };
+                else
+                    return [](const vector<T, 8> &v, int shift, bool sign) __aie_inline { return UPSHIFT_FN(v8cacc64)(v, shift, sign);  };
+            }
+            else {
+                return unsupported_ups{};
+            }
         }
+#endif
+        else {
+            return unsupported_ups{};
+        }
+#undef UPSHIFT_FN
     }
 
     template <typename T>
     static constexpr auto get_srs()
     {
+#if __AIE_API_USE_SRS_TO__
+#define SRS_FN(vec_type) ::srs_to_##vec_type
+#else
+#define SRS_FN(vec_type) ::to_##vec_type
+#endif
+        // Conversions using large intrinsic types may not be appropriate if 1k vector backend is disabled.
+        constexpr bool disabled_1k_storage = max_intrinsic_vector_bits::value < 1024;
+
         if constexpr (std::is_same_v<T, bfloat16>) {
             if constexpr (Elems <= 16)
                 return [](const accum_base<Class, MinBits, 16> &acc,  int, bool) __aie_inline { return ::to_v16bfloat16(acc); };
             else
                 return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return ::to_v32bfloat16(acc); };
         }
-#if __AIE_API_FP32_EMULATION__
+#if __AIE_API_BF8_SUPPORT__
+        else if constexpr (std::is_same_v<T, bfloat8>) {
+            return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return ::to_v32bfloat8(acc); };
+        }
+#endif
+#if __AIE_API_FP8_SUPPORT__
+        else if constexpr (std::is_same_v<T, float8>) {
+            return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return ::to_v32float8(acc); };
+        }
+#endif
+
+#if __AIE_API_FP16_SUPPORT__
+        else if constexpr (std::is_same_v<T, float16>) {
+            if constexpr (Elems <= 16)
+                return [](const accum_base<Class, MinBits, 16> &acc, int, bool) __aie_inline { return ::to_v16float16(acc); };
+            else
+                return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return ::to_v32float16(acc); };
+        }
+#endif
+#if __AIE_API_FP32_EMULATION__|| __AIE_API_FP32_SUPPORT__
         else if constexpr (std::is_same_v<T, float>) {
             if constexpr (Elems <= 8)
                 return [](const accum_base<Class, MinBits, 8> &acc, int, bool) __aie_inline { return  (v8float) acc; };
-            else if constexpr (Elems == 16)
+            else if constexpr (Elems == 16 || disabled_1k_storage)
                 return [](const accum_base<Class, MinBits, 16> &acc, int, bool) __aie_inline { return (v16float) acc; };
             else
                 return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return (v32float) acc; };
         }
 #endif
 #if __AIE_API_COMPLEX_FP32_EMULATION__
+#if __AIE_API_CBF16_SUPPORT__
+        else if constexpr (std::is_same_v<T, cbfloat16>) {
+            if constexpr (Elems == 4)
+                return [](const accum_base<Class, MinBits, 4> &acc, int, bool) __aie_inline { return ::extract_v4cbfloat16(::to_v8cbfloat16(::set_v8caccfloat(0, acc)), 0); };
+            else if constexpr (Elems == 8)
+                return [](const accum_base<Class, MinBits, 8> &acc, int, bool) __aie_inline { return ::to_v8cbfloat16(acc); };
+            else
+                return [](const accum_base<Class, MinBits, 16> &acc, int, bool) __aie_inline { return ::to_v16cbfloat16(acc); };
+        }
+#endif
         else if constexpr (std::is_same_v<T, cfloat>) {
             if constexpr (Elems <= 4)
                 return [](const accum_base<Class, MinBits, 4> &acc, int, bool) __aie_inline { return (v4cfloat) acc;  };
@@ -948,75 +1140,100 @@ private:
                 return [](const accum_base<Class, MinBits, 8> &acc, int, bool) __aie_inline { return (v8cfloat) acc;  };
         }
 #endif
+#if __AIE_ARCH__ == 21
         else if constexpr (std::is_same_v<T, bfp16ebs8>) {
             return [](const accum_base<Class, MinBits, 64> &acc, int, bool) __aie_inline { return ::to_v64bfp16ebs8(acc); };
         }
         else if constexpr (std::is_same_v<T, bfp16ebs16>) {
             return [](const accum_base<Class, MinBits, 64> &acc, int, bool) __aie_inline { return ::to_v64bfp16ebs16(acc); };
         }
+#endif
+#if __AIE_ARCH__ == 22
+        else if constexpr (std::is_same_v<T, mx4>) {
+            return [](const accum_base<Class, MinBits, 64> &acc, int, bool) __aie_inline { return ::to_v64mx4(acc); };
+        }
+        else if constexpr (std::is_same_v<T, mx6>) {
+            return [](const accum_base<Class, MinBits, 64> &acc, int, bool) __aie_inline { return ::to_v64mx6(acc); };
+        }
+        else if constexpr (std::is_same_v<T, mx9>) {
+            return [](const accum_base<Class, MinBits, 64> &acc, int, bool) __aie_inline { return ::to_v64mx9(acc); };
+        }
+#endif
         else if constexpr (std::is_same_v<T, int8>) {
             if constexpr (Bits == 32) {
                 if constexpr (Elems <= 32)
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32int8(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32int8)(acc, shift, sign); };
                 else
-                    return [](const accum_base<Class, MinBits, 64> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v64int8(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 64> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v64int8)(acc, shift, sign); };
             }
             else if constexpr (Bits == 64) {
-                return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::pack(::srs_to_v32int16(acc, shift, sign), sign); };
+                return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::pack(SRS_FN(v32int16)(acc, shift, sign), sign); };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, uint8>) {
             if constexpr (Bits == 32) {
                 if constexpr (Elems <= 32)
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32uint8(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32uint8)(acc, shift, sign); };
                 else
-                    return [](const accum_base<Class, MinBits, 64> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v64uint8(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 64> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v64uint8)(acc, shift, sign); };
             }
             else if constexpr (Bits == 64) {
-                return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::pack(::srs_to_v32uint16(acc, shift, sign), sign); };
+                return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::pack(SRS_FN(v32uint16)(acc, shift, sign), sign); };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, int16>) {
             if constexpr (Bits == 32) {
                 if constexpr (Elems <= 16)
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16int16(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16int16)(acc, shift, sign);  };
                 else
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32int16(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32int16)(acc, shift, sign);  };
             }
             else if constexpr (Bits == 64) {
                 if constexpr (Elems <= 16)
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16int16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16int16)(acc, shift, sign); };
                 else
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32int16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32int16)(acc, shift, sign); };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, uint16>) {
             if constexpr (Bits == 32) {
                 if constexpr (Elems <= 16)
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16uint16(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16uint16)(acc, shift, sign);  };
                 else
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32uint16(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32uint16)(acc, shift, sign);  };
             }
             else if constexpr (Bits == 64) {
                 if constexpr (Elems <= 16)
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16uint16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16uint16)(acc, shift, sign); };
                 else
-                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v32uint16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 32> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v32uint16)(acc, shift, sign); };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, int32>) {
             if constexpr (Bits == 32) {
                 if constexpr (Elems <= 8)
                     return [](const accum_base<Class, MinBits, 8> &acc, int, bool) __aie_inline { return (v8int32) acc; };
-                else
+                else if constexpr (Elems == 16 || disabled_1k_storage)
                     return [](const accum_base<Class, MinBits, 16> &acc, int, bool) __aie_inline { return (v16int32) acc; };
+                else
+                    return [](const accum_base<Class, MinBits, 32> &acc, int, bool) __aie_inline { return (v32int32) acc; };
             }
             else if constexpr (Bits == 64) {
                 if constexpr (Elems <= 8)
-                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v8int32(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v8int32)(acc, shift, sign);  };
                 else
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16int32(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16int32)(acc, shift, sign);  };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, uint32>) {
             if constexpr (Bits == 32) {
@@ -1027,25 +1244,32 @@ private:
             }
             else if constexpr (Bits == 64) {
                 if constexpr (Elems <= 8)
-                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v8uint32(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v8uint32)(acc, shift, sign);  };
                 else
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16uint32(acc, shift, sign);  };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16uint32)(acc, shift, sign);  };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, cint16>) {
             if constexpr (Bits == 64) {
                 if constexpr (Elems <= 8)
-                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v8cint16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v8cint16)(acc, shift, sign); };
                 else
-                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v16cint16(acc, shift, sign); };
+                    return [](const accum_base<Class, MinBits, 16> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v16cint16)(acc, shift, sign); };
             }
+            else
+                return unsupported_srs{};
         }
         else if constexpr (std::is_same_v<T, cint32>) {
             if constexpr (Elems <= 4)
-                return [](const accum_base<Class, MinBits, 4> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v4cint32(acc, shift, sign);  };
+                return [](const accum_base<Class, MinBits, 4> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v4cint32)(acc, shift, sign);  };
             else
-                return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return ::srs_to_v8cint32(acc, shift, sign);  };
+                return [](const accum_base<Class, MinBits, 8> &acc, int shift, bool sign) __aie_inline { return SRS_FN(v8cint32)(acc, shift, sign);  };
         }
+        else
+            return unsupported_srs{};
+#undef SRS_FN
     }
 
     template <unsigned ElemsOut, std::size_t... Indices>
@@ -1066,8 +1290,8 @@ private:
 };
 
 template <AccumClass Class, unsigned MinBits, unsigned... Es>
-__aie_inline
-inline accum_base<Class, MinBits, (Es + ...)> concat_helper(const accum_base<Class, MinBits, Es>&... inputs)
+inline __aie_inline accum_base<Class, MinBits, (Es + ...)>
+concat_helper(const accum_base<Class, MinBits, Es> &...inputs)
 {
     accum_base<Class, MinBits, (Es + ...)> result;
     result.upd_all(inputs...);

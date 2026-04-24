@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -123,9 +123,9 @@ struct mul_bits_impl<MulOp, 80, 32, int32, 16, int16>
         accum_type<Elems> ret;
 
         utils::unroll_times<Elems / 8>([&](auto idx) __aie_inline {
-            ret.template insert(idx, mul_op(acc.template grow_extract<8>(idx)...,
-                                            ::concat(v1.template extract<8>(idx), zeros<T1, 8>::run()),              0, 0x76543210, 8,
-                                            v2.template grow_extract<16>(idx / 2),                       8 * (idx % 2), 0x76543210, 0));
+            ret.insert(idx, mul_op(acc.template grow_extract<8>(idx)...,
+                                   ::concat(v1.template extract<8>(idx), zeros<T1, 8>::run()),              0, 0x76543210, 8,
+                                   v2.template grow_extract<16>(idx / 2),                       8 * (idx % 2), 0x76543210, 0));
         });
 
         return ret;
@@ -193,9 +193,9 @@ struct mul_bits_impl<MulOp, 80, 32, int32, 16, int16>
         accum_type<Elems> ret;
 
         utils::unroll_times<Elems / 8>([&](auto idx) __aie_inline {
-            ret.template insert(0, mul_op(acc...,
-                                          ::concat(v.template extract<8>(idx), zeros<T1, 8>::run()),            0, 0x76543210, 8,
-                                          subv_parent,                                               local_offset,        off, 0));
+            ret.insert(0, mul_op(acc...,
+                                 ::concat(v.template extract<8>(idx), zeros<T1, 8>::run()),            0, 0x76543210, 8,
+                                 subv_parent,                                               local_offset,        off, 0));
         });
 
         return ret;

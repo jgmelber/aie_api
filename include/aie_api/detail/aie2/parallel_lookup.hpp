@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -63,7 +63,8 @@ struct parallel_lookup<T, lut<4, OffsetType, OffsetType>, oor_policy>
     static constexpr unsigned KeyWords   = sizeof(T);
     static constexpr unsigned ValueWords = sizeof(OffsetType);
 
-    using MyLUT = lut<4, OffsetType, OffsetType>;
+    using MyLUT    = lut<4, OffsetType, OffsetType>;
+    using idx_type = std::conditional_t<std::is_signed_v<T>, int32, uint32>;
 
     __aie_inline
     bool check_index_coverage(unsigned elems, unsigned step_bits, unsigned bias)
@@ -91,7 +92,7 @@ struct parallel_lookup<T, lut<4, OffsetType, OffsetType>, oor_policy>
      * out-of-range checks when they are not necessary.
      */
     __aie_inline
-    vector<int32, 16> apply_oor_policy(vector<int32, 16> index)
+    vector<idx_type, 16> apply_oor_policy(vector<idx_type, 16> index)
     {
         if (!PAR_LOOKUP_ALL_SPACE_MANIFEST(all_space_used_)) {
             if constexpr (std::is_signed_v<T>) {
@@ -146,11 +147,11 @@ public:
         if (!PAR_LOOKUP_ALL_SPACE_MANIFEST(all_space_used_)) {
             int idx_max  = (l.LUT_elems_ << offset) - 1;
             if constexpr (std::is_signed_v<T> && oor_policy == lut_oor_policy::truncate) {
-                idx_max_vec_ = broadcast<int32, 16>::run(idx_max);
-                idx_min_vec_ = broadcast<int32, 16>::run(used_bias);
+                idx_max_vec_ = broadcast<idx_type, 16>::run(idx_max);
+                idx_min_vec_ = broadcast<idx_type, 16>::run(used_bias);
             } else {
-                idx_max_vec_ = broadcast<int32, 16>::run(idx_max - used_bias);
-                idx_min_vec_ = broadcast<int32, 16>::run(-used_bias);
+                idx_max_vec_ = broadcast<idx_type, 16>::run(idx_max - used_bias);
+                idx_min_vec_ = broadcast<idx_type, 16>::run(-used_bias);
             }
         }
     }
@@ -178,7 +179,7 @@ public:
         constexpr auto load_op = get_lut_x2_op<ValueWords>();
 
         result_t result;
-        vector<int32, 16> index;
+        vector<idx_type, 16> index;
 
         coeff_t coeff0, coeff1;
         accum_t acc;
@@ -188,20 +189,20 @@ public:
         //Preferred option would be work directly with the configuration, pending CRVO-4425
         acc.from_vector(input);
 
-        index = acc.template extract<16>(0).template to_vector<int32>(shift_addr_);
+        index = acc.template extract<16>(0).template to_vector<idx_type>(shift_addr_);
         index = apply_oor_policy(index);
 
-        load_op(LUT_ab_, LUT_cd_, index, coeff0, coeff1);
+        load_op(LUT_ab_, LUT_cd_, index.template cast_to<int32>(), coeff0, coeff1);
         // Discard garbage resulting from 64bit read
         coeff0 = ::shuffle(coeff0, coeff1, mode);
 
         if constexpr (Vec::size() == 32) {
             coeff_t coeff2, coeff3;
 
-            index = acc.template extract<16>(1).template to_vector<int32>(shift_addr_);
+            index = acc.template extract<16>(1).template to_vector<idx_type>(shift_addr_);
             index = apply_oor_policy(index);
             
-            load_op(LUT_ab_, LUT_cd_, index, coeff2, coeff3);
+            load_op(LUT_ab_, LUT_cd_, index.template cast_to<int32>(), coeff2, coeff3);
             // Discard garbage resulting from 64bit read
             coeff2 = ::shuffle(coeff2, coeff3, mode);
             // Combines the two vectors
@@ -227,14 +228,14 @@ private:
 #if __AIE_ARCH__ == 20
     const int* LUT_ab_;
     const int* LUT_cd_;
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 ||  __AIE_ARCH__ == 22
     // TODO: CRVO-4468: compr and sparse functions should accept references to const pointers
     int* LUT_ab_;
     int* LUT_cd_;
 #endif
     int shift_addr_;
-    vector<int32, 16> idx_max_vec_;
-    vector<int32, 16> idx_min_vec_;
+    vector<idx_type, 16> idx_max_vec_;
+    vector<idx_type, 16> idx_min_vec_;
     const bool all_space_used_; //Determine if truncate/saturate would have no impact because space is fully used, and skip via PAR_LOOKUP_ALL_SPACE_MANIFEST if possible
 };
 

@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_ADD_ACCUM__HPP__
 #define __AIE_API_DETAIL_AIE1_ADD_ACCUM__HPP__
 
+#include <algorithm>
+
 #include "../add.hpp"
 
 namespace aie::detail {
-
 
 template <typename T, unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_vector_bits_impl<48, 8, T, Elems, Op>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -503,6 +503,468 @@ __aie_inline
 constexpr auto cbegin_vector_random_circular(const adf::io_buffer<T, Dir, Config> &port)
 {
     return begin_vector_random_circular<Elems, Resource>(port);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a const vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return make_vector_input_buffer_stream<Elems, Resource>(port.data());
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a const vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto cbegin_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return begin_vector_input_buffer_stream(port);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a vector output stream over given io buffer.
+ *
+ * @tparam Elems The size of the vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_vector_output_buffer_stream(adf::io_buffer<T, Dir, Config> &port)
+{
+    return make_vector_output_buffer_stream<Elems, Resource>(port.data());
+}
+
+#if AIE_API_ML_VERSION >= 200
+/**
+ * @ingroup group_adf
+ *
+ * Returns a sparse vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_sparse_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return sparse_vector_input_buffer_stream<T, Elems, Resource>(port.data());
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a sparse vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto cbegin_sparse_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return begin_sparse_vector_input_buffer_stream<Elems, Resource>(port);
+}
+#endif
+
+#if AIE_API_ML_VERSION >= 210
+/**
+ * @ingroup group_adf
+ *
+ * Returns a block vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_block_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return block_vector_input_buffer_stream<T, Elems, Resource>(port.data());
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a block vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto cbegin_block_vector_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return begin_block_vector_input_buffer_stream<Elems, Resource>(port);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a block vector output stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_block_vector_output_buffer_stream(adf::io_buffer<T, Dir, Config> &port)
+{
+    return block_vector_output_buffer_stream<T, Elems, Resource>(port.data());
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a restrict block vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_block_vector_restrict_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return block_vector_restrict_input_buffer_stream<T, Elems, Resource>(port.data());
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a restrict block vector input stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto cbegin_block_vector_restrict_input_buffer_stream(const adf::io_buffer<T, Dir, Config> &port)
+{
+    return begin_block_vector_restrict_input_buffer_stream<Elems, Resource>(port);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Returns a restrict block vector output stream over given io buffer.
+ *
+ * @tparam Elems The size of the block vector
+ * @tparam Resource Bank annotation
+ * @param port The io buffer
+ */
+template<unsigned Elems,
+         aie_dm_resource Resource = aie_dm_resource::none,
+         typename T,
+         typename Dir,
+         typename Config>
+__aie_inline
+constexpr auto begin_block_vector_restrict_output_buffer_stream(adf::io_buffer<T, Dir, Config> &port)
+{
+    return block_vector_restrict_output_buffer_stream<T, Elems, Resource>(port.data());
+}
+#endif
+
+
+namespace detail {
+
+template <typename T>
+struct addressing_mode { using type = ::adf::addressing::linear; };
+
+template <typename T, typename Dir, typename Config>
+struct addressing_mode<::adf::io_buffer<T, Dir, Config>>
+{
+    using type = typename Config::addressing_mode;
+};
+
+template <typename T>
+using addressing_mode_t = typename addressing_mode<T>::type;
+
+} // detail
+
+/**
+ * @ingroup group_adf
+ *
+ * Creates a tensor buffer stream for accessing multidimensional data from an ADF I/O buffer port.
+ *
+ * This function wraps an ADF I/O buffer port (input_buffer or output_buffer) with tensor buffer stream semantics,
+ * enabling hardware-accelerated multidimensional memory access patterns. The stream accesses data using the
+ * addressing pattern defined by the tensor descriptor.
+ *
+ * @tparam Resource Data Memory resource to be used for the access. Defaults to none.
+ * @tparam Mode     Tensor buffer stream mode. Defaults to default_mode.
+ * @tparam T        Type of the I/O buffer (must satisfy IOBuffer concept).
+ * @tparam TensorDescriptor Type of the tensor descriptor (automatically deduced).
+ *
+ * @param port         Reference to the I/O buffer port to wrap.
+ * @param tensor_desc  Tensor descriptor created with make_tensor_descriptor that describes the shape and
+ *                     stride of the multidimensional tensor.
+ *
+ * @return A tensor buffer stream object that accesses the I/O buffer according to the tensor descriptor.
+ *
+ * @sa make_tensor_descriptor
+ * @sa make_restrict_tensor_buffer_stream
+ * @sa input_buffer
+ * @sa output_buffer
+ */
+template<aie_dm_resource Resource = aie_dm_resource::none,
+         aie::tbs_mode Mode       = aie::tbs_mode::default_mode,
+         IOBuffer T,
+         typename TensorDescriptor>
+__aie_inline
+constexpr auto make_tensor_buffer_stream(T &port, const TensorDescriptor& tensor_desc)
+{
+    using type      = std::remove_pointer_t<decltype(port.data())>;
+    using desc_type = typename TensorDescriptor::type;
+    static_assert(std::is_same_v<detail::addressing_mode_t<T>, adf::addressing::linear>);
+    static_assert(Mask<desc_type> || std::is_same_v<type, desc_type>,
+                  "Input data type does not match tensor descriptor");
+    static_assert(Mode == aie::tbs_mode::default_mode,                   "Unsupported tbs_mode selected");
+
+    using ResourceType = decltype(Resource);
+    return detail::make_tensor_buffer_stream<ResourceType, Resource, Mode>(port, tensor_desc);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Creates a constant tensor buffer stream for accessing multidimensional data from an ADF I/O buffer port.
+ *
+ * This overload accepts a const reference to an I/O buffer port and creates a read-only tensor buffer stream.
+ * The returned stream can only be used for reading data from the buffer, preventing accidental modifications.
+ *
+ * @tparam Resource Data Memory resource to be used for the access. Defaults to none.
+ * @tparam Mode     Tensor buffer stream mode. Defaults to default_mode.
+ * @tparam T        Type of the I/O buffer (must satisfy IOBuffer concept).
+ * @tparam TensorDescriptor Type of the tensor descriptor (automatically deduced).
+ *
+ * @param port         Const reference to the I/O buffer port to wrap.
+ * @param tensor_desc  Tensor descriptor created with make_tensor_descriptor that describes the shape and
+ *                     stride of the multidimensional tensor.
+ *
+ * @return A constant tensor buffer stream object that can be used to read from the I/O buffer.
+ *
+ * @sa make_tensor_descriptor
+ * @sa make_restrict_tensor_buffer_stream
+ * @sa input_buffer
+ * @sa output_buffer
+ */
+template<aie_dm_resource Resource = aie_dm_resource::none,
+         aie::tbs_mode Mode       = aie::tbs_mode::default_mode,
+         IOBuffer T,
+         typename TensorDescriptor>
+__aie_inline
+constexpr auto make_tensor_buffer_stream(const T &port, const TensorDescriptor& tensor_desc)
+{
+    using type      = std::remove_pointer_t<decltype(port.data())>;
+    using desc_type = typename TensorDescriptor::type;
+    static_assert(std::is_same_v<detail::addressing_mode_t<T>, adf::addressing::linear>);
+    static_assert(Mask<desc_type> || std::is_same_v<type, desc_type>,
+                  "Input data type does not match tensor descriptor");
+    static_assert(Mode == aie::tbs_mode::default_mode,                   "Unsupported tbs_mode selected");
+
+    using ResourceType = decltype(Resource);
+    return detail::make_tensor_buffer_stream<ResourceType, Resource, Mode>(port, tensor_desc);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Creates a restrict tensor buffer stream for accessing multidimensional data from an ADF I/O buffer port.
+ *
+ * This function creates a tensor buffer stream with restrict semantics, indicating to the compiler that the
+ * I/O buffer is the only way to access the underlying data during the lifetime of the stream. This allows for
+ * more aggressive optimizations by removing potential aliasing concerns.
+ *
+ * @tparam Resource Data Memory resource to be used for the access. Defaults to none.
+ * @tparam Mode     Tensor buffer stream mode. Defaults to default_mode.
+ * @tparam T        Type of the I/O buffer (must satisfy IOBuffer concept).
+ * @tparam TensorDescriptor Type of the tensor descriptor (automatically deduced).
+ *
+ * @param port         Reference to the I/O buffer port to wrap.
+ * @param tensor_desc  Tensor descriptor created with make_tensor_descriptor that describes the shape and
+ *                     stride of the multidimensional tensor.
+ *
+ * @return A restrict tensor buffer stream object with additional optimization opportunities due to restrict semantics.
+ *
+ * @sa make_tensor_descriptor
+ * @sa make_tensor_buffer_stream
+ * @sa input_buffer
+ * @sa output_buffer
+ */
+template<aie_dm_resource Resource = aie_dm_resource::none,
+         aie::tbs_mode Mode       = aie::tbs_mode::default_mode,
+         IOBuffer T,
+         typename TensorDescriptor>
+__aie_inline
+constexpr auto make_restrict_tensor_buffer_stream(T &port, const TensorDescriptor& tensor_desc)
+{
+    using type      = std::remove_pointer_t<decltype(port.data())>;
+    using desc_type = typename TensorDescriptor::type;
+    static_assert(std::is_same_v<detail::addressing_mode_t<T>, adf::addressing::linear>);
+    static_assert(std::is_same_v<type, typename TensorDescriptor::type>, "Input data type does not match tensor descriptor");
+    static_assert(Mask<desc_type> || std::is_same_v<type, desc_type>,
+                  "Input data type does not match tensor descriptor");
+    static_assert(Mode == aie::tbs_mode::default_mode,                   "Unsupported tbs_mode selected");
+
+    using ResourceType = decltype(Resource);
+    constexpr bool Restrict = true;
+    return detail::make_tensor_buffer_stream<ResourceType, Resource, Mode, Restrict>(port, tensor_desc);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Creates a tensor buffer stream for accessing unaligned multidimensional data from an ADF I/O buffer port.
+ *
+ * This function wraps an ADF I/O buffer port (input_buffer or output_buffer) with tensor buffer stream semantics,
+ * enabling hardware-accelerated multidimensional memory access patterns. The stream accesses data using the
+ * addressing pattern defined by the tensor descriptor.
+ *
+ * @tparam Resource Data Memory resource to be used for the access. Defaults to none.
+ * @tparam Mode     Tensor buffer stream mode. Defaults to default_mode.
+ * @tparam T        Type of the I/O buffer (must satisfy IOBuffer concept).
+ * @tparam TensorDescriptor Type of the tensor descriptor (automatically deduced).
+ *
+ * @param port         Reference to the I/O buffer port to wrap.
+ * @param tensor_desc  Tensor descriptor created with make_tensor_descriptor that describes the shape and
+ *                     stride of the multidimensional tensor.
+ *
+ * @return A tensor buffer stream object that accesses the I/O buffer according to the tensor descriptor.
+ *
+ * @sa make_tensor_descriptor
+ * @sa make_restrict_tensor_buffer_stream
+ * @sa input_buffer
+ * @sa output_buffer
+ */
+template<aie_dm_resource Resource = aie_dm_resource::none,
+         aie::tbs_mode Mode       = aie::tbs_mode::default_mode,
+         IOBuffer T,
+         typename TensorDescriptor>
+__aie_inline
+constexpr auto make_unaligned_tensor_buffer_stream(T &port, const TensorDescriptor& tensor_desc)
+{
+    using type      = std::remove_pointer_t<decltype(port.data())>;
+    using desc_type = typename TensorDescriptor::type;
+    static_assert(std::is_same_v<detail::addressing_mode_t<T>, adf::addressing::linear>);
+    static_assert(Mask<desc_type> || std::is_same_v<type, desc_type>,
+                  "Input data type does not match tensor descriptor");
+    static_assert(Mode == aie::tbs_mode::default_mode,                   "Unsupported tbs_mode selected");
+
+    constexpr bool Restrict  = false;
+    constexpr bool Unaligned = true;
+
+    using ResourceType = decltype(Resource);
+    return detail::make_tensor_buffer_stream<ResourceType, Resource, Mode, Restrict, Unaligned>(port, tensor_desc);
+}
+
+/**
+ * @ingroup group_adf
+ *
+ * Creates a constant tensor buffer stream for accessing unaligned multidimensional data from an ADF I/O buffer port.
+ *
+ * This overload accepts a const reference to an I/O buffer port and creates a read-only tensor buffer stream.
+ * The returned stream can only be used for reading data from the buffer, preventing accidental modifications.
+ *
+ * @tparam Resource Data Memory resource to be used for the access. Defaults to none.
+ * @tparam Mode     Tensor buffer stream mode. Defaults to default_mode.
+ * @tparam T        Type of the I/O buffer (must satisfy IOBuffer concept).
+ * @tparam TensorDescriptor Type of the tensor descriptor (automatically deduced).
+ *
+ * @param port         Const reference to the I/O buffer port to wrap.
+ * @param tensor_desc  Tensor descriptor created with make_tensor_descriptor that describes the shape and
+ *                     stride of the multidimensional tensor.
+ *
+ * @return A constant tensor buffer stream object that can be used to read from the I/O buffer.
+ *
+ * @sa make_tensor_descriptor
+ * @sa make_restrict_tensor_buffer_stream
+ * @sa input_buffer
+ * @sa output_buffer
+ */
+template<aie_dm_resource Resource = aie_dm_resource::none,
+         aie::tbs_mode Mode       = aie::tbs_mode::default_mode,
+         IOBuffer T,
+         typename TensorDescriptor>
+__aie_inline
+constexpr auto make_unaligned_tensor_buffer_stream(const T &port, const TensorDescriptor& tensor_desc)
+{
+    using type      = std::remove_pointer_t<decltype(port.data())>;
+    using desc_type = typename TensorDescriptor::type;
+    static_assert(std::is_same_v<detail::addressing_mode_t<T>, adf::addressing::linear>);
+    static_assert(Mask<desc_type> || std::is_same_v<type, desc_type>,
+                  "Input data type does not match tensor descriptor");
+    static_assert(Mode == aie::tbs_mode::default_mode,                   "Unsupported tbs_mode selected");
+
+    constexpr bool Restrict  = false;
+    constexpr bool Unaligned = true;
+
+    using ResourceType = decltype(Resource);
+    return detail::make_tensor_buffer_stream<ResourceType, Resource, Mode, Restrict, Unaligned>(port, tensor_desc);
 }
 
 } // namespace aie

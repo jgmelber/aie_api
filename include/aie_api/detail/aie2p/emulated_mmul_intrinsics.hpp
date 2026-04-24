@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2P_EMULATED_MMUL_INTRINSICS__HPP__
 #define __AIE_API_DETAIL_AIE2P_EMULATED_MMUL_INTRINSICS__HPP__
+
+#if __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 template <typename T1, typename T2> requires(aie::detail::utils::is_one_of_v<T1, int32, uint32> &&
                                                      aie::detail::utils::is_one_of_v<T2, int32, uint32>)
@@ -43,6 +45,8 @@ inline v32acc64 mac_4x2_2x8_32bx32b(aie::vector<T1, 16> a, bool a_sign, aie::vec
 
     return acc;
 }
+
+#endif
 
 template <typename T1, typename T2> requires(aie::detail::utils::is_one_of_v<T1, int32, uint32> &&
                                                      aie::detail::utils::is_one_of_v<T2, int16, uint16>)
@@ -297,6 +301,18 @@ inline aie::accum<accfloat, 16> mul_4x8_8x4_fp32(v32float x, v32float y)
     aie::vector<float, 16> y6 = ::extract_v4float_broadcast_to_v16float(::extract_v16float(y, 1), 6);
     aie::vector<float, 16> y7 = ::extract_v4float_broadcast_to_v16float(::extract_v16float(y, 1), 7);
 
+#if __AIE_API_CRVO_9906__
+    aie::accum<accfloat, 32> acc = ::mul_elem_32(x0.template grow<32>(), y0.template grow<32>());
+    acc                          = ::mac_elem_32(x1.template grow<32>(), y1.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x2.template grow<32>(), y2.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x3.template grow<32>(), y3.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x4.template grow<32>(), y4.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x5.template grow<32>(), y5.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x6.template grow<32>(), y6.template grow<32>(), acc);
+    acc                          = ::mac_elem_32(x7.template grow<32>(), y7.template grow<32>(), acc);
+
+    return acc.template extract<16>(0);
+#else
     v16accfloat acc = ::mul_elem_16(x0, y0);
     acc             = ::mac_elem_16(x1, y1, acc);
     acc             = ::mac_elem_16(x2, y2, acc);
@@ -307,6 +323,7 @@ inline aie::accum<accfloat, 16> mul_4x8_8x4_fp32(v32float x, v32float y)
     acc             = ::mac_elem_16(x7, y7, acc);
 
     return acc;
+#endif
 }
 
 inline aie::accum<accfloat, 16> mac_4x8_8x4_fp32(v32float x, aie::vector<float, 32> y, v16accfloat acc, bool zero)
@@ -334,6 +351,19 @@ inline aie::accum<accfloat, 16> mac_4x8_8x4_fp32(v32float x, aie::vector<float, 
     aie::vector<float, 16> y6 = ::extract_v4float_broadcast_to_v16float(::extract_v16float(y, 1), 6);
     aie::vector<float, 16> y7 = ::extract_v4float_broadcast_to_v16float(::extract_v16float(y, 1), 7);
 
+#if __AIE_API_CRVO_9906__
+    aie::accum<accfloat, 32> tmp_acc{::set_v32accfloat(0, acc)};
+    tmp_acc = ::mac_elem_32_conf(x0.template grow<32>(), y0.template grow<32>(), tmp_acc, zero, 0, 0);
+    tmp_acc = ::mac_elem_32     (x1.template grow<32>(), y1.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x2.template grow<32>(), y2.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x3.template grow<32>(), y3.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x4.template grow<32>(), y4.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x5.template grow<32>(), y5.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x6.template grow<32>(), y6.template grow<32>(), tmp_acc);
+    tmp_acc = ::mac_elem_32     (x7.template grow<32>(), y7.template grow<32>(), tmp_acc);
+
+    return tmp_acc.extract<16>(0);
+#else
     acc = ::mac_elem_16_conf(x0, y0, acc, zero, 0, 0);
     acc = ::mac_elem_16     (x1, y1, acc);
     acc = ::mac_elem_16     (x2, y2, acc);
@@ -344,6 +374,7 @@ inline aie::accum<accfloat, 16> mac_4x8_8x4_fp32(v32float x, aie::vector<float, 
     acc = ::mac_elem_16     (x7, y7, acc);
 
     return acc;
+#endif
 }
 
 #endif

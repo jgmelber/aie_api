@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_SLIDING_MUL_ACC32_FP_HPP__
 #define __AIE_API_DETAIL_AIE2_SLIDING_MUL_ACC32_FP_HPP__
+
+#include <algorithm>
 
 #include "../mul.hpp"
 #include "../vector.hpp"
@@ -17,24 +19,24 @@ static constexpr auto sliding_mul_accfloat_get_mul_op()
 {
 #if __AIE_API_CBF16_SUPPORT__
     if constexpr (std::is_same_v<CoeffType, cbfloat16> || std::is_same_v<DataType, cbfloat16>) {
-        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_8_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_elem_8_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_8_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_8_2(args...); };
+        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_8_2_conf(args..., /*sub_mul=*/0); };
+        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_elem_8_2_conf(args..., /*sub_mul=*/0); };
+        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_8_2_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
+        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_8_2_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
     }
     else
 #endif
     if      constexpr (std::is_same_v<CoeffType, bfloat16>) {
-        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_16_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_elem_16_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_16_2(args...); };
-        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_16_2(args...); };
+        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_16_2_conf(args..., /*sub_mul=*/0); };
+        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_elem_16_2_conf(args..., /*sub_mul=*/0); };
+        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_16_2_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
+        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_16_2_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
     }
     else if constexpr (std::is_same_v<CoeffType, float>) {
-        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_16(args...); };
-        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::negmul_elem_16(args...); };
-        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_16(args...); };
-        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_16(args...); };
+        if      constexpr (MulOp == MulMacroOp::Mul)     return [](auto &&... args) __aie_inline { return ::mul_elem_16_conf(args..., /*sub_mul=*/0); };
+        else if constexpr (MulOp == MulMacroOp::NegMul)  return [](auto &&... args) __aie_inline { return ::mul_elem_16_conf(args..., /*sub_mul=*/1); };
+        else if constexpr (MulOp == MulMacroOp::Add_Mul) return [](auto &&... args) __aie_inline { return ::mac_elem_16_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
+        else if constexpr (MulOp == MulMacroOp::Sub_Mul) return [](auto &&... args) __aie_inline { return ::msc_elem_16_conf(args..., /*sub_mul=*/0, /*sub_acc1=*/0); };
     }
 }
 
@@ -57,6 +59,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, bfloat16, bfloa
                     const vector<data_type, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         constexpr auto mac_op = sliding_mul_accfloat_get_mul_op<add_to_op<MulOp>(), coeff_type, data_type>();
@@ -84,7 +87,8 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, bfloat16, bfloa
 
             tmp = mul_op(::concat(coeff_local, zero),
                          ::concat(data_local, zero),
-                         (acc.template grow_extract<lanes_per_mul>(idx_y))...);
+                         utils::get_nth<0>(acc.template grow_extract<lanes_per_mul>(idx_y), acc)...,
+                         utils::get_nth<0>(zero_acc, acc)...);
 
             utils::unroll_for<unsigned, 1, Points / columns_per_mul>([&](auto idx) __aie_inline {
                 const unsigned data_start_local =  (data_start + columns_per_mul * idx + idx_y * lanes_per_mul) % data_elems;
@@ -97,7 +101,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 16, 16, bfloat16, bfloa
 
                 tmp = mac_op(::concat(coeff_local, zero),
                              ::concat(data_local, zero),
-                             tmp);
+                             tmp, false);
             });
 
             if constexpr (Lanes <= lanes_per_mul)
@@ -130,6 +134,7 @@ struct sliding_mul_cbf16_common
                     const vector<data_type, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         constexpr auto mac_op = sliding_mul_accfloat_get_mul_op<add_to_op<MulOp>(), coeff_type, data_type>();
@@ -157,7 +162,8 @@ struct sliding_mul_cbf16_common
 
             tmp = mul_op(coeff_local,
                          ::concat(data_local, data_zero),
-                         (acc.template grow_extract<lanes_per_mul>(idx_y))...);
+                         utils::get_nth<0>(acc.template grow_extract<lanes_per_mul>(idx_y), acc)...,
+                         utils::get_nth<0>(zero_acc, acc)...);
 
             utils::unroll_for<unsigned, 1, Points / columns_per_mul>([&](auto idx) __aie_inline {
                 const unsigned data_start_local =  (data_start + columns_per_mul * idx + idx_y * lanes_per_mul) % data_elems;
@@ -170,7 +176,7 @@ struct sliding_mul_cbf16_common
 
                 tmp = mac_op(coeff_local,
                              ::concat(data_local, data_zero),
-                             tmp);
+                             tmp, false);
             });
 
             if constexpr (Lanes <= lanes_per_mul)
@@ -213,6 +219,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 32, 32, float, float>
                     const vector<data_type, N_Data> &data,
                     unsigned data_start,
                     bool data_sign,
+                    bool zero_acc,
                     const Acc &... acc)
     {
         constexpr auto mac_op = sliding_mul_accfloat_get_mul_op<add_to_op<MulOp>(), coeff_type, data_type>();
@@ -238,7 +245,10 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 32, 32, float, float>
                                                                           data_start_local)
                              .template extract<lanes_per_mul>(0);
 
-            tmp = mul_op(coeff_local, data_local, (acc.template grow_extract<lanes_per_mul>(idx_y))...);
+            tmp = mul_op(coeff_local,
+                         data_local,
+                         utils::get_nth<0>(acc.template grow_extract<lanes_per_mul>(idx_y), acc)...,
+                         utils::get_nth<0>(zero_acc, acc)...);
 
             utils::unroll_for<unsigned, 1, Points / columns_per_mul>([&](auto idx) __aie_inline {
                 const unsigned data_start_local =  (data_start + columns_per_mul * idx + idx_y * lanes_per_mul) % data_elems;
@@ -249,7 +259,7 @@ struct sliding_mul_bits_impl<Lanes, Points, 1, 1, 1, 32, 32, 32, float, float>
                                                                              data_start_local)
                                  .template extract<lanes_per_mul>(0);
 
-                tmp = mac_op(coeff_local, data_local, tmp);
+                tmp = mac_op(coeff_local, data_local, tmp, false);
             });
 
             if constexpr (Lanes <= lanes_per_mul)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -15,7 +15,7 @@ namespace aie::detail {
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_up_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -33,7 +33,7 @@ struct shuffle_up_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_up_fill_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, const vector_type &fill, unsigned n)
@@ -54,7 +54,7 @@ struct shuffle_up_fill_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_up_rotate_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -75,7 +75,7 @@ struct shuffle_up_rotate_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_up_replicate_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -96,7 +96,7 @@ struct shuffle_up_replicate_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_down_replicate_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -130,7 +130,7 @@ struct shuffle_up_replicate_bits_impl : public shuffle_up_replicate_bits_impl_sc
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_down_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -148,7 +148,7 @@ struct shuffle_down_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_down_fill_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, const vector_type &fill, unsigned n)
@@ -169,7 +169,7 @@ struct shuffle_down_fill_bits_impl_scalar
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct shuffle_down_rotate_bits_impl_scalar
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v, unsigned n)
@@ -231,7 +231,7 @@ struct shuffle_up_replicate_bits
     __aie_inline
     static vector_type run(const vector_type &v, unsigned n)
     {
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
         return shuffle_up_fill_bits_impl<TypeBits, T, Elems>::run(v, broadcast<T, Elems>::run(v[0]),  n);
 #else
         return shuffle_up_replicate_bits_impl<TypeBits, T, Elems>::run(v, n);
@@ -295,7 +295,7 @@ struct shuffle_down_replicate_bits
     __aie_inline
     static vector_type run(const vector_type &v, unsigned n)
     {
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
         return shuffle_down_fill_bits_impl<TypeBits, T, Elems>::run(v, broadcast<T, Elems>::run(v[Elems - 1]), n);
 #else
         return shuffle_down_replicate_bits_impl<TypeBits, T, Elems>::run(v, n);
@@ -334,7 +334,7 @@ using shuffle_down_replicate = shuffle_down_replicate_bits<type_bits_v<T>, T, El
 #include "aie1/shuffle.hpp"
 #include "aie1/shuffle_replicate.hpp"
 
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/shuffle.hpp"
 

@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE1_ACCUMULATE__HPP__
 #define __AIE_API_DETAIL_AIE1_ACCUMULATE__HPP__
 
+#include <type_traits>
+
 #include "../accum.hpp"
 #include "../vector.hpp"
 #include "../broadcast.hpp"
 #include "../mul.hpp"
-
-#include <type_traits>
 
 namespace aie::detail {
 

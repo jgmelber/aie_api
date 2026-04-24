@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -13,9 +13,11 @@
 #define AIE_API_NATIVE 1
 #endif
 
-#define __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#ifndef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#define __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__ 1
+#endif
 
-#if AIE_API_NATIVE == 0
+#if __chess__
 #define __AIE_API_FUNDAMENTAL_TYPE__ [[chess::behave_as_fundamental_type]]
 #define __AIE_API_KEEP_IN_REGISTERS__ [[chess::keep_in_registers]]
 #else
@@ -40,6 +42,20 @@
 #endif
 #endif
 
+#if __chess__
+#define __aie_api_duplicate(x) chess_duplicate((x))
+#else
+#define __aie_api_duplicate(x) (x)
+#endif
+
+#ifndef __AIE_API_COMPLEX_VECTOR_SUPPORT__
+#if __AIECC__
+#define __AIE_API_COMPLEX_VECTOR_SUPPORT__ 0
+#else
+#define __AIE_API_COMPLEX_VECTOR_SUPPORT__ 1
+#endif
+#endif
+
 #if __AIE_ARCH__ == 10
 
 #include "aie1/config.hpp"
@@ -52,9 +68,13 @@
 
 #include "aie2p/config.hpp"
 
+#elif __AIE_ARCH__ == 22
+
+#include "aie2ps/config.hpp"
+
 #endif
 
-#if (AIE_API_NATIVE == 0) && (__AIE_API_SCALAR_TYPES_CONSTEXPR__ != 0)
+#if (AIE_API_NATIVE == 0)
 #define SCALAR_TYPES_CONSTEXPR constexpr
 #else
 #define SCALAR_TYPES_CONSTEXPR
@@ -67,20 +87,33 @@
 #define BFLOAT16_CONSTEXPR
 #endif
 
-#if __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-
-#if __AIE_API_SHIFT_BYTES__
-#define SHIFT_BYTES ::shift_bytes
+#if (AIE_API_NATIVE == 0)
+#define FLOAT16_CONSTEXPR constexpr
 #else
-#define SHIFT_BYTES ::shift
+#define FLOAT16_CONSTEXPR
 #endif
 
+#if (AIE_API_NATIVE == 0)
+#define BFLOAT8_CONSTEXPR constexpr
+#else
+#define BFLOAT8_CONSTEXPR
+#endif
+
+#if (AIE_API_NATIVE == 0)
+#define FLOAT8_CONSTEXPR constexpr
+#else
+#define FLOAT8_CONSTEXPR
 #endif
 
 namespace aie {
 
 /**
  * @ingroup group_utility_functions
+ * @defgroup group_utility_arch Architecture helpers
+ */
+
+/**
+ * @ingroup group_utility_arch
  *
  * Structure used to represent the AIE architecture being compiled against.
  */
@@ -91,21 +124,16 @@ struct arch {
     enum ArchVersion : unsigned {
         AIE      = 10,
         AIE_ML   = 20,
-        XDNA_2   = 21
+        XDNA2    = 21,
+        AIE_MLv2 = 22
     };
 
     /**
      * An enum defining available AIE generations, which are defined as:
-     *
-     * <ul>
-     * <li>Gen1: AIE</li>
-     * <li>Gen2: AIE-ML/XDNA 1, XDNA_2</li>
-     * </ul>
-     *
      */
     enum ArchGeneration : unsigned {
-        Gen1 = 1,
-        Gen2 = 2
+        Gen1 = 1, //!< AIE
+        Gen2 = 2  //!< AIE-ML/XDNA1, XDNA2, AIE-MLv2
     };
 
     /**
@@ -129,7 +157,7 @@ struct arch {
     /**
      * Checks if the current AIE architecture version against the supplied generation pack.
      *
-     * @param vs A pack of ArchGenerations to test the current version against
+     * @param gens A pack of ArchGenerations to test the current version against
      */
     template <typename... T> requires (std::is_same_v<T, ArchGeneration> && ...)
     static constexpr bool is(T... gens) { return ((generation == gens) || ...); }

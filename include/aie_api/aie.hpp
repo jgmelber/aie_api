@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -12,23 +12,23 @@
 #ifndef __AIE_API_AIE__HPP__
 #define __AIE_API_AIE__HPP__
 
+#if !__AIENGINE__
+
+// Forward declaration of common AI API types that may be visible at the graph level
+#include "aie_declaration.hpp"
+
+#else // __AIENGINE__
+
+#if !defined(__AIE_ARCH__)
+#error "'__AIE_ARCH__' macro is required to compile AIE API kernels"
+#endif
+
 // AIE API currently requires C++20
 #define AIE_API_CXX_VERSION 202002L
 
-// TODO: When host/graph compiler is updated to C++20 we will need to change this logic
 #if __cplusplus < AIE_API_CXX_VERSION
-
-#ifdef __chess__
-
 #error "C++20 or greater is required to compile AIE API kernels"
-
-#else
-
-#include "aie_declaration.hpp"
-
 #endif
-
-#else
 
 #include <algorithm>
 #include <array>
@@ -128,102 +128,11 @@ struct is_valid_elem_op
 template <typename T1, typename T2>
 static constexpr bool is_valid_elem_op_v = is_valid_elem_op<T1, T2>::value;
 
-template <typename T1, typename T2>
-struct is_valid_mul_op
-{
-    using type1 = operand_base_type_t<T1>;
-    using type2 = operand_base_type_t<T2>;
-
-    static constexpr bool value()
-    {
-#if __AIE_ARCH__ == 10
-        if      constexpr (Utils::is_one_of_v<type2, int8, uint8>)
-            return Utils::is_one_of_v<type1, int8, uint8, int16>;
-        else if constexpr (std::is_same_v<type2, int16>)
-            return Utils::is_one_of_v<type1, int8, uint8, int16, int32, cint16, cint32>;
-        else if constexpr (std::is_same_v<type2, int32>)
-            return Utils::is_one_of_v<type1, int16, int32, cint16, cint32>;
-        else if constexpr (Utils::is_one_of_v<type2, float, cfloat>)
-            return Utils::is_one_of_v<type1, float, cfloat>;
-        else if constexpr (std::is_same_v<type2, cint16>)
-            return Utils::is_one_of_v<type1, int16, int32, cint16, cint32>;
-        else if constexpr (std::is_same_v<type2, cint32>)
-            return Utils::is_one_of_v<type1, int16, int32, cint16, cint32>;
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (Utils::is_one_of_v<type2, int4, uint4>)
-            return Utils::is_one_of_v<type1, int4, uint4, int8, uint8>;
-        else if constexpr (Utils::is_one_of_v<type2, int8, uint8>)
-            return Utils::is_one_of_v<type1, int4, uint4, int8, uint8, int16, uint16>;
-        else if constexpr (Utils::is_one_of_v<type2, int16, uint16>)
-            return Utils::is_one_of_v<type1, int8, uint8, int16, uint16, int32, uint32, cint16, cint32>;
-        else if constexpr (Utils::is_one_of_v<type2, int32, uint32>)
-            return Utils::is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-#if __AIE_API_CBF16_SUPPORT__
-        else if constexpr (Utils::is_one_of_v<type2, bfloat16, cbfloat16>)
-            return Utils::is_one_of_v<type1, bfloat16, cbfloat16>;
-#endif
-        else if constexpr (Utils::is_one_of_v<type2, float, cfloat>)
-            return Utils::is_one_of_v<type1, float, cfloat>;
-#else
-        else if constexpr (std::is_same_v<type2, float>)
-            return std::is_same_v<type1, float>;
-#endif
-        else if constexpr (std::is_same_v<type2, cint16>)
-            return Utils::is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
-        else if constexpr (std::is_same_v<type2, cint32>)
-            return Utils::is_one_of_v<type1, int16, uint16, int32, uint32, cint16, cint32>;
-#if !__AIE_API_CBF16_SUPPORT__
-        else if constexpr (std::is_same_v<type2, bfloat16>)
-            return std::is_same_v<type1, bfloat16>;
-#endif
-#endif
-
-        return false;
-    }
-};
-
-template <typename Parent, Operation Op, typename T2>
-struct is_valid_mul_op<unary_op<Parent, Op>, T2>
-{
-    static constexpr bool value()
-    {
-        return is_valid_mul_op<typename unary_op<Parent, Op>::value_type, T2>::value();
-    }
-};
-
-template <typename T, typename Parent, Operation Op>
-struct is_valid_mul_op<T, unary_op<Parent, Op>>
-{
-    static constexpr bool value()
-    {
-        return is_valid_mul_op<T, typename unary_op<Parent, Op>::value_type>::value();
-    }
-};
-
-template <typename Parent1, typename Parent2, Operation Op, typename T2>
-struct is_valid_mul_op<binary_op<Parent1, Parent2, Op>, T2>
-{
-    static constexpr bool value()
-    {
-        return is_valid_mul_op<typename binary_op<Parent1, Parent2, Op>::value_type, T2>::value();
-    }
-};
-
-template <typename T, typename Parent1, typename Parent2, Operation Op>
-struct is_valid_mul_op<T, binary_op<Parent1, Parent2, Op>>
-{
-    static constexpr bool value()
-    {
-        return is_valid_mul_op<T, typename binary_op<Parent1, Parent2, Op>::value_type>::value();
-    }
-};
-
 #if AIE_API_ML_VERSION >= 210
-template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems, ElemBaseOrBlockType TypeA, ElemBaseOrBlockType TypeB, AccumElemBaseType AccumTag>
+template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems, ElemBaseOrBlockType TypeA, ElemBaseOrBlockType TypeB, AccumElemBaseType AccumTag, accum_ownership Ownership>
 struct mmul;
 #else
-template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag>
+template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag, accum_ownership Ownership>
 struct mmul;
 #endif
 
@@ -234,8 +143,8 @@ struct is_mmul
     static constexpr bool value = false;
 };
 
-template  <unsigned M, unsigned K, unsigned N, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag>
-struct is_mmul<mmul<M, K, N, TypeA, TypeB, AccumTag>>
+template  <unsigned M, unsigned K, unsigned N, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag, accum_ownership Ownership>
+struct is_mmul<mmul<M, K, N, TypeA, TypeB, AccumTag, Ownership>>
 {
     static constexpr bool value = true;
 };
@@ -250,10 +159,10 @@ template <typename T>
 static constexpr bool is_mmul_or_op_v =  is_mmul_v<aie_dm_resource_remove_t<T>> ||
                                          is_op_v<T>;
 
-template  <unsigned M, unsigned K, unsigned N, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag>
-struct op_value_type_helper<mmul<M, K, N, TypeA, TypeB, AccumTag>>
+template  <unsigned M, unsigned K, unsigned N, ElemBaseType TypeA, ElemBaseType TypeB, AccumElemBaseType AccumTag, accum_ownership Ownership>
+struct op_value_type_helper<mmul<M, K, N, TypeA, TypeB, AccumTag, Ownership>>
 {
-    using type = typename mmul<M, K, N, TypeA, TypeB, AccumTag>::value_type;
+    using type = typename mmul<M, K, N, TypeA, TypeB, AccumTag, Ownership>::value_type;
 };
 
 template <typename T>
@@ -400,11 +309,48 @@ constexpr unary_op<Acc, Operation::Acc_Sub> op_sub(const Acc &acc)
  * @param e Vector, vector element, or accumulator to which the operation is performed.
  *          The type must meet @ref aie::Vector, @ref aie::SparseVector, @ref aie::Elem or @ref aie::Accum.
  */
-template <typename T> requires(Vector<T> || SparseVector<T> || Elem<T> || Accum<T>)
+template <typename T> requires(Vector<T>
+#if AIE_API_ML_VERSION >= 210
+                               || BlockVector<T>
+#endif
+                               || SparseVector<T>
+                               || Elem<T>
+                               || Accum<T>)
 __aie_inline
 constexpr unary_op<T, Operation::None> op_none(const T &e)
 {
     return {e};
+}
+
+/**
+ * @ingroup group_basic_types_ops
+ *
+ * Returns an empty operation modifier for the given tensor buffer stream
+ *
+ * @param e A reference to a @ref aie::TensorBufferStream
+ */
+template <TensorBufferStream T>
+__aie_inline
+unary_op<T, Operation::None> op_none(T &e)
+{
+    return {e};
+}
+
+/**
+ * @ingroup group_basic_types_ops
+ *
+ * Returns an empty operation modifier for the given input argument when it is not an operation already
+ * and when it is it returns the input itself
+ *
+ * @param arg The input argument
+ */
+template <typename T>
+__aie_inline
+auto op_or_none(T &&arg) {
+    if constexpr (!is_op_v<std::remove_cvref_t<T>>)
+        return op_none(std::forward<T>(arg));
+    else
+        return std::forward<T>(arg);
 }
 
 /**
@@ -483,6 +429,21 @@ constexpr binary_op<T, bool, Operation::Sign> op_sign(const T &e, bool is_signed
 /**
  * @ingroup group_basic_types_ops
  *
+ * Returns dynamically signed/unsigned operation modifier for the given tensor buffer stream
+ *
+ * @param e A reference to a @ref aie::TensorBufferStream
+ * @param is_signed Controls if the first paramer is interpreted as signed, or not.
+ */
+template <TensorBufferStream T>
+__aie_inline
+binary_op<T, bool, Operation::Sign> op_sign(T &e, bool is_signed)
+{
+    return {e, is_signed};
+}
+
+/**
+ * @ingroup group_basic_types_ops
+ *
  * Zeroes out the given accumulator or not depending on the zero parameter. On some architectures this operation can be collapsed with
  * a subsequent operation.
  *
@@ -494,6 +455,24 @@ __aie_inline
 constexpr binary_op<Acc, bool, Operation::Zero> op_zero(const Acc &acc, bool to_zero)
 {
     return {acc, to_zero};
+}
+
+/**
+ * @ingroup group_basic_types_ops
+ *
+ * Conditionally negates the operand based on the to_negate parameter.
+ * On some architectures this operation can be collapsed with a subsequent operation.
+ *
+ * @param e         Vector, element or accumulator passed to the operation. The type must meet
+ *                  @ref aie::Vector, @ref aie::Elem, @ref aie::Accum or be another operation,
+ *                  using an integer type.
+ * @param to_negate Controls if the first paramer is negated, or not.
+ */
+template <typename T> requires(Vector<T> || Elem<T> || Accum<T> || is_op_v<T>)
+__aie_inline
+constexpr binary_op<T, bool, Operation::Neg> op_neg(const T &e, bool to_negate)
+{
+    return {e, to_negate};
 }
 
 /**
@@ -554,7 +533,7 @@ static constexpr unsigned vector_decl_align   = detail::vector_decl_align;
 /**
  * @ingroup group_memory
  *
- * Specifies the minimum alignment requirement for vector loads and stores.
+ * Specifies the minimum alignment requirement in bytes for vector loads and stores.
  *
  * @sa @ref aie::vector_decl_align
  * @sa @ref aie::load_v
@@ -562,6 +541,18 @@ static constexpr unsigned vector_decl_align   = detail::vector_decl_align;
  */
 template <DecoratedElemBaseType T, unsigned Elems>
 static constexpr unsigned vector_ldst_align_v = detail::vector_ldst_align_v<T, Elems>;
+
+/**
+ * @ingroup group_memory
+ *
+ * Specifies the minimum alignment requirement in elements for vector loads and stores.
+ *
+ * @sa @ref aie::vector_decl_align
+ * @sa @ref aie::load_v
+ * @sa @ref aie::vector<T, Elems>::load
+ */
+template <DecoratedElemBaseType T, unsigned Elems>
+static constexpr unsigned vector_ldst_align_elems_v = (detail::vector_ldst_align_v<T, Elems> * 8) / detail::type_bits_v<T>;
 
 /**
  * @ingroup group_memory
@@ -938,7 +929,7 @@ auto pack(const Vec &v) -> vector<T2, Vec::size()>
  * Returns the values of the passed accumulator in a vector of the requested type. The values can be shifted down before rounding and saturation are applied
  * (does not apply to floating point accumulators).
  *
- * \note On AIE-ML/XDNA 1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
+ * \note On AIE-ML/XDNA1 shift values of -4, -3, and -2 are unsafe, as they will only produce correct result if truncation
  * is selected or saturation against 0 is required.
  *
  * @param acc   Input accumulator.  The type must meet @ref aie::AccumOrOp or @ref aie::MmulOrOp.
@@ -1116,6 +1107,64 @@ vector<operand_base_type_t<E>, Elems> broadcast(E a)
         return detail::broadcast<T, Elems>::run(vector_elem_const_ref(a));
     else
         return detail::broadcast<T, Elems>::run(a);
+}
+
+/**
+ * @ingroup group_init
+ *
+ * Returns a vector whose elements are initialized to a repeating set of values.
+ *
+ * @code
+ * unsigned i = 0;
+ * while (i < Elems)
+ *   for (unsigned j = 0; j < N; ++j)
+ *     out[i++] = a[j];
+ * @endcode
+ *
+ * @tparam T     Element type of the result vector.
+ * @tparam Elems Size of the result vector.
+ * @tparam N     Number of repeating elements. The combined number of bits must be small to fit in a scalar value (64bit or smaller).
+ *
+ * @param a Set of values. Its elements must meet @ref aie::ElemBaseType.
+ */
+template <ElemBaseType T, unsigned Elems = native_vector_length_v<T>, unsigned N>
+     requires(arch::is(arch::Gen2)
+             && detail::utils::is_powerof2(N)
+             && (detail::type_bits_v<T> * N) <= 64)
+__aie_inline
+vector<T, Elems> broadcast(const T (&a)[N])
+{
+    return detail::broadcast<T, Elems>::run(a);
+}
+
+/**
+ * @ingroup group_init
+ *
+ * Returns a vector whose elements are initialized to a repeating set of values.
+ *
+ * @code
+ * unsigned i = 0;
+ * while (i < Elems)
+ *   for (unsigned j = index * N; j < (index + 1) * N; ++j)
+ *     out[i++] = v[j];
+ * @endcode
+ *
+ * @tparam N      Number of repeating elements.
+ * @tparam T      Element type of the result vector.
+ * @tparam Elems  Size of the result vector.
+ * @tparam Elems2 Size of the vector where to get values to be broadcast from
+ *
+ * @param v     Vector with the values to be broadcast
+ * @param index Index of the sequence of N elements to be broadcast
+ */
+template <unsigned N, ElemBaseType T, unsigned Elems = native_vector_length_v<T>, unsigned Elems2>
+     requires(arch::is(arch::Gen2)
+             && detail::utils::is_powerof2(N)
+             && N <= Elems)
+__aie_inline
+vector<T, Elems> broadcast_vector(const vector<T, Elems2> &v, unsigned index)
+{
+    return detail::broadcast_vector<T, Elems, N>::run(v, index);
 }
 
 /**
@@ -2116,6 +2165,14 @@ typename Vec::value_type reduce_max(const Vec &v)
     return detail::max_reduce<T, Elems>::run(v);
 }
 
+template <ElemBaseType T, unsigned Elems>
+    requires(RealElem<T>)
+__aie_inline
+T reduce_max(const T &max, const aie::vector<T, Elems> &v)
+{
+    return detail::max_reduce<T, Elems>::run(max, v);
+}
+
 template <RealVector Vec>
 [[deprecated("Use reduce_max instead")]]
 __aie_inline
@@ -2286,6 +2343,14 @@ typename Vec::value_type reduce_min(const Vec &v)
     constexpr unsigned Elems = Vec::size();
 
     return detail::min_reduce<T, Elems>::run(v);
+}
+
+template <ElemBaseType T, unsigned Elems>
+    requires(RealElem<T>)
+__aie_inline
+T reduce_min(const T &min, const aie::vector<T, Elems> &v)
+{
+    return detail::min_reduce<T, Elems>::run(min, v);
 }
 
 template <RealVector Vec>
@@ -3293,7 +3358,7 @@ auto filter_even(const Vec &v, unsigned chunk_size = 1) -> vector<typename Vec::
  */
 template <ComplexElem Elem>
 __aie_inline
-auto real(Elem e) -> detail::utils::get_complex_component_type_t<operand_base_type_t<Elem>>
+auto real(Elem e) -> detail::remove_complex_t<operand_base_type_t<Elem>>
 {
     using T_base = operand_base_type_t<Elem>;
     T_base value = e;
@@ -3309,7 +3374,7 @@ auto real(Elem e) -> detail::utils::get_complex_component_type_t<operand_base_ty
  */
 template <ComplexElem Elem>
 __aie_inline
-auto imag(Elem e) -> detail::utils::get_complex_component_type_t<operand_base_type_t<Elem>>
+auto imag(Elem e) -> detail::remove_complex_t<operand_base_type_t<Elem>>
 {
     using T_base = operand_base_type_t<Elem>;
     T_base value = e;
@@ -3325,9 +3390,10 @@ auto imag(Elem e) -> detail::utils::get_complex_component_type_t<operand_base_ty
  */
 template <ComplexVector Vec>
 __aie_inline
-auto real(const Vec &v) -> vector<detail::utils::get_complex_component_type_t<typename Vec::value_type>, Vec::size()>
+auto real(const Vec &v) -> detail::remove_complex_t<Vec>
 {
-    return filter_even(v.template cast_to<detail::utils::get_complex_component_type_t<typename Vec::value_type>>());
+    using real_elem_t = detail::remove_complex_t<typename Vec::value_type>;
+    return filter_even(v.template cast_to<real_elem_t>());
 }
 
 /**
@@ -3339,9 +3405,10 @@ auto real(const Vec &v) -> vector<detail::utils::get_complex_component_type_t<ty
  */
 template <ComplexVector Vec>
 __aie_inline
-auto imag(const Vec &v) -> vector<detail::utils::get_complex_component_type_t<typename Vec::value_type>, Vec::size()>
+auto imag(const Vec &v) -> detail::remove_complex_t<Vec>
 {
-    return filter_odd(v.template cast_to<detail::utils::get_complex_component_type_t<typename Vec::value_type>>());
+    using real_elem_t = detail::remove_complex_t<typename Vec::value_type>;
+    return filter_odd(v.template cast_to<real_elem_t>());
 }
 
 /**
@@ -3608,7 +3675,7 @@ auto saturating_add(const Vec1 &v1, const Vec2 &v2) -> aie_dm_resource_remove_t<
     constexpr bool is_complex = Vec1::is_complex();
 
     using T = typename Vec1::value_type;
-    using U = std::conditional_t<is_complex, detail::utils::get_complex_component_type_t<T>, T>;
+    using U = detail::remove_complex_t<T>;
 
     constexpr unsigned Elems = is_complex ? 2 * Vec1::size() : Vec1::size();
 
@@ -3911,7 +3978,7 @@ auto add(const Acc &acc, E a) -> result_type_t<Acc>
  *
  * @tparam TR Type of returned integer vector, default to int32 but can be set to int16
  */
-template <typename TR = int32, ComplexVector Vec> requires(Utils::is_one_of_v<TR, int32, int16>)
+template <typename TR = int32, ComplexIntegralVector Vec> requires(Utils::is_one_of_v<TR, int32, int16>)
 __aie_inline
 constexpr auto abs_square(const Vec &v, int shift = 0)
 {
@@ -3934,11 +4001,12 @@ constexpr auto abs_square(const Vec &v, int shift = 0)
  *
  * @param v     Input complex vector
  */
-template <unsigned Elems> requires (arch::is(arch::AIE) || (arch::is(arch::AIE_ML) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
+template <typename TR = float, ComplexFloatVector Vec>
+    requires (arch::is(arch::AIE) || (arch::is(arch::AIE_ML, arch::AIE_MLv2) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
 __aie_inline
-constexpr vector<float, Elems> abs_square(const vector<cfloat, Elems> &v)
+constexpr auto abs_square(const Vec &v)
 {
-    return detail::abs_square<cfloat, float, Elems>::run(v, 0);
+    return detail::abs_square<typename Vec::value_type, TR, Vec::size()>::run(v, 0);
 }
 
 /**
@@ -3946,15 +4014,13 @@ constexpr vector<float, Elems> abs_square(const vector<cfloat, Elems> &v)
  *
  * Compute the absolute square of a scalar complex value
  *
- * @code
- * out = v.real² + v.imag²;
- * @endcode
+ * \f$ f(a + b i) = a^2 + b^2 \f$
  *
  * @param v     Input complex scalar
  */
 template <ComplexElem E>
 __aie_inline
-constexpr auto abs_square(const E &v) -> detail::utils::get_complex_component_type_t<operand_base_type_t<E>>
+constexpr auto abs_square(const E &v) -> detail::remove_complex_t<operand_base_type_t<E>>
 {
     using T_base = operand_base_type_t<E>;
     T_base value = v;
@@ -4014,7 +4080,7 @@ static constexpr int min_shift = detail::min_shift;
  */
 template <Vector Vec>
 __aie_inline
-constexpr auto upshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
+auto upshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
 {
     using T = typename Vec::value_type;
     constexpr unsigned Elems = Vec::size();
@@ -4034,12 +4100,14 @@ constexpr auto upshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t
  */
 template <Vector Vec>
 __aie_inline
-constexpr auto downshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
+auto downshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
 {
     using T = typename Vec::value_type;
     constexpr unsigned Elems = Vec::size();
 
     REQUIRES_MSG(shift <= detail::max_shift, "Shift value cannot exceed aie::max_shift");
+
+    scoped_mode rnd_mode{rounding_mode::floor};
 
     return detail::shift<T, Elems>::run(v, 0, shift);
 }
@@ -4054,16 +4122,17 @@ constexpr auto downshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove
  */
 template <Vector Vec>
 __aie_inline
-constexpr auto logical_downshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
+auto logical_downshift(const Vec &v, unsigned shift) -> aie_dm_resource_remove_t<Vec>
 {
     using T = typename Vec::value_type;
 
     REQUIRES_MSG(shift <= detail::max_shift, "Shift value cannot exceed aie::max_shift");
 
+    constexpr unsigned RealElems = Vec::size() * (Vec::is_complex() ? 2 : 1);
+    using RealT = detail::remove_complex_t<T>;
+
 #if __AIE_ARCH__ == 10
-    constexpr unsigned RealElems = Vec::is_complex() ? Vec::size() * 2 : Vec::size();
-    using RealT   = std::conditional_t<Vec::is_complex(), Utils::get_complex_component_type_t<T>, T>;
-    using RealVec = std::conditional_t<Vec::is_complex(), vector<RealT, RealElems>, Vec>;
+    using RealVec = vector<RealT, RealElems>;
 
     constexpr RealT top_bit  = RealT(1 << (detail::type_bits_v<RealT> - 1));
               RealT top_bits = top_bit >> shift;
@@ -4074,10 +4143,11 @@ constexpr auto logical_downshift(const Vec &v, unsigned shift) -> aie_dm_resourc
     RealVec zero = zeros<RealT, RealElems>();
     return detail::sub<RealT, RealElems>::run(tmp.template cast_to<RealT>(), select(zero, top_bits, lt(tmp, zero))).template cast_to<T>();
 #else
-    constexpr unsigned Elems = Vec::size();
-    using U = typename detail::utils::make_unsigned_t<T>;
+    scoped_mode rnd_mode{rounding_mode::floor};
 
-    return detail::shift<U, Elems>::run(v.template cast_to<U>(), 0, shift).template cast_to<T>();
+    using U  = typename detail::utils::make_unsigned_t<RealT>;
+
+    return detail::shift<U, RealElems>::run(v.template cast_to<U>(), 0, shift).template cast_to<T>();
 #endif
 }
 
@@ -4180,7 +4250,8 @@ constexpr auto conj(const E &a) -> operand_base_type_t<E>
 /**
  * @ingroup group_reduce
  *
- * Returns sum of the elements in the input vector.
+ * Returns the sum of all input vector elements. Higher precision intermediate values may be used to perform this
+ * reduction.
  *
  * @param v Input vector. The type must meet @ref aie::Vector.
  */
@@ -4192,6 +4263,40 @@ typename Vec::value_type reduce_add(const Vec &v)
     constexpr unsigned Elems = Vec::size();
 
     return detail::add_reduce<T, Elems>::run(v);
+}
+
+template <ElemBaseType T, unsigned Elems>
+__aie_inline
+T reduce_add(const T &total, const aie::vector<T, Elems> &v)
+{
+    return detail::add_reduce<T, Elems>::run(total, v);
+}
+
+/**
+ * @ingroup group_reduce
+ *
+ * Returns the sum of all input vector elements. This overload is useful when the result must be converted to a lower
+ * precision format and the input values are already available in an accumulator (for example, as a result of a previous
+ * operation such as a multiplication).
+ *
+ * @param acc  Input accumulator. The type must meet @ref aie::Accum.
+ * @tparam Acc Input accumulator type.
+ * @tparam T   Result type after reduction. The type must be compatible with the input accumulator.
+ *
+ * Example:
+ * @code
+ * aie::accum<accfloat, 16> acc = ...;
+ * bfloat16 result = aie::reduce_add<bfloat16>(acc);
+ * @endcode
+ */
+template <ElemBaseType T, Accum Acc>
+__aie_inline
+T reduce_add(const Acc &acc)
+    requires(Acc::value_class() == detail::accum_class_for_type_v<T>)
+{
+    constexpr unsigned Elems = Acc::size();
+
+    return detail::add_reduce<T, Elems>::run(acc);
 }
 
 template <Vector Vec>
@@ -4277,7 +4382,7 @@ auto saturating_sub(const Vec1 &v1, const Vec2 &v2) -> aie_dm_resource_remove_t<
     constexpr bool is_complex = Vec1::is_complex();
 
     using T = typename Vec1::value_type;
-    using U = std::conditional_t<is_complex, detail::utils::get_complex_component_type_t<T>, T>;
+    using U = detail::remove_complex_t<T>;
 
     constexpr unsigned Elems = is_complex ? 2 * Vec1::size() : Vec1::size();
 
@@ -4582,29 +4687,35 @@ constexpr auto mul(const Vec1 &v1, const Vec2 &v2) -> accum<AccumTag, Vec1::size
             return mul<AccumTag>(v1(), v2);
         else if constexpr (Vec2::is_operation_not(Operation::Conj))
             return mul<AccumTag>(v1, v2());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!Vec1::is_operation_none() && detail::is_floating_point_v<T1>)
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec1::is_operation_not(Operation::Neg))
             return mul<AccumTag>(v1(), v2);
-        else if constexpr (!Vec2::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec2::is_operation_not(Operation::Neg))
             return mul<AccumTag>(v1, v2());
-        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(v1(), v2);
-        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(v1, v2());
 #endif
         else {
-            constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
-
             constexpr Operation Op1 = detail::evaluate_mul_operation<Vec1>();
             constexpr Operation Op2 = detail::evaluate_mul_operation<Vec2>();
 
+            constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_mul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(v1, v2);
+
             if constexpr (Vec1::is_operation(Operation::Min, Operation::Max))
-                return detail::mul_maxmin<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v1.parent1(), v1.parent2(), v2.parent1());
+                return detail::mul_maxmin<op, accum_bits, T1, T2>::run(v1.parent1(), v1.parent2(), v2.parent1());
             else
-                return detail::mul<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1), v2.parent1(), detail::get_mul_sign(v2));
+                return detail::mul<op, accum_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                v2.parent1(), detail::get_mul_sign(v2),
+                                                                sub_mul);
         }
     }
 }
+
 
 /**
  * @ingroup group_arithmetic
@@ -4648,14 +4759,14 @@ constexpr auto mul(E a, const Vec &v) -> accum<AccumTag, Vec::size()>
             return mul<AccumTag>(a(), v);
         else if constexpr (Vec::is_operation_not(Operation::Conj))
             return mul<AccumTag>(a, v());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!E::is_operation_none() && detail::is_floating_point_v<T1>)
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && E::is_operation_not(Operation::Neg))
             return mul<AccumTag>(a(), v);
-        else if constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec::is_operation_not(Operation::Neg))
             return mul<AccumTag>(a, v());
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(a(), v);
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(a, v());
 #endif
         else {
@@ -4663,11 +4774,18 @@ constexpr auto mul(E a, const Vec &v) -> accum<AccumTag, Vec::size()>
             constexpr Operation Op2 = detail::evaluate_mul_operation<Vec>();
 
             constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_mul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(a, v);
 
             if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v));
+                return detail::mul<op, accum_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                v.parent1(),                        detail::get_mul_sign(v),
+                                                                sub_mul);
             else
-                return detail::mul<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v));
+                return detail::mul<op, accum_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a),
+                                                                v.parent1(), detail::get_mul_sign(v),
+                                                                sub_mul);
         }
     }
 }
@@ -4714,14 +4832,14 @@ constexpr auto mul(const Vec &v, E a) -> accum<AccumTag, Vec::size()>
             return mul<AccumTag>(v(), a);
         else if constexpr (E::is_operation_not(Operation::Conj))
             return mul<AccumTag>(v, a());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T1>)
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec::is_operation_not(Operation::Neg))
             return mul<AccumTag>(v(), a);
-        else if constexpr (!E::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && E::is_operation_not(Operation::Neg))
             return mul<AccumTag>(v, a());
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(v(), a);
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mul<AccumTag>(v, a());
 #endif
         else {
@@ -4729,11 +4847,18 @@ constexpr auto mul(const Vec &v, E a) -> accum<AccumTag, Vec::size()>
             constexpr Operation Op2 = detail::evaluate_mul_operation<E>();
 
             constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_mul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(v, a);
 
             if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v), vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a));
+                return detail::mul<op, accum_bits, T1, T2>::run(v.parent1(),                        detail::get_mul_sign(v),
+                                                                vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                sub_mul);
             else
-                return detail::mul<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v), a.parent1(), detail::get_mul_sign(a));
+                return detail::mul<op, accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v),
+                                                                a.parent1(), detail::get_mul_sign(a),
+                                                                sub_mul);
         }
     }
 }
@@ -4851,9 +4976,6 @@ constexpr auto mac(const Acc &acc, const Vec1 &v1, const Vec2 &v2) -> operand_ba
     if constexpr (!is_op_v<Acc>) {
         return mac(op_add(acc), v1, v2);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return mac(acc(), v1, v2);
-    }
     else if constexpr (!is_op_v<Vec1>) {
         return mac(acc, op_none(v1), v2);
     }
@@ -4871,24 +4993,54 @@ constexpr auto mac(const Acc &acc, const Vec1 &v1, const Vec2 &v2) -> operand_ba
             return mac(acc, v1(), v2);
         else if constexpr (Vec2::is_operation_not(Operation::Conj))
             return mac(acc, v1, v2());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!Vec1::is_operation_none() && detail::is_floating_point_v<T1>)
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return mac(acc(), v1, v2);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec1::is_operation_not(Operation::Neg))
             return mac(acc, v1(), v2);
-        else if constexpr (!Vec2::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec2::is_operation_not(Operation::Neg))
             return mac(acc, v1, v2());
-        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, v1(), v2);
-        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, v1, v2());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return mac(acc(), v1, v2);
 #endif
         else {
-            constexpr Operation Op1 = detail::evaluate_mul_operation<Vec1>();
-            constexpr Operation Op2 = detail::evaluate_mul_operation<Vec2>();
+            constexpr Operation Op1     = detail::evaluate_mul_operation<Vec1>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<Vec2>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
 
-            if constexpr (Vec1::is_operation(Operation::Min, Operation::Max))
-                return detail::mul_maxmin<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(v1.parent1(), v1.parent2(), v2.parent1(), acc.parent1());
-            else
-                return detail::mul<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1), v2.parent1(), detail::get_mul_sign(v2), acc.parent1());
+            if constexpr (Vec1::is_operation(Operation::Min, Operation::Max)) {
+                constexpr auto op = detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+                return detail::mul_maxmin<op, acc_bits, T1, T2>::run(v1.parent1(), v1.parent2(),
+                                                                     v2.parent1(), acc.parent1());
+            }
+            else {
+                bool zero_acc = false;
+                bool sub_mul  = detail::eval_sub_mul(v1, v2);
+                bool sub_acc  = false;
+
+                if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg)) {
+                    constexpr auto op = detail::to_mul_macro_op<Operation::Acc_Add, Op1, Op2>();
+                    if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+                    if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+                    return detail::mul<op, acc_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                  v2.parent1(), detail::get_mul_sign(v2),
+                                                                  sub_mul, sub_acc,
+                                                                  zero_acc, acc.parent1());
+                }
+                else {
+                    constexpr auto op = detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+                    return detail::mul<op, acc_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                  v2.parent1(), detail::get_mul_sign(v2),
+                                                                  sub_mul, sub_acc,
+                                                                  zero_acc, acc.parent1());
+                }
+            }
         }
     }
 }
@@ -4920,9 +5072,6 @@ constexpr auto mac(const Acc &acc, E a, const Vec &v) -> operand_base_type_t<Acc
     if      constexpr (!is_op_v<Acc>) {
         return mac(op_add(acc), a, v);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return mac(acc(), a, v);
-    }
     else if constexpr (!is_op_v<E>) {
         return mac(acc, op_none(a), v);
     }
@@ -4940,24 +5089,50 @@ constexpr auto mac(const Acc &acc, E a, const Vec &v) -> operand_base_type_t<Acc
             return mac(acc, a(), v);
         else if constexpr (Vec::is_operation_not(Operation::Conj))
             return mac(acc, a, v());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!E::is_operation_none() && detail::is_floating_point_v<T1>)
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return mac(acc(), a, v);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && E::is_operation_not(Operation::Neg))
             return mac(acc, a(), v);
-        else if constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec::is_operation_not(Operation::Neg))
             return mac(acc, a, v());
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, a(), v);
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, a, v());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return mac(acc(), a, v);
 #endif
         else {
-            constexpr Operation Op1 = detail::evaluate_mul_operation<E>();
-            constexpr Operation Op2 = detail::evaluate_mul_operation<Vec>();
+            constexpr Operation Op1     = detail::evaluate_mul_operation<E>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<Vec>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
 
-            if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v), acc.parent1());
-            else
-                return detail::mul<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(a.parent1(), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v), acc.parent1());
+            bool zero_acc = false;
+            bool sub_mul  = detail::eval_sub_mul(a, v);
+            bool sub_acc  = false;
+
+            if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+            if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+            constexpr auto op = [&](){
+                if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg)) return detail::to_mul_macro_op<Operation::Acc_Add, Op1, Op2>();
+                else                                                              return detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+            }();
+
+            if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>) {
+                return detail::mul<op, acc_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                                    v.parent1(),  detail::get_mul_sign(v),
+                                                                                    sub_mul, sub_acc,
+                                                                                    zero_acc, acc.parent1());
+            }
+            else {
+                return detail::mul<op, acc_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a),
+                                                              v.parent1(), detail::get_mul_sign(v),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
+            }
         }
     }
 }
@@ -4989,9 +5164,6 @@ constexpr auto mac(const Acc &acc, const Vec &v, E a) -> operand_base_type_t<Acc
     if      constexpr (!is_op_v<Acc>) {
         return mac(op_add(acc), v, a);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return mac(acc(), v, a);
-    }
     else if constexpr (!is_op_v<Vec>) {
         return mac(acc, op_none(v), a);
     }
@@ -5009,24 +5181,48 @@ constexpr auto mac(const Acc &acc, const Vec &v, E a) -> operand_base_type_t<Acc
             return mac(acc, v(), a);
         else if constexpr (E::is_operation_not(Operation::Conj))
             return mac(acc, v, a());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T1>)
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return mac(acc(), v, a);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec::is_operation_not(Operation::Neg))
             return mac(acc, v(), a);
-        else if constexpr (!E::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && E::is_operation_not(Operation::Neg))
             return mac(acc, v, a());
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, v(), a);
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return mac(acc, v, a());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return mac(acc(), v, a);
 #endif
         else {
-            constexpr Operation Op1 = detail::evaluate_mul_operation<Vec>();
-            constexpr Operation Op2 = detail::evaluate_mul_operation<E>();
+            constexpr Operation Op1     = detail::evaluate_mul_operation<Vec>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<E>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
+
+            bool zero_acc = false;
+            bool sub_mul  = detail::eval_sub_mul(v, a);
+            bool sub_acc  = false;
+
+            if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+            if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+            constexpr auto op = [&](){
+                if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg)) return detail::to_mul_macro_op<Operation::Acc_Add, Op1, Op2>();
+                else                                                              return detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+            }();
 
             if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(v.parent1(), detail::get_mul_sign(v), vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a), acc.parent1());
+                return detail::mul<op, acc_bits, T1, T2>::run(v.parent1(),                        detail::get_mul_sign(v),
+                                                              vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
             else
-                return detail::mul<detail::to_mul_macro_op<Acc::operation, Op1, Op2>(), Acc::result_type::accum_bits(), T1, T2>::run(v.parent1(), detail::get_mul_sign(v), a.parent1(), detail::get_mul_sign(a), acc.parent1());
+                return detail::mul<op, acc_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v),
+                                                              a.parent1(), detail::get_mul_sign(a),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
         }
     }
 }
@@ -5034,10 +5230,13 @@ constexpr auto mac(const Acc &acc, const Vec &v, E a) -> operand_base_type_t<Acc
 /**
  * @ingroup group_arithmetic
  *
- * Returns an accumulator with the element-wise multiply-add of the two input vectors and accumulator. The vectors and
- * the accumulator must have the same size and the types of all operands must be compatible. Operands can also be lazy
- * operations (see @ref group_basic_types_ops). On some AIE architectures certain operations can be collapsed with the
- * multiplication into a single instruction.
+ * Performs an element-wise multiplication of two input vectors, then returns the subtraction of an accumulator with the
+ * resulting product. The vectors and the accumulator must have the same size and the types of all operands must be
+ * compatible.
+ *
+ * Operands can also be lazy operations (see @ref group_basic_types_ops).
+ *
+ * On some AIE architectures certain operations can be collapsed with the multiplication into a single instruction.
  *
  * @code
  * for (unsigned i = 0; i < Elems; ++i)
@@ -5049,26 +5248,93 @@ constexpr auto mac(const Acc &acc, const Vec &v, E a) -> operand_base_type_t<Acc
  * @param v2  Second input vector. The type must meet @ref aie::VectorOrOp.
  */
 // TODO: document compatible types.
-template <Accum Acc, VectorOrOp Vec1, VectorOrOp Vec2>
+template <AccumOrOp Acc, VectorOrOp Vec1, VectorOrOp Vec2>
     requires(is_valid_size_v<Acc, Vec1, Vec2> && is_valid_mul_op_v<typename Vec1::value_type, typename Vec2::value_type>)
 __aie_inline
-constexpr auto msc(const Acc &acc, const Vec1 &v1, const Vec2 &v2) -> aie_dm_resource_remove_t<Acc>
+constexpr auto msc(const Acc &acc, const Vec1 &v1, const Vec2 &v2) -> operand_base_type_t<Acc>
 {
-    if      constexpr (!is_op_v<Acc>) {
-        return mac(op_sub(acc), v1, v2);
+    if constexpr (!is_op_v<Acc>) {
+        return msc(op_sub(acc), v1, v2);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return msc(acc(), v1, v2);
+    else if constexpr (!is_op_v<Vec1>) {
+        return msc(acc, op_none(v1), v2);
+    }
+    else if constexpr (!is_op_v<Vec2>) {
+        return msc(acc, v1, op_none(v2));
+    }
+    else {
+        using T1 = typename Vec1::value_type;
+        using T2 = typename Vec2::value_type;
+
+#if __AIE_ARCH__ == 10
+        if      constexpr (Vec1::is_operation_not(Operation::Conj) && detail::is_floating_point_v<T1>)
+            return msc(acc, v1(), v2);
+        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Abs, Operation::Max, Operation::Min))
+            return msc(acc, v1(), v2);
+        else if constexpr (Vec2::is_operation_not(Operation::Conj))
+            return msc(acc, v1, v2());
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return msc(acc(), v1, v2);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec1::is_operation_not(Operation::Neg))
+            return msc(acc, v1(), v2);
+        else if constexpr (detail::is_floating_point_v<T2> && Vec2::is_operation_not(Operation::Neg))
+            return msc(acc, v1, v2());
+        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, v1(), v2);
+        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, v1, v2());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return msc(acc(), v1, v2);
+#endif
+        else {
+            constexpr Operation Op1     = detail::evaluate_mul_operation<Vec1>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<Vec2>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
+
+            if constexpr (Vec1::is_operation(Operation::Min, Operation::Max)) {
+                constexpr auto op = detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+                return detail::mul_maxmin<op, acc_bits, T1, T2>::run(v1.parent1(), v1.parent2(),
+                                                                     v2.parent1(), acc.parent1());
+            }
+            else {
+                bool zero_acc = false;
+                bool sub_mul  = detail::eval_sub_mul(v1, v2);
+                bool sub_acc  = false;
+
+                if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg)) {
+                    constexpr auto op = detail::to_mul_macro_op<Operation::Acc_Sub, Op1, Op2>();
+                    if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+                    if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+                    return detail::mul<op, acc_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                  v2.parent1(), detail::get_mul_sign(v2),
+                                                                  sub_mul, sub_acc,
+                                                                  zero_acc, acc.parent1());
+                }
+                else {
+                    constexpr auto op = detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+                    return detail::mul<op, acc_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                  v2.parent1(), detail::get_mul_sign(v2),
+                                                                  sub_mul, sub_acc,
+                                                                  zero_acc, acc.parent1());
+                }
+            }
+        }
     }
 }
 
 /**
  * @ingroup group_arithmetic
  *
- * Returns an accumulator with the element-wise multiply-add of value, input vector and accumulator. The vector and
- * the accumulator must have the same size and their types must be compatible. Operands can also be lazy
- * operations (see @ref group_basic_types_ops). On some AIE architectures certain operations can be collapsed with the
- * multiplication into a single instruction.
+ * Performs an element-wise multiplication of a scalar and a vector, then returns the subtraction of an accumulator with
+ * the resulting product. The vectors and the accumulator must have the same size and the types of all operands must be
+ * compatible.
+ *
+ * Operands can also be lazy operations (see @ref group_basic_types_ops).
+ *
+ * On some AIE architectures certain operations can be collapsed with the multiplication into a single instruction.
  *
  * @code
  * for (unsigned i = 0; i < Elems; ++i)
@@ -5080,26 +5346,89 @@ constexpr auto msc(const Acc &acc, const Vec1 &v1, const Vec2 &v2) -> aie_dm_res
  * @param v   Input vector. The type must meet @ref aie::VectorOrOp.
  */
 // TODO: document compatible types.
-template <Accum Acc, ElemOrOp E, VectorOrOp Vec>
+template <AccumOrOp Acc, ElemOrOp E, VectorOrOp Vec>
     requires(is_valid_size_v<Acc, E, Vec> && is_valid_mul_op_v<E, typename Vec::value_type>)
 __aie_inline
-constexpr auto msc(const Acc &acc, E a, const Vec &v) -> aie_dm_resource_remove_t<Acc>
+constexpr auto msc(const Acc &acc, E a, const Vec &v) -> operand_base_type_t<Acc>
 {
     if      constexpr (!is_op_v<Acc>) {
-        return mac(op_sub(acc), a, v);
+        return msc(op_sub(acc), a, v);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return msc(acc(), a, v);
+    else if constexpr (!is_op_v<E>) {
+        return msc(acc, op_none(a), v);
+    }
+    else if constexpr (!is_op_v<Vec>) {
+        return msc(acc, a, op_none(v));
+    }
+    else {
+        using T1 = operand_base_type_t<typename E::value_type>;
+        using T2 = typename Vec::value_type;
+
+#if __AIE_ARCH__ == 10
+        if      constexpr (E::is_operation_not(Operation::Conj) && detail::is_floating_point_v<T1>)
+            return msc(acc, a(), v);
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Abs))
+            return msc(acc, a(), v);
+        else if constexpr (Vec::is_operation_not(Operation::Conj))
+            return msc(acc, a, v());
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return msc(acc(), a, v);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && E::is_operation_not(Operation::Neg))
+            return msc(acc, a(), v);
+        else if constexpr (detail::is_floating_point_v<T2> && Vec::is_operation_not(Operation::Neg))
+            return msc(acc, a, v());
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, a(), v);
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, a, v());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return msc(acc(), a, v);
+#endif
+        else {
+            constexpr Operation Op1     = detail::evaluate_mul_operation<E>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<Vec>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
+
+            bool zero_acc = false;
+            bool sub_mul  = detail::eval_sub_mul(a, v);
+            bool sub_acc  = false;
+
+            if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+            if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+            constexpr auto op = [&](){
+                if constexpr (Acc::is_operation(Operation::Zero)) return detail::to_mul_macro_op<Operation::Acc_Sub, Op1, Op2>();
+                else                                              return detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+            }();
+
+            if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>) {
+                return detail::mul<op, acc_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                                    v.parent1(),  detail::get_mul_sign(v),
+                                                                                    sub_mul, sub_acc,
+                                                                                    zero_acc, acc.parent1());
+            }
+            else {
+                return detail::mul<op, acc_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a),
+                                                              v.parent1(), detail::get_mul_sign(v),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
+            }
+        }
     }
 }
 
 /**
  * @ingroup group_arithmetic
  *
- * Returns an accumulator with the element-wise multiply-add of input vector, value and accumulator. The vector and
- * the accumulator must have the same size and their types must be compatible. Operands can also be lazy
- * operations (see @ref group_basic_types_ops). On some AIE architectures certain operations can be collapsed with the
- * multiplication into a single instruction.
+ * Performs an element-wise multiplication of a scalar and a vector, then returns the subtraction of an accumulator with
+ * the resulting product. The vectors and the accumulator must have the same size and the types of all operands must be
+ * compatible.
+ *
+ * Operands can also be lazy operations (see @ref group_basic_types_ops).
+ *
+ * On some AIE architectures certain operations can be collapsed with the multiplication into a single instruction.
  *
  * @code
  * for (unsigned i = 0; i < Elems; ++i)
@@ -5111,16 +5440,74 @@ constexpr auto msc(const Acc &acc, E a, const Vec &v) -> aie_dm_resource_remove_
  * @param a   Input value. The type must meet @ref aie::ElemOrOp.
  */
 // TODO: document compatible types.
-template <Accum Acc, VectorOrOp Vec, ElemOrOp E>
+template <AccumOrOp Acc, VectorOrOp Vec, ElemOrOp E>
     requires(is_valid_size_v<Acc, Vec, E> && is_valid_mul_op_v<typename Vec::value_type, E>)
 __aie_inline
-constexpr auto msc(const Acc &acc, const Vec &v, E a) -> aie_dm_resource_remove_t<Acc>
+constexpr auto msc(const Acc &acc, const Vec &v, E a) -> operand_base_type_t<Acc>
 {
     if      constexpr (!is_op_v<Acc>) {
-        return mac(op_sub(acc), v, a);
+        return msc(op_sub(acc), v, a);
     }
-    else if constexpr (Acc::is_operation(Operation::Zero)) { //TODO: zeroization could be propagated into the underlying intrinsics (CRVO-5125)
-        return msc(acc(), v, a);
+    else if constexpr (!is_op_v<Vec>) {
+        return msc(acc, op_none(v), a);
+    }
+    else if constexpr (!is_op_v<E>) {
+        return msc(acc, v, op_none(a));
+    }
+    else {
+        using T1 = typename Vec::value_type;
+        using T2 = operand_base_type_t<typename E::value_type>;
+
+#if __AIE_ARCH__ == 10
+        if      constexpr (Vec::is_operation_not(Operation::Conj) && detail::is_floating_point_v<T1>)
+            return msc(acc, v(), a);
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Abs))
+            return msc(acc, v(), a);
+        else if constexpr (E::is_operation_not(Operation::Conj))
+            return msc(acc, v, a());
+        else if constexpr (Acc::is_operation(Operation::Zero, Operation::Neg))
+            return msc(acc(), v, a);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec::is_operation_not(Operation::Neg))
+            return msc(acc, v(), a);
+        else if constexpr (detail::is_floating_point_v<T2> && E::is_operation_not(Operation::Neg))
+            return msc(acc, v, a());
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, v(), a);
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
+            return msc(acc, v, a());
+        //FIXME: CRVO-10673 cfloat zeroization
+        else if constexpr (Acc::is_operation(Operation::Zero) && (std::is_same_v<T1, cfloat> || std::is_same_v<T2, cfloat>))
+            return msc(acc(), v, a);
+#endif
+        else {
+            constexpr Operation Op1     = detail::evaluate_mul_operation<Vec>();
+            constexpr Operation Op2     = detail::evaluate_mul_operation<E>();
+            constexpr unsigned acc_bits = Acc::result_type::accum_bits();
+
+            bool zero_acc = false;
+            bool sub_mul  = detail::eval_sub_mul(v, a);
+            bool sub_acc  = false;
+
+            if constexpr (Acc::is_operation(Operation::Zero)) zero_acc = acc.parent2();
+            if constexpr (Acc::is_operation(Operation::Neg))  sub_acc  = acc.parent2();
+
+            constexpr auto op = [&](){
+                if constexpr (Acc::is_operation(Operation::Zero)) return detail::to_mul_macro_op<Operation::Acc_Sub, Op1, Op2>();
+                else                                              return detail::to_mul_macro_op<Acc::operation, Op1, Op2>();
+            }();
+
+            if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
+                return detail::mul<op, acc_bits, T1, T2>::run(v.parent1(),                        detail::get_mul_sign(v),
+                                                              vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
+            else
+                return detail::mul<op, acc_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v),
+                                                              a.parent1(), detail::get_mul_sign(a),
+                                                              sub_mul, sub_acc,
+                                                              zero_acc, acc.parent1());
+        }
     }
 }
 
@@ -5166,14 +5553,14 @@ constexpr auto negmul(const Vec1 &v1, const Vec2 &v2) -> accum<AccumTag, Vec1::s
             return negmul<AccumTag>(v1(), v2);
         else if constexpr (Vec2::is_operation_not(Operation::Conj))
             return negmul<AccumTag>(v1, v2());
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-        if      constexpr (!Vec1::is_operation_none() && detail::is_floating_point_v<T1>)
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+        if      constexpr (detail::is_floating_point_v<T1> && Vec1::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(v1(), v2);
-        else if constexpr (!Vec2::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec2::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(v1, v2());
-        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec1::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(v1(), v2);
-        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec2::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(v1, v2());
 #endif
         else {
@@ -5181,11 +5568,16 @@ constexpr auto negmul(const Vec1 &v1, const Vec2 &v2) -> accum<AccumTag, Vec1::s
             constexpr Operation Op2 = detail::evaluate_mul_operation<Vec2>();
 
             constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_negmul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(v1, v2);
 
             if constexpr (is_binary_op_v<Vec1>)
                 return detail::mul_maxmin<detail::to_mul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v1.parent1(), v1.parent2(), v2.parent1());
             else
-                return detail::mul<detail::to_negmul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1), v2.parent1(), detail::get_mul_sign(v2));
+                return detail::mul<op, accum_bits, T1, T2>::run(v1.parent1(), detail::get_mul_sign(v1),
+                                                                v2.parent1(), detail::get_mul_sign(v2),
+                                                                sub_mul);
         }
     }
 }
@@ -5233,13 +5625,13 @@ constexpr auto negmul(E a, const Vec &v) -> accum<AccumTag, Vec::size()>
         else if constexpr (Vec::is_operation_not(Operation::Conj))
             return negmul<AccumTag>(a, v());
 #else
-        if      constexpr (!E::is_operation_none() && detail::is_floating_point_v<T1>)
+        if      constexpr (detail::is_floating_point_v<T1> && E::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(a(), v);
-        else if constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && Vec::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(a, v());
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(a(), v);
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(a, v());
 #endif
         else {
@@ -5247,11 +5639,18 @@ constexpr auto negmul(E a, const Vec &v) -> accum<AccumTag, Vec::size()>
             constexpr Operation Op2 = detail::evaluate_mul_operation<Vec>();
 
             constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_negmul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(a, v);
 
             if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_negmul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v));
+                return detail::mul<op, accum_bits, T1, T2>::run(vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                v.parent1(),                        detail::get_mul_sign(v),
+                                                                sub_mul);
             else
-                return detail::mul<detail::to_negmul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a), v.parent1(), detail::get_mul_sign(v));
+                return detail::mul<op, accum_bits, T1, T2>::run(a.parent1(), detail::get_mul_sign(a),
+                                                                v.parent1(), detail::get_mul_sign(v),
+                                                                sub_mul);
         }
     }
 }
@@ -5299,13 +5698,13 @@ constexpr auto negmul(const Vec &v, E a) -> accum<AccumTag, Vec::size()>
         else if constexpr (E::is_operation_not(Operation::Conj))
             return negmul<AccumTag>(v, a());
 #else
-        if      constexpr (!Vec::is_operation_none() && detail::is_floating_point_v<T1>)
+        if      constexpr (detail::is_floating_point_v<T1> && Vec::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(v(), a);
-        else if constexpr (!E::is_operation_none() && detail::is_floating_point_v<T2>)
+        else if constexpr (detail::is_floating_point_v<T2> && E::is_operation_not(Operation::Neg))
             return negmul<AccumTag>(v, a());
-        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (Vec::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(v(), a);
-        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign))
+        else if constexpr (E::is_operation_not(Operation::Conj, Operation::Sign, Operation::Neg))
             return negmul<AccumTag>(v, a());
 #endif
         else {
@@ -5313,11 +5712,18 @@ constexpr auto negmul(const Vec &v, E a) -> accum<AccumTag, Vec::size()>
             constexpr Operation Op2 = detail::evaluate_mul_operation<E>();
 
             constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
+            constexpr auto op = detail::to_negmul_macro_op<Op1, Op2>();
+
+            bool sub_mul = detail::eval_sub_mul(v, a);
 
             if constexpr (detail::is_vector_elem_ref_v<typename E::parent1_type>)
-                return detail::mul<detail::to_negmul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v), vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a));
+                return detail::mul<op, accum_bits, T1, T2>::run(v.parent1(),                        detail::get_mul_sign(v),
+                                                                vector_elem_const_ref(a.parent1()), detail::get_mul_sign(a),
+                                                                sub_mul);
             else
-                return detail::mul<detail::to_negmul_macro_op<Op1, Op2>(), accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v), a.parent1(), detail::get_mul_sign(a));
+                return detail::mul<op, accum_bits, T1, T2>::run(v.parent1(), detail::get_mul_sign(v),
+                                                                a.parent1(), detail::get_mul_sign(a),
+                                                                sub_mul);
         }
     }
 }
@@ -5476,7 +5882,7 @@ constexpr auto mul_square(const Vec &v) -> accum<AccumTag, Vec::size()>
 
     constexpr unsigned accum_bits = detail::to_native_accum_bits<AccumTag>();
 
-    return detail::square<detail::MulMacroOp::Mul, accum_bits, T>::run(v);
+    return detail::square<detail::MulMacroOp::Mul, accum_bits, T>::run(v, false);
 }
 
 /**
@@ -5520,13 +5926,35 @@ template <AccumOrOp Acc, Vector Vec> requires(Vec::size() == Acc::size())
 __aie_inline
 constexpr auto mac_square(const Acc &acc, const Vec &v)
 {
-    if constexpr (detail::is_accum_v<Acc>) {
+    if constexpr (!is_op_v<Acc>) {
         return mac_square(op_add(acc), v);
     }
+#if __AIE_ARCH__ == 10
+    else if constexpr (Acc::is_operation(Operation::Zero)) {
+        return mac_square(acc(), v);
+    }
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+    //FIXME: CRVO-10673 cfloat zeroization
+    else if constexpr (Acc::is_operation(Operation::Zero) && std::is_same_v<typename Vec::value_type, cfloat>) {
+        return mac_square(acc(), v);
+    }
+#endif
     else {
         using T = typename Vec::value_type;
 
-        return detail::square<detail::to_mul_macro_op<Acc::operation, Operation::None, Operation::None>(), Acc::result_type::accum_bits(), T>::run(v, acc.parent1());
+        bool zero_acc = false;
+
+        constexpr auto get_op = [&](){
+            if constexpr (Acc::is_operation(Operation::Zero)) return Operation::Acc_Add;
+            else                                              return Acc::operation;
+        };
+
+        if constexpr (Acc::is_operation(Operation::Zero))
+            zero_acc = acc.parent2();
+
+        constexpr auto op = detail::to_mul_macro_op<get_op(), Operation::None, Operation::None>();
+
+        return detail::square<op, Acc::result_type::accum_bits(), T>::run(v, zero_acc, acc.parent1());
     }
 }
 
@@ -5544,11 +5972,40 @@ constexpr auto mac_square(const Acc &acc, const Vec &v)
  * @param acc Input accumulator. The type must meet @ref aie::Accum.
  * @param v   Input vector. The type must meet @ref aie::Vector.
  */
-template <Accum Acc, Vector Vec> requires(Vec::size() == Acc::size())
+template <AccumOrOp Acc, Vector Vec> requires(Vec::size() == Acc::size())
 __aie_inline
 constexpr auto msc_square(const Acc &acc, const Vec &v)
 {
-    return mac_square(op_sub(acc), v);
+    if constexpr (!is_op_v<Acc>) {
+        return msc_square(op_sub(acc), v);
+    }
+#if __AIE_ARCH__ == 10
+    else if constexpr (Acc::is_operation(Operation::Zero)) {
+        return msc_square(acc(), v);
+    }
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
+    //FIXME: CRVO-10673 cfloat zeroization
+    else if constexpr (Acc::is_operation(Operation::Zero) && std::is_same_v<typename Vec::value_type, cfloat>) {
+        return msc_square(acc(), v);
+    }
+#endif
+    else {
+        using T = typename Vec::value_type;
+
+        bool zero_acc = false;
+
+        constexpr auto get_op = [&](){
+            if constexpr (Acc::is_operation(Operation::Zero)) return Operation::Acc_Sub;
+            else                                              return Acc::operation;
+        };
+
+        if constexpr (Acc::is_operation(Operation::Zero))
+            zero_acc = acc.parent2();
+
+        constexpr auto op = detail::to_mul_macro_op<get_op(), Operation::None, Operation::None>();
+
+        return detail::square<op, Acc::result_type::accum_bits(), T>::run(v, zero_acc, acc.parent1());
+    }
 }
 
 /**
@@ -5590,7 +6047,7 @@ constexpr auto msc_square(const Acc &acc, const Vec &v)
  *
  * @param  acc         Accumulator to which the result of the accumulation is added (or subtracted).
  *                     The type must meet @ref aie::AccumOrOp.
- * @param  coeff       Vector of coefficients. Size is limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+ * @param  coeff       Vector of coefficients. Size is limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
  * @param  coeff_start First element from the coeff vector to be used.
  * @param  data        First vector of data.
  * @param  next_data   Remaining data vectors.
@@ -5664,7 +6121,7 @@ auto accumulate(const Acc &acc,
  *
  * @param  acc         Accumulator to which the result of the accumulation is added (or subtracted).
  *                     The type must meet @ref aie::AccumOrOp.
- * @param  coeff       Vector of coefficients. Size is limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+ * @param  coeff       Vector of coefficients. Size is limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
  * @param  coeff_start First element from the coeff vector to be used.
  * @param  data        Array of data vectors
  */
@@ -5723,7 +6180,7 @@ auto accumulate(const Acc &acc,
  *                  result of the multiplication of the coefficient and data types (real/complex). Refer to
  *                  \ref DefaultAccumTag "default accumulator tag" table for the minimum accumulator element tag
  *                  required for each combination of input element types.
- * @param coeff Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+ * @param coeff Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
  * @param coeff_start First element from the coeff vector to be used.
  * @param data First vector of data.
  * @param next_data Rest of the data vectors.
@@ -5783,7 +6240,7 @@ auto accumulate(const VecCoeff &coeff,
  *                  result of the multiplication of the coefficient and data types (real/complex). Refer to
  *                  \ref DefaultAccumTag "default accumulator tag" table for the minimum accumulator element tag
  *                  required for each combination of input element types.
- * @param coeff Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA 1 respectively.
+ * @param coeff Vector of coefficients. Vectors limited to 256b and 512b on AIE and AIE-ML/XDNA1 respectively.
  * @param coeff_start First element from the coeff vector to be used.
  * @param data Array of data vectors
  */
@@ -5839,15 +6296,17 @@ auto accumulate(const VecCoeff &coeff,
  * Objects of this type encapsulate the current result of the multiplication. The first result is computed with the mul
  * method. New multiplications can be accumulated using the mac method.
  *
- * @tparam M_Elems  Rows in matrix A.
- * @tparam K_Elems  Columns in matrix A / Rows in matrix B.
- * @tparam N_Elems  Columns in matrix B.
- * @tparam TypeA    Type of the elements in matrix A. It must meet @ref aie::ElemBaseType.
- * @tparam TypeB    Optional. Type of the elements in matrix B. By default is the same as TypeA. It must meet
- *                  @ref aie::ElemBaseType.
- * @tparam AccumTag Optional. Type of the elements of the accumulator that contains the results to be written in matrix
- *                  C. It must meet @ref aie::AccumElemBaseType. If not specified, it uses the
- *                  \ref DefaultAccumTag "default accumulation type" for multiplications of TypeA x TypeB.
+ * @tparam M_Elems   Rows in matrix A.
+ * @tparam K_Elems   Columns in matrix A / Rows in matrix B.
+ * @tparam N_Elems   Columns in matrix B.
+ * @tparam TypeA     Type of the elements in matrix A. It must meet @ref aie::ElemBaseType.
+ * @tparam TypeB     Optional. Type of the elements in matrix B. By default is the same as TypeA. It must meet
+ *                   @ref aie::ElemBaseType.
+ * @tparam AccumTag  Optional. Type of the elements of the accumulator that contains the results to be written in matrix
+ *                   C. It must meet @ref aie::AccumElemBaseType. If not specified, it uses the
+ *                   \ref DefaultAccumTag "default accumulation type" for multiplications of TypeA x TypeB.
+ * @tparam Ownership Optional. If set to owned, the mmul object references a user-provided accumulator instead of owning one.
+ *                   When set as ref, the object must be constructed with an accumulator reference. Defaults to owned.
  */
 template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems,
 #if AIE_API_ML_VERSION >= 210
@@ -5855,12 +6314,13 @@ template <unsigned M_Elems, unsigned K_Elems, unsigned N_Elems,
 #else
           ElemBaseType TypeA, ElemBaseType TypeB = TypeA,
 #endif
-          AccumElemBaseType AccumTag = accauto>
+          AccumElemBaseType AccumTag = accauto,
+          accum_ownership Ownership = accum_ownership::owned>
 struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
-                                  detail::to_native_accum_bits_for_mul_types_tag<TypeA, TypeB, AccumTag>()>
+                                  detail::to_native_accum_bits_for_mul_types_tag<TypeA, TypeB, AccumTag>(), Ownership>
 {
     using mmul_impl = detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
-                                   detail::to_native_accum_bits_for_mul_types_tag<TypeA, TypeB, AccumTag>()>;
+                                   detail::to_native_accum_bits_for_mul_types_tag<TypeA, TypeB, AccumTag>(), Ownership>;
 
     /**
      * \brief Number of rows in matrix A.
@@ -5897,6 +6357,11 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      */
     static constexpr unsigned size() { return size_C; }
 
+    /**
+     * \brief Number of bits in the accumulator.
+     */
+    static constexpr unsigned accum_bits = detail::to_native_accum_bits_for_mul_types_tag<TypeA, TypeB, AccumTag>();
+
     using accum_type = typename mmul_impl::accum_type;
 
     /**
@@ -5905,7 +6370,16 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      * @note The result may not be explicitly zero initialized before the first @ref mul or @ref mac operation takes place.
      */
     __aie_inline
-    mmul()
+    mmul() requires (Ownership == accum_ownership::owned)
+    {}
+
+    /**
+     * \brief Constructor. Data will qualify as zero/non zero initialised for the first operation.
+     *
+     * @param to_zero Indicates whether to zero initialize the accumulator data.
+     */
+    __aie_inline
+    mmul(bool to_zero) requires (Ownership == accum_ownership::owned) : mmul_impl(to_zero)
     {}
 
     /**
@@ -5914,7 +6388,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      * @param acc Accumulator data is initialized from.
      */
     __aie_inline
-    mmul(const accum_type &acc) : mmul_impl(acc)
+    mmul(const accum_type &acc) requires (Ownership == accum_ownership::owned) : mmul_impl(acc)
     {}
 
     /**
@@ -5925,7 +6399,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      * @sa aie::op_add
      */
     __aie_inline
-    mmul(const unary_op<accum_type, Operation::Acc_Add> &op) : mmul_impl(op.parent1())
+    mmul(const unary_op<accum_type, Operation::Acc_Add> &op) requires (Ownership == accum_ownership::owned) : mmul_impl(op.parent1())
     {}
 
     /**
@@ -5938,7 +6412,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      * @sa aie::op_zero
      */
     __aie_inline
-    mmul(const binary_op<accum_type, bool, Operation::Zero> &op) : mmul_impl(op.parent1(), op.parent2())
+    mmul(const binary_op<accum_type, bool, Operation::Zero> &op) requires (Ownership == accum_ownership::owned) : mmul_impl(op.parent1(), op.parent2())
     {}
 
     /**
@@ -5947,7 +6421,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      * @param acc Accumulator data is initialized from.
      */
     __aie_inline
-    mmul &operator=(const accum_type &acc)
+    mmul &operator=(const accum_type &acc) requires (Ownership == accum_ownership::owned)
     {
         *this = mmul(acc);
 
@@ -5964,7 +6438,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
      */
     template <typename T>
     __aie_inline
-    mmul(const vector<T, size_C> &v, int shift = 0) : mmul_impl(v, shift)
+    mmul(const vector<T, size_C> &v, int shift = 0) requires (Ownership == accum_ownership::owned) : mmul_impl(v, shift)
     {}
 
     /**
@@ -6013,14 +6487,15 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                      && std::is_same_v<typename VecA::value_type, TypeA>
                      && std::is_same_v<typename VecB::value_type, TypeB>)
     __aie_inline
-    void mul(const VecA &a, const VecB &b)
+    mmul& mul(const VecA &a, const VecB &b)
     {
         if      constexpr (!is_op_v<VecA>)
             return mul(op_none(a), b);
         else if constexpr (!is_op_v<VecB>)
             return mul(a, op_none(b));
         else
-          return mmul_impl::mul(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+            mmul_impl::mul(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+        return *this;
     }
 
     /**
@@ -6036,14 +6511,15 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                      && std::is_same_v<typename VecA::value_type, TypeA>
                      && std::is_same_v<typename VecB::value_type, TypeB>)
     __aie_inline
-    void mac(const VecA &a, const VecB &b)
+    mmul& mac(const VecA &a, const VecB &b)
     {
         if      constexpr (!is_op_v<VecA>)
             return mac(op_none(a), b);
         else if constexpr (!is_op_v<VecB>)
             return mac(a, op_none(b));
         else
-          return mmul_impl::mac(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+            mmul_impl::mac(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+        return *this;
     }
 
     /**
@@ -6064,7 +6540,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                         std::is_same_v<typename VecA::value_type, TypeA> &&
                         std::is_same_v<typename VecB::value_type, TypeB>)
     __aie_inline
-    void mul(const VecA &a, const VecB &b)
+    mmul& mul(const VecA &a, const VecB &b)
     {
         if      constexpr (!is_op_v<VecA>)
             return mul(op_none(a), b);
@@ -6072,6 +6548,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
             return mul(a, op_none(b));
         else
             mmul_impl::mul(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+        return *this;
     }
 
     /**
@@ -6090,7 +6567,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                         std::is_same_v<typename VecA::value_type, TypeA> &&
                         std::is_same_v<typename VecB::value_type, TypeB>)
     __aie_inline
-    void mac(const VecA &a, const VecB &b)
+    mmul& mac(const VecA &a, const VecB &b)
     {
         if      constexpr (!is_op_v<VecA>)
             return mac(op_none(a), b);
@@ -6098,6 +6575,7 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
             return mac(a, op_none(b));
         else
             mmul_impl::mac(a.parent1(), detail::get_mul_sign(a), b.parent1(), detail::get_mul_sign(b));
+        return *this;
     }
 
 #if AIE_API_ML_VERSION >= 210
@@ -6118,9 +6596,10 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                      && std::is_same_v<typename VecB::value_type, TypeB>
                      && VecB::is_operation(Operation::Transpose))
     __aie_inline
-    void mul(const VecA &a, const VecB &b)
+    mmul& mul(const VecA &a, const VecB &b)
     {
         mmul_impl::mul(a, true, b.parent1(), true);
+        return *this;
     }
 
     /**
@@ -6138,9 +6617,10 @@ struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
                      && std::is_same_v<typename VecB::value_type, TypeB>
                      && VecB::is_operation(Operation::Transpose))
     __aie_inline
-    void mac(const VecA &a, const VecB &b)
+    mmul& mac(const VecA &a, const VecB &b)
     {
         mmul_impl::mac(a, true, b.parent1(), true);
+        return *this;
     }
 
     /**
@@ -6364,7 +6844,7 @@ struct lut : public detail::lut<ParallelAccesses, OffsetType, SlopeType>
  * @ingroup group_lut
  *
  * \note
- * Linear approximation functionality is only available from AIE-ML/XDNA 1
+ * Linear approximation functionality is only available from AIE-ML/XDNA1
  *
  * Type to support a linear approximation via interpolation with slope/offset values stored in a lookup table.
  *
@@ -6406,10 +6886,10 @@ struct lut : public detail::lut<ParallelAccesses, OffsetType, SlopeType>
  * <table>
  * <caption>Supported linear approximation types</caption>
  * <tr><th>Input<th>Offset<th>Slope<th>Accumulator type<th>Lanes<th>Minumum step_bits required
- * <tr><td>int8<td>int8 <td>int8 <td>acc32 <td>32 <td> 2
- * <tr><td>int16<td>int16 <td>int16 <td>acc64 <td>16 <td> 3
- * <tr><td>int16<td>int32 <td>int32 <td>acc64 <td>16 <td> 4
- * <tr><td>bfloat16<td>float<td>bfloat16 <td>accfloat <td>16 <td> 0
+ * <tr><td>%int8<td>%int8 <td>%int8 <td>%acc32 <td>32 <td> 2
+ * <tr><td>%int16<td>%int16 <td>%int16 <td>%acc64 <td>16 <td> 3
+ * <tr><td>%int16<td>%int32 <td>%int32 <td>%acc64 <td>16 <td> 4
+ * <tr><td>%bfloat16<td>%float<td>%bfloat16 <td>%accfloat <td>16 <td> 0
  * </table>
  *
  * Note that while the floating point linear approx requires the offset data to be 32b floats, the slope data is required to be bfloat16.
@@ -6458,7 +6938,7 @@ private:
  * @ingroup group_lut
  *
  * \note
- * Parallel lookup functionality is only available from AIE-ML/XDNA 1
+ * Parallel lookup functionality is only available from AIE-ML/XDNA1
  *
  * Type with functionality to directly index a LUT based on input vector of values.
  * The number of achieved lookups per cycle is determined by the \ref aie::lut object that encapsulates the contents of the lookup table.
@@ -6548,273 +7028,16 @@ private:
     parallel_lookup_impl parallel_lookup_;
 };
 
-using dim_2d                = detail::dim_2d;
-using dim_3d                = detail::dim_3d;
-using sliding_window_dim_1d = detail::sliding_window_dim_1d;
-using sliding_window_dim_2d = detail::sliding_window_dim_2d;
-using sliding_window_dim_3d = detail::sliding_window_dim_3d;
-
-struct tensor_dim
-{
-    unsigned num;
-    int step;
-
-    __aie_inline constexpr tensor_dim() = default;
-    __aie_inline constexpr explicit tensor_dim(unsigned num, int step) : num(num), step(step) {}
-};
-
-template <unsigned Rank, typename T, unsigned Elems, typename NativeRepr = detail::default_repr_t<Rank>>
-    requires (arch::is(arch::Gen2) && Rank > 0)
-class tensor_descriptor
-{
-public:
-    static constexpr unsigned elems = Elems;
-    using        type = T;
-    using vector_type = detail::tensor_vector_type_t<T, Elems>;
-
-    __aie_inline constexpr tensor_descriptor() = default;
-
-    __aie_inline
-    explicit constexpr tensor_descriptor(const std::array<tensor_dim, Rank>& dims, bool byte_steps = false) :
-        dims_(steps_to_incrs(dims, byte_steps)),
-        it_desc_(to_iteration_descriptor(dims_))
-    {}
-
-    __aie_inline
-    constexpr tensor_descriptor(const tensor_descriptor& other) : dims_(other.dims_), it_desc_(other.it_desc_) {}
-
-private:
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-    template <aie_dm_resource Resource, DecoratedElemBaseType T2, typename TensorDescriptor>
-        requires (arch::is(arch::Gen2))
-    friend constexpr auto make_tensor_buffer_stream(T2 *base, const TensorDescriptor& dims);
-    template <aie_dm_resource Resource, DecoratedElemBaseType T2, typename TensorDescriptor>
-        requires (arch::is(arch::Gen2))
-    friend constexpr auto make_tensor_buffer_stream(const T2 *base, const TensorDescriptor& dims);
-    template <aie_dm_resource Resource, DecoratedElemBaseType T2, typename TensorDescriptor>
-        requires (arch::is(arch::Gen2))
-    friend constexpr auto make_restrict_tensor_buffer_stream(T2 *base, const TensorDescriptor& dims);
-
-    template <typename T2, unsigned Elems2, typename... Args>
-        requires (arch::is(arch::Gen2) && (Utils::is_one_of_v<std::decay_t<Args>, int, dim_2d, dim_3d> && ...))
-    friend constexpr auto make_tensor_descriptor_from_native(Args&&... args);
-    template <typename T2, unsigned Elems2, typename... Args>
-        requires (arch::is(arch::Gen2) &&
-                  (Utils::is_one_of_v<std::decay_t<Args>, int, dim_2d, dim_3d, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d> && ...))
-    friend constexpr auto make_tensor_descriptor_from_native_bytes(Args&&... args);
-#else
-    template <aie_dm_resource Resource, typename T2, typename TensorDescriptor>
-    friend constexpr auto make_tensor_buffer_stream(T2 *base, const TensorDescriptor& dims);
-    template <aie_dm_resource Resource, typename T2, typename TensorDescriptor>
-    friend constexpr auto make_tensor_buffer_stream(const T2 *base, const TensorDescriptor& dims);
-    template <aie_dm_resource Resource, typename T2, typename TensorDescriptor>
-    friend constexpr auto make_restrict_tensor_buffer_stream(T2 *base, const TensorDescriptor& dims);
-
-    template <typename T2, unsigned Elems2, typename... Args>
-    friend constexpr auto make_tensor_descriptor_from_native(Args&&... args);
-    template <typename T2, unsigned Elems2, typename... Args>
-    friend constexpr auto make_tensor_descriptor_from_native_bytes(Args&&... args);
-#endif
-
-#if __AIE_ARCH__ == 21
-    static constexpr int implicit_incr = detail::is_valid_block_type_v<T> ? vector_type::bytes() : 0;
-#else
-    static constexpr int implicit_incr = 0;
-#endif
-
-    // For native initialization
-    __aie_inline
-    explicit constexpr tensor_descriptor(NativeRepr&& dims) : dims_(), it_desc_(std::move(dims))
-    {}
-
-    // walk dims_ and update steps to increments
-    __aie_inline
-    static constexpr std::array<tensor_dim, Rank> steps_to_incrs(const std::array<tensor_dim, Rank> &dims, bool byte_steps)
-    {
-        int rollback = 0;
-        int scale = byte_steps ? 1 : vector_type::bytes();
-        std::array<tensor_dim, Rank> incrs;
-
-        for (int i = Rank - 1; i >= 0; --i) {
-            int step_bytes = dims[i].step * scale;
-            int local_rollback = step_bytes * (dims[i].num - 1);
-            //TODO: Check alignment on native
-            incrs[i] = tensor_dim(dims[i].num - 1u, step_bytes - implicit_incr - rollback);
-            rollback += local_rollback;
-        }
-
-        return incrs;
-    }
-
-    template <int Idx = 0>
-    __aie_inline
-    static constexpr auto to_iteration_descriptor(const std::array<tensor_dim, Rank>& dims)
-    {
-        if        constexpr ((Idx + 2) < Rank) {
-            using detail::dim_3d;
-            // offset required to interface increments between different structs
-            int offset = (Idx + 2) == (Rank - 1) ? 0 : (dims[Idx + 3].step + implicit_incr) * dims[Idx + 3].num + implicit_incr;
-            return std::tuple_cat(std::make_tuple(dim_3d{dims[Idx + 2].num, dims[Idx + 2].step + offset,
-                                                         dims[Idx + 1].num, dims[Idx + 1].step + offset,
-                                                                            dims[Idx    ].step + offset}),
-                                  to_iteration_descriptor<Idx + 3>(dims));
-        } else if constexpr ((Idx + 1) < Rank) {
-            using detail::dim_2d;
-            return std::tuple_cat(std::make_tuple(dim_2d{dims[Idx + 1].num, dims[Idx + 1].step,
-                                                                            dims[Idx    ].step}),
-                                  to_iteration_descriptor<Idx + 2>(dims));
-        } else if constexpr ((Idx    ) < Rank) {
-            return std::make_tuple(dims[Idx].step);
-        } else {
-            return std::make_tuple();
-        }
-    }
-
-    std::array<tensor_dim, Rank> dims_;
-
-    using tensor_iteration_descriptor = NativeRepr;
-    NativeRepr it_desc_;
-};
-
-template <typename T, unsigned Elems, typename... Args>
-    requires (arch::is(arch::Gen2) && (std::is_same_v<Args, tensor_dim> && ...))
-__aie_inline
-constexpr auto make_tensor_descriptor(Args&&... args)
-{
-    constexpr unsigned Rank = sizeof...(Args);
-    constexpr bool byte_steps = false;
-    return tensor_descriptor<Rank, T, Elems>(std::array<tensor_dim, Rank>{std::forward<Args>(args)...}, byte_steps);
-}
-
-template <typename T, unsigned Elems, typename... Args>
-    requires (arch::is(arch::Gen2) && (std::is_same_v<Args, tensor_dim> && ...))
-__aie_inline
-constexpr auto make_tensor_descriptor_bytes(Args&&... args)
-{
-    constexpr unsigned Rank = sizeof...(Args);
-    constexpr bool byte_steps = true;
-    return tensor_descriptor<Rank, T, Elems>(std::array<tensor_dim, Rank>{std::forward<Args>(args)...}, byte_steps);
-}
-
-template <typename T, unsigned Elems, typename... Args>
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-    requires (arch::is(arch::Gen2) && (Utils::is_one_of_v<std::decay_t<Args>, int, dim_2d, dim_3d> && ...))
-#endif
-__aie_inline
-constexpr auto make_tensor_descriptor_from_native(Args&&... args)
-{
-    constexpr unsigned Rank = detail::compute_rank_v<Args...>;
-    using vector_type = detail::tensor_vector_type_t<T, Elems>;
-
-    constexpr auto apply_scale = []<typename U>(U&& arg, int scale){
-        using U2 = std::decay_t<U>;
-        if      constexpr (std::is_same_v<int,            U2>) return arg * scale;
-        else if constexpr (std::is_same_v<detail::dim_2d, U2>) return detail::dim_2d(arg.num1, arg.inc1 * scale, arg.inc2 * scale);
-        else if constexpr (std::is_same_v<detail::dim_3d, U2>) return detail::dim_3d(arg.num1, arg.inc1 * scale, arg.num2, arg.inc2 * scale, arg.inc3 * scale);
-    };
-
-    auto&& dims = std::make_tuple(apply_scale(std::forward<Args>(args), vector_type::bytes())...);
-    return tensor_descriptor<Rank, T, Elems, std::decay_t<decltype(dims)>>(std::move(dims));
-}
-
-template <typename T, unsigned Elems, typename... Args>
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-    requires (arch::is(arch::Gen2) &&
-              (Utils::is_one_of_v<std::decay_t<Args>, int, dim_2d, dim_3d, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d> && ...))
-#endif
-__aie_inline
-constexpr auto make_tensor_descriptor_from_native_bytes(Args&&... args)
-{
-    constexpr unsigned Rank = detail::compute_rank_v<Args...>;
-    auto&& dims = std::make_tuple(std::forward<Args>(args)...);
-
-    // Ensure, at maximum, one sliding_window_dim_*d is passed
-    constexpr unsigned num_sliding_dims = (Utils::is_one_of_v<Args, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d> + ...);
-    static_assert(num_sliding_dims <= 1, "Only a single sliding_window_dim is supported");
-    // If present, ensure that the sliding_window_dim is the last argument
-    if constexpr (num_sliding_dims == 1) {
-        using innermost_type = std::tuple_element_t<sizeof...(Args) - 1, std::decay_t<decltype(dims)>>;
-        static_assert(Utils::is_one_of_v<innermost_type, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d>,
-                      "sliding_window_dim is required to be the innermost dimension");
-    }
-
-    return tensor_descriptor<Rank, T, Elems, std::decay_t<decltype(dims)>>(std::move(dims));
-}
-
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-template <aie_dm_resource Resource = aie_dm_resource::none, DecoratedElemBaseType T, typename TensorDescriptor>
-    requires (arch::is(arch::Gen2))
-#else
-template <aie_dm_resource Resource = aie_dm_resource::none, typename T, typename TensorDescriptor>
-#endif
-__aie_inline
-constexpr auto make_tensor_buffer_stream(T *base, const TensorDescriptor& tensor_desc)
-{
-    static_assert(std::is_same_v<T, typename TensorDescriptor::type>, "Input data type does not match tensor descriptor");
-    constexpr unsigned Elems = TensorDescriptor::elems;
-    using iter_desc_t = typename std::decay_t<TensorDescriptor>::tensor_iteration_descriptor;
-
-    if constexpr (std::tuple_size_v<iter_desc_t> == 1 &&
-                  Utils::is_one_of_v<std::tuple_element_t<0, iter_desc_t>, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d>) {
-
-        return detail::const_sliding_window_buffer_stream<T, Elems, std::tuple_element_t<0, iter_desc_t>, Resource>(base, std::get<0>(tensor_desc.it_desc_));
-    }
-    else {
-        return detail::tensor_buffer_stream<T, Elems, 0, iter_desc_t, Resource, /*Restrict=*/false>(base, tensor_desc.it_desc_);
-    }
-}
-
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-template <aie_dm_resource Resource = aie_dm_resource::none, DecoratedElemBaseType T, typename TensorDescriptor>
-    requires (arch::is(arch::Gen2))
-#else
-template <aie_dm_resource Resource = aie_dm_resource::none, typename T, typename TensorDescriptor>
-#endif
-__aie_inline
-constexpr auto make_tensor_buffer_stream(const T *base, const TensorDescriptor& tensor_desc)
-{
-    static_assert(std::is_same_v<T, typename TensorDescriptor::type>, "Input data type does not match tensor descriptor");
-    constexpr unsigned Elems = TensorDescriptor::elems;
-    using iter_desc_t = typename std::decay_t<TensorDescriptor>::tensor_iteration_descriptor;
-
-    if constexpr (std::tuple_size_v<iter_desc_t> == 1 &&
-                  Utils::is_one_of_v<std::tuple_element_t<0, iter_desc_t>, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d>) {
-
-        return detail::const_sliding_window_buffer_stream<const T, Elems, std::tuple_element_t<0, iter_desc_t>, Resource>(base, std::get<0>(tensor_desc.it_desc_));
-    }
-    else {
-        return detail::tensor_buffer_stream<const T, Elems, 0, iter_desc_t, Resource>(base, tensor_desc.it_desc_);
-    }
-}
-
-
-#if __AIE_API_SUPPORTED_FRIEND_CONCEPTS__
-template <aie_dm_resource Resource = aie_dm_resource::none, DecoratedElemBaseType T, typename TensorDescriptor>
-    requires (arch::is(arch::Gen2))
-#else
-template <aie_dm_resource Resource = aie_dm_resource::none, typename T, typename TensorDescriptor>
-#endif
-__aie_inline
-constexpr auto make_restrict_tensor_buffer_stream(T * __restrict base, const TensorDescriptor& tensor_desc)
-{
-    static_assert(std::is_same_v<T, typename TensorDescriptor::type>, "Input data type does not match tensor descriptor");
-    constexpr unsigned Elems = TensorDescriptor::elems;
-    using iter_desc_t = typename std::decay_t<TensorDescriptor>::tensor_iteration_descriptor;
-
-    if constexpr (std::tuple_size_v<iter_desc_t> == 1 &&
-                  Utils::is_one_of_v<std::tuple_element_t<0, iter_desc_t>, sliding_window_dim_1d, sliding_window_dim_2d, sliding_window_dim_3d>) {
-
-        return detail::const_sliding_window_buffer_stream<T, Elems, std::tuple_element_t<0, iter_desc_t>, Resource>(base, std::get<0>(tensor_desc.it_desc_));
-    }
-    else {
-        return detail::tensor_buffer_stream<T, Elems, 0, iter_desc_t, Resource, /*Restrict=*/true>(base, tensor_desc.it_desc_);
-    }
-}
-
 /**
  * @ingroup group_elementary
+ *
+ * Returns the square root of a value.
+ *
+ * \f$ f(a) = \sqrt{a} \f$
+ *
+ * @param a Input value. It must meet @ref aie::Elem.
  */
-template <Elem E>
+template <RealElem E>
 __aie_inline
 auto sqrt(E a)
 {
@@ -6824,6 +7047,12 @@ auto sqrt(E a)
 
 /**
  * @ingroup group_elementary
+ *
+ * Returns the inverse value.
+ *
+ * \f$ f(a) = a^{-1} \f$
+ *
+ * @param a Input value. It must meet @ref aie::RealElem.
  */
 template <RealElem E>
 __aie_inline
@@ -6835,12 +7064,18 @@ auto inv(E a)
 
 /**
  * @ingroup group_elementary
+ *
+ * Returns the inverse value of a complex number.
+ *
+ * \f$ z^{-1} = \frac{1}{a + bi} = \frac{a - bi}{a^2 + b^2} \f$
+ *
+ * @param a Input value. It must meet @ref aie::ComplexElem.
  */
-template <ComplexElem E>
+template <ComplexElem C>
 __aie_inline
-auto inv(E a)
+auto inv(C a)
 {
-    using T_base = operand_base_type_t<E>;
+    using T_base = operand_base_type_t<C>;
     T_base num = conj(a);
     auto den = abs_square(a);
     return T_base{num.real / den, num.imag / den};
@@ -6848,8 +7083,16 @@ auto inv(E a)
 
 /**
  * @ingroup group_elementary
+ *
+ * Performs an approximation of the inversed square root of a single value.
+ *
+ * \f$ f(a) \approx \frac{1}{\sqrt{a}} \f$
+ *
+ * \note Due to the variations in support across architectures, the results of this function may differ slightly across devices.
+ *
+ * @param a Input value. The type must meet @ref aie::Elem.
  */
-template <Elem E>
+template <RealElem E>
 __aie_inline
 auto invsqrt(E a)
 {
@@ -6955,9 +7198,15 @@ auto sincos_complex(E a) -> std::conditional_t<detail::is_floating_point_v<opera
 /**
  * @ingroup group_elementary
  *
+ * Returns the square root of all values in a vector.
+ *
+ * \f$ f(v_i) = \sqrt{v_i} \f$
+ *
  * \note This is a scalar operation. Even though the function operates with vectors, the actual operation is applied to each element individually.
+ *
+ * @param v Input value. It must meet @ref aie::Vector.
  */
-template <Vector Vec>
+template <RealVector Vec>
 __aie_inline
 auto sqrt(const Vec &v) -> aie_dm_resource_remove_t<Vec>
 {
@@ -6970,7 +7219,13 @@ auto sqrt(const Vec &v) -> aie_dm_resource_remove_t<Vec>
 /**
  * @ingroup group_elementary
  *
+ * Returns the inverse value of every element in a vector.
+ *
+ * \f$ f(v_{i}) = v_{i}^{-1} \f$
+ *
  * \note This is a scalar operation. Even though the function operates with vectors, the actual operation is applied to each element individually.
+ *
+ * @param v Input values. It must meet @ref aie::Vector
  */
 template <Vector Vec>
 __aie_inline
@@ -6984,8 +7239,16 @@ auto inv(const Vec &v) -> aie_dm_resource_remove_t<Vec>
 
 /**
  * @ingroup group_elementary
+ *
+ * Performs an approximation of the inversed square root of every element in a vector.
+ *
+ * \f$ f(v_{i}) \approx \frac{1}{\sqrt{v_{i}}} \f$
+ *
+ * \note Due to the variations in support across architectures, the results of this function may differ slightly across devices.
+ *
+ * @param v Input values. The type must meet @ref aie::Vector.
  */
-template <Vector Vec>
+template <RealVector Vec>
 __aie_inline
 auto invsqrt(const Vec &v) -> aie_dm_resource_remove_t<Vec>
 {
@@ -7175,20 +7438,96 @@ auto to_fixed(const vector<cfloat, Elems> &v, int shift = 0) -> vector<TR, Elems
  *
  * Convert the elements in a bfloat16 vector into fixed-point values.
  *
- * \note
- * This conversion performs floor rounding, regardless of the \ref rounding_mode configured
- * by the user.
+ * @param v     Input vector.
+ * @param shift Position of the point in the output values.
+ *
+ * @tparam TR   Type of the returned fixed-point values.
+ */
+template <typename TR = int32, typename T, unsigned Elems>
+    requires (arch::is(arch::Gen2) && std::is_same_v<T, bfloat16>)
+__aie_inline
+auto to_fixed(const vector<T, Elems> &v, int shift = 0) -> vector<TR, Elems>
+{
+    return detail::elementary_vector<detail::ElementaryOp::Float2Fix, TR, T, Elems>::run(v, shift);
+}
+
+/**
+ * @ingroup group_fp_conversion
+ *
+ * Convert the elements in a floating point accumulator into a vector of fixed-point values.
+ *
+ * @param v     Input accumulator.
+ * @param shift Position of the point in the output values.
+ *
+ * @tparam TR   Type of the returned fixed-point values.
+ */
+template <typename TR = int32, unsigned Elems>
+    requires(arch::is(arch::Gen2) && Utils::is_one_of_v<TR, int4, uint4, int8, uint8, int16, uint16, int32, uint32>)
+__aie_inline
+auto to_fixed(const accum<accfloat, Elems> &v, int shift = 0) -> vector<TR, Elems>
+{
+    return to_fixed<TR, Elems>(v.template to_vector<float>(), shift);
+}
+
+/**
+ * @ingroup group_fp_conversion
+ *
+ * Convert the elements in a floating point vector into fixed-point values.
+ *
+ * @param v     Input vector.
+ * @param shift Position of the point in the output values.
+ *
+ * @tparam TR   Return element type of the result vector. Must be a signed integer type.
+ */
+template <typename TR = int32, typename T, unsigned Elems>
+    requires (!detail::is_floating_point_v<TR>
+              && detail::is_signed_v<TR>
+              && detail::is_floating_point_v<T>
+              && detail::type_bits_v<TR> <= detail::type_bits_v<T>
+              && arch::is(arch::Gen2))
+__aie_inline
+auto to_fixed_sign(const vector<T, Elems> &v, bool v_sign, int shift = 0) -> vector<TR, Elems>
+{
+    return detail::elementary_vector<detail::ElementaryOp::Float2Fix, TR, T, Elems>::run(v, shift, v_sign);
+}
+
+/**
+ * @ingroup group_fp_conversion
+ *
+ * Convert the elements in a floating point accumulator into a vector of fixed-point values.
+ *
+ * @param v      Input accumulator.
+ * @param v_sign Dynamic sign of the point in the output values.
+ * @param shift  Position of the point in the output values.
+ *
+ * @tparam TR   Type of the returned fixed-point values.
+ */
+template <typename TR = int32, unsigned Elems>
+    requires(arch::is(arch::Gen2) && Utils::is_one_of_v<TR, int4, int8, int16, int32>)
+__aie_inline
+auto to_fixed_sign(const accum<accfloat, Elems> &v, bool v_sign, int shift = 0) -> vector<TR, Elems>
+{
+    return detail::elementary_vector<detail::ElementaryOp::Float2Fix, TR, float, Elems>::run(v.template to_vector<float>(), shift, v_sign);
+}
+
+/**
+ * @ingroup group_fp_conversion
+ *
+ * Convert the elements in a bfloat16 vector into floored fixed-point values.
  *
  * @param v     Input vector.
  * @param shift Position of the point in the output values.
  *
  * @tparam TR   Type of the returned fixed-point values.
  */
-template <typename TR = int32, unsigned Elems> requires (arch::is(arch::Gen2))
+template <typename TR = int32, typename T, unsigned Elems>
+    requires (arch::is(arch::Gen2)
+              && Utils::is_one_of_v<TR, int16, int32>
+              && (arch::is(arch::Gen2) && std::is_same_v<T, bfloat16>))
 __aie_inline
-auto to_fixed(const vector<bfloat16, Elems> &v, int shift = 0) -> vector<TR, Elems>
+auto to_fixed_floor(const vector<T, Elems> &v, int shift = 0) -> vector<TR, Elems>
 {
-    return detail::elementary_vector<detail::ElementaryOp::Float2Fix, TR, bfloat16, Elems>::run(v, shift);
+    return detail::elementary_vector<detail::ElementaryOp::Float2FixFloor, TR, T, Elems>::run(v, shift);
 }
 
 /**
@@ -7307,7 +7646,7 @@ bool lt(T a, T b) requires(detail::is_floating_point_v<T> && !detail::is_complex
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::lt<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b).test(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a < b;
 #endif
@@ -7329,7 +7668,7 @@ bool gt(T a, T b) requires(detail::is_floating_point_v<T> && !detail::is_complex
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::lt<T, 256 / (sizeof(T) * 8)>::run(v_b, v_a).test(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a > b;
 #endif
@@ -7351,7 +7690,7 @@ bool le(T a, T b) requires(detail::is_floating_point_v<T> && !detail::is_complex
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return !gt(a, b);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a <= b;
 #endif
@@ -7373,7 +7712,7 @@ bool ge(T a, T b) requires(detail::is_floating_point_v<T> && !detail::is_complex
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::ge<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b).test(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a >= b;
 #endif
@@ -7395,7 +7734,7 @@ bool neq(T a, T b) requires(detail::is_floating_point_v<T>)
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::neq<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b).test(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a != b;
 #endif
@@ -7417,7 +7756,7 @@ bool eq(T a, T b) requires(detail::is_floating_point_v<T>)
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return !detail::neq<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b).test(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a == b;
 #endif
@@ -7434,15 +7773,8 @@ template <typename T>
 __aie_inline
 T max(T a, T b) requires(detail::is_floating_point_v<T>)
 {
-#if __AIE_ARCH__ == 10
-    const vector<T, 256 / (sizeof(T) * 8)> v_a(a);
-    const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
-
-    return detail::max<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b)[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-    // Implement with accumulator addition
-    return std::max(a, b);
-#endif
+    constexpr unsigned n = detail::native_vector_length_v<T>;
+    return detail::max<T, n>::run(vector<T, n>(a), vector<T, n>(b))[0];
 }
 
 /**
@@ -7456,15 +7788,8 @@ template <typename T>
 __aie_inline
 T min(T a, T b) requires(detail::is_floating_point_v<T>)
 {
-#if __AIE_ARCH__ == 10
-    const vector<T, 256 / (sizeof(T) * 8)> v_a(a);
-    const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
-
-    return detail::min<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b)[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
-    // Implement with accumulator addition
-    return std::min(a, b);
-#endif
+    constexpr unsigned n = detail::native_vector_length_v<T>;
+    return detail::min<T, n>::run(vector<T, n>(a), vector<T, n>(b))[0];
 }
 
 template <typename T>
@@ -7476,7 +7801,7 @@ T add(T a, T b) requires(detail::is_floating_point_v<T>)
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::add<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b)[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator addition
     return a + b;
 #endif
@@ -7491,7 +7816,7 @@ T sub(T a, T b) requires(detail::is_floating_point_v<T>)
     const vector<T, 256 / (sizeof(T) * 8)> v_b(b);
 
     return detail::sub<T, 256 / (sizeof(T) * 8)>::run(v_a, v_b)[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     // Implement with accumulator subtraction
     return a - b;
 #endif
@@ -7508,8 +7833,8 @@ auto mul(T1 a, T2 b) requires(detail::is_floating_point_v<T1> &&
     const vector<T1, elems> v_a(a);
     const vector<T2, elems> v_b(b);
 
-    return detail::mul<detail::MulMacroOp::Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>).to_vector().get(0);
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+    return detail::mul<detail::MulMacroOp::Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>, false).to_vector().get(0);
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return a * b;
 #endif
 }
@@ -7530,8 +7855,8 @@ TR mac(TR c, T1 a, T2 b) requires(detail::is_floating_point_v<T1> &&
     using acc_type = std::conditional_t<std::is_same_v<TR, float>, accfloat, caccfloat>;
     const accum<acc_type, elems> acc(v_c);
 
-    return detail::mul<detail::MulMacroOp::Add_Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>, acc).to_vector()[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+    return detail::mul<detail::MulMacroOp::Add_Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>, false, acc).to_vector()[0];
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return c + a * b;
 #endif
 }
@@ -7552,8 +7877,8 @@ TR msc(TR c, T1 a, T2 b) requires(detail::is_floating_point_v<T1> &&
     using acc_type = std::conditional_t<std::is_same_v<TR, float>, accfloat, caccfloat>;
     const accum<acc_type, elems> acc(v_c);
 
-    return detail::mul<detail::MulMacroOp::Sub_Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>, acc).to_vector()[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+    return detail::mul<detail::MulMacroOp::Sub_Mul, 32, T1, T2>::run(v_a, detail::is_signed_v<T1>, v_b, detail::is_signed_v<T2>, false, acc).to_vector()[0];
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return c - a * b;
 #endif
 }
@@ -7566,7 +7891,7 @@ inline float div(float a, float b)
     const vector<float, 8>  v_b(inv(b));
 
     return mul(v_a, v_b).to_vector()[0];
-#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 20 || __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
     return a / b;
 #endif
 }
@@ -7642,11 +7967,12 @@ auto div(const Vec &a, E b)
  * @param b Vector of divisors. The type must meet @ref aie::ComplexVector.
  */
 template <ComplexVector Vec>
-    requires(arch::is(arch::AIE) || (arch::is(arch::AIE_ML) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
+    requires(arch::is(arch::AIE) || (arch::is(arch::AIE_ML, arch::AIE_MLv2) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
 __aie_inline
-auto div(const Vec &a, const Vec &b) -> accum<
-    detail::accum_tag_for_mul_types<typename Vec::value_type, detail::utils::get_complex_component_type_t<typename Vec::value_type>>,
-    Vec::size()>
+auto div(const Vec &a, const Vec &b) -> accum<detail::accum_tag_for_mul_types<
+                                                    typename Vec::value_type,
+                                                    detail::remove_complex_t<typename Vec::value_type>>,
+                                              Vec::size()>
 {
     using T = typename Vec::value_type;
 
@@ -7669,10 +7995,10 @@ auto div(const Vec &a, const Vec &b) -> accum<
  * @param b Divisor. The type must meet @ref aie::ComplexElem.
  */
 template <ComplexVector Vec, ComplexElem E>
-    requires(arch::is(arch::AIE) || (arch::is(arch::AIE_ML) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
+    requires(arch::is(arch::AIE) || (arch::is(arch::AIE_ML, arch::AIE_MLv2) && __AIE_API_COMPLEX_FP32_EMULATION__ == 1))
 __aie_inline
 auto div(const Vec &a, const E &b)
-    -> accum<detail::accum_tag_for_mul_types<typename Vec::value_type, detail::utils::get_complex_component_type_t<E>>,
+    -> accum<detail::accum_tag_for_mul_types<typename Vec::value_type, detail::remove_complex_t<E>>,
         Vec::size()>
 {
     using T = typename Vec::value_type;
@@ -7687,6 +8013,14 @@ auto div(const Vec &a, const E &b)
 
 /**
  * @ingroup group_elementary
+ *
+ * Returns the square root of all values in an accumulator.
+ *
+ * \f$ f(v_i) = \sqrt{v_i} \f$
+ *
+ * \note This is a scalar operation. Even though the function operates with accumulators, the actual operation is applied to each element individually.
+ *
+ * @param v Input values.
  */
 // TODO: simplify using concepts
 template <unsigned Elems> requires (arch::is(arch::AIE))
@@ -7700,6 +8034,14 @@ accum<accfloat, Elems> sqrt(const accum<accfloat, Elems> &v)
 
 /**
  * @ingroup group_elementary
+ *
+ * Returns the inverse value of every element in an accumulator.
+ *
+ * \f$ f(v_{i}) = v_{i}^{-1} \f$
+ *
+ * \note This is a scalar operation. Even though the function operates with accumulators, the actual operation is applied to each element individually.
+ *
+ * @param v Input values.
  */
 template <unsigned Elems> requires (arch::is(arch::AIE))
 __aie_inline
@@ -7712,6 +8054,12 @@ accum<accfloat, Elems> inv(const accum<accfloat, Elems> &v)
 
 /**
  * @ingroup group_elementary
+ *
+ * Performs an approximation of the inversed square root of every element in a floating point accumulator.
+ *
+ * \f$ f(v_{i}) \approx \frac{1}{\sqrt{v_{i}}} \f$
+ *
+ * @param v Input values.
  */
 template <unsigned Elems> requires (arch::is(arch::AIE))
 __aie_inline
@@ -7730,7 +8078,7 @@ accum<accfloat, Elems> invsqrt(const accum<accfloat, Elems> &v)
  * @param v     Input vector.
  */
 template <typename TR = bfloat16, unsigned Elems>
-    requires (arch::is(arch::XDNA_2))
+    requires (arch::is(arch::XDNA2, arch::AIE_MLv2))
 __aie_inline
 auto tanh(const vector<float, Elems> &v) -> vector<TR, Elems>
 {
@@ -7740,12 +8088,15 @@ auto tanh(const vector<float, Elems> &v) -> vector<TR, Elems>
 /**
  * @ingroup group_elementary
  *
- * Compute the 2^x function on the elements of the input vector.
+ * Compute the 2 raised to the power function for all elements in a vector.
  *
- * @param v     Input vector.
+ * \f$ f(v_{i}) = 2^{v_{i}} \f$
+ *
+ * @param v Input values.
  */
 template <typename TR = bfloat16, unsigned Elems>
-    requires(arch::is(arch::XDNA_2) && Utils::is_one_of_v<TR, bfloat16>)
+    requires((arch::is(arch::XDNA2) && Utils::is_one_of_v<TR, bfloat16>) ||
+             (arch::is(arch::AIE_MLv2) && Utils::is_one_of_v<TR, bfloat16, float>))
 __aie_inline
 auto exp2(const vector<float, Elems> &v) -> vector<TR, Elems>
 {
@@ -7768,6 +8119,8 @@ constexpr T zero()
 }
 
 /**
+ * @ingroup group_config
+ *
  * Set the saturation mode.
  *
  * @param m Saturation mode to be set
@@ -7779,6 +8132,8 @@ static inline void set_saturation(saturation_mode m)
 }
 
 /**
+ * @ingroup group_config
+ *
  * Get the current saturation mode.
  */
 __aie_inline
@@ -7788,6 +8143,8 @@ static inline saturation_mode get_saturation()
 }
 
 /**
+ * @ingroup group_config
+ *
  * Set the saturation mode and return the previously set mode.
  *
  * @param m Saturation mode to be set
@@ -7803,6 +8160,8 @@ static inline saturation_mode swap_saturation(saturation_mode m)
 }
 
 /**
+ * @ingroup group_config
+ *
  * Set the rounding mode used in accumulator to vector conversions.
  *
  * @param m Rounding mode to be set
@@ -7814,6 +8173,8 @@ static inline void set_rounding(rounding_mode m)
 }
 
 /**
+ * @ingroup group_config
+ *
  * Get the current rounding mode used in accumulator to vector conversions.
  */
 __aie_inline
@@ -7823,6 +8184,8 @@ static inline rounding_mode get_rounding()
 }
 
 /**
+ * @ingroup group_config
+ *
  * Set the rounding mode used in accumulator to vector conversions and return the previously set mode.
  *
  * @param m Rounding mode to be set
@@ -7866,6 +8229,11 @@ BINARY_OP_IMPL(Max)
 BINARY_OP_IMPL(Min)
 {
     return min(this->parent1(), this->parent2());
+}
+
+BINARY_OP_IMPL(Neg)
+{
+    return this->parent2() ? neg(this->parent1()) : this->parent1();
 }
 
 }

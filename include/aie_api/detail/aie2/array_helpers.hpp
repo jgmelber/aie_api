@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
 #ifndef __AIE_API_DETAIL_AIE2_ARRAY_HELPERS__HPP__
 #define __AIE_API_DETAIL_AIE2_ARRAY_HELPERS__HPP__
 
+#include <algorithm>
 #include <iterator>
 
 #include "../../concepts.hpp"
@@ -105,7 +106,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(!IsStatic && !IsStrideStatic)
     constexpr circular_iterator(pointer ptr, pointer base, size_t elems, size_t stride) :
-        storage_{ptr, (ptr - base), elems},
+        storage_{ptr, static_cast<addr_t>(ptr - base), elems},
         stride_{stride}
     {
         REQUIRES_MSG(ptr >= base, "Start address must be greater or equal to base address");
@@ -114,7 +115,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(!IsStatic && IsStrideStatic)
     constexpr circular_iterator(pointer ptr, pointer base, size_t elems) :
-        storage_{ptr, (ptr - base), elems}
+        storage_{ptr, static_cast<addr_t>(ptr - base), elems}
     {
         REQUIRES_MSG(ptr >= base, "Start address must be greater or equal to base address");
         REQUIRES_MSG(ptr < base + elems, "Start address must be less than base address plus array size");
@@ -122,7 +123,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(IsStatic && !IsStrideStatic)
     constexpr circular_iterator(pointer ptr, pointer base, size_t stride) :
-        storage_{ptr, (ptr - base)},
+        storage_{ptr, static_cast<addr_t>(ptr - base)},
         stride_{stride}
     {
         REQUIRES_MSG(ptr >= base, "Start address must be greater or equal to base address");
@@ -131,7 +132,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(IsStatic && IsStrideStatic)
     constexpr circular_iterator(pointer ptr, pointer base) :
-        storage_{ptr, (ptr - base)}
+        storage_{ptr, static_cast<addr_t>(ptr - base)}
     {
         REQUIRES_MSG(ptr >= base, "Start address must be greater or equal to base address");
         REQUIRES_MSG(ptr < base + Elems, "Start address must be less than base address plus array size");
@@ -243,7 +244,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(!IsStatic && !IsStrideStatic)
     constexpr vector_circular_iterator(T *ptr, T *base, size_t elems, size_t stride) :
-        storage_{ptr, (ptr - base) / (Elems / subbyte_elems), elems},
+        storage_{ptr, static_cast<addr_t>((ptr - base) / (Elems / subbyte_elems)), elems},
         stride_{stride}
     {
         REQUIRES_MSG(elems % Elems == 0,                          "Array size needs to be a multiple of vector size");
@@ -254,7 +255,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(!IsStatic && IsStrideStatic)
     constexpr vector_circular_iterator(T *ptr, T *base, size_t elems) :
-        storage_{ptr, (ptr - base) / (Elems / subbyte_elems), elems}
+        storage_{ptr, static_cast<addr_t>((ptr - base) / (Elems / subbyte_elems)), elems}
     {
         REQUIRES_MSG(elems % Elems == 0,                          "Array size needs to be a multiple of vector size");
         REQUIRES_MSG(ptr >= base,                                 "Start address must be greater or equal to base address");
@@ -264,7 +265,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(IsStatic && !IsStrideStatic)
     constexpr vector_circular_iterator(T *ptr, T *base, size_t stride) :
-        storage_{ptr, (ptr - base) / (Elems / subbyte_elems)},
+        storage_{ptr, static_cast<addr_t>((ptr - base) / (Elems / subbyte_elems))},
         stride_{stride}
     {
         REQUIRES_MSG(ArrayElems % Elems == 0,                     "Array size needs to be a multiple of vector size");
@@ -275,7 +276,7 @@ public:
 
     template <bool IsStatic = is_static(), bool IsStrideStatic = is_stride_static()> requires(IsStatic && IsStrideStatic)
     constexpr vector_circular_iterator(T *ptr, T *base) :
-        storage_{ptr, (ptr - base) / (Elems / subbyte_elems)}
+        storage_{ptr, static_cast<addr_t>((ptr - base) / (Elems / subbyte_elems))}
     {
         REQUIRES_MSG(ArrayElems % Elems == 0,                      "Array size needs to be a multiple of vector size");
         REQUIRES_MSG(ptr >= base,                                  "Start address must be greater or equal to base address");

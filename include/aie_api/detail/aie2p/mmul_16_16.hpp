@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -104,6 +104,8 @@ struct mmul_16_16<4, 4, 8, TypeA, TypeB, AccumBits> : public C_block<TypeA, Type
     }
 };
 
+#if __AIE_ARCH__ == 21 ||  __AIE_ARCH__ == 22
+
 template <typename TypeA, typename TypeB, unsigned AccumBits>
 struct mmul_16_16<2, 8, 8, TypeA, TypeB, AccumBits> : public C_block<TypeA, TypeB, 64, 16, 1>
 {
@@ -188,6 +190,8 @@ struct mmul_16_16<8, 1, 8, TypeA, TypeB, 32> : public C_block<TypeA, TypeB, 32, 
         this->zero = false;
     }
 };
+
+#endif
 
 template <unsigned M, unsigned K, unsigned N, unsigned AccumBits>
 struct mmul<M, K, N, int16, int16, AccumBits>   : public mmul_16_16<M, K, N, int16,  int16, AccumBits>  { using mmul_16_16<M, K, N, int16, int16, AccumBits>::mmul_16_16; };

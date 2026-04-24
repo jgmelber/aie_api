@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -17,24 +17,16 @@
                                            (__AIE_MODEL_VERSION__ >= 20000 && __AIE_MODEL_VERSION__ < 30000 && __AIE_MODEL_VERSION__ >= 21800) || \
                                            (__AIE_MODEL_VERSION__ >= 10000 && __AIE_MODEL_VERSION__ < 20000 && __AIE_MODEL_VERSION__ >= 11800))
 
-#define __AIE_API_SCALAR_TYPES_CONSTEXPR__ ((__AIE_MODEL_VERSION__ >= 900000)                                                                   || \
-                                            (__AIE_MODEL_VERSION__ >= 20000 && __AIE_MODEL_VERSION__ < 30000 && __AIE_MODEL_VERSION__ >= 21800) || \
-                                            (__AIE_MODEL_VERSION__ >= 10000 && __AIE_MODEL_VERSION__ < 20000 && __AIE_MODEL_VERSION__ >= 11800))
-
-#define __AIE_API_COMPOUND_DM_RESOURCE__   ((__AIE_MODEL_VERSION__ >= 900000)                                                                   || \
-                                            (__AIE_MODEL_VERSION__ >= 20000 && __AIE_MODEL_VERSION__ < 30000 && __AIE_MODEL_VERSION__ >= 22400) || \
-                                            (__AIE_MODEL_VERSION__ >= 10000 && __AIE_MODEL_VERSION__ < 20000 && __AIE_MODEL_VERSION__ >= 12400))
-
 #define __AIE_API_FLOAT_CONVERSION_VECTORIZED__   ((__AIE_MODEL_VERSION__ >= 900000)                                                                   || \
                                                    (__AIE_MODEL_VERSION__ >= 20000 && __AIE_MODEL_VERSION__ < 30000 && __AIE_MODEL_VERSION__ >= 22400) || \
                                                    (__AIE_MODEL_VERSION__ >= 10000 && __AIE_MODEL_VERSION__ < 20000 && __AIE_MODEL_VERSION__ >= 12400))
 
-#define __AIE_API_SUPPORTED_FRIEND_CONCEPTS__     ((__AIE_MODEL_VERSION__ <= 900000)                                  && \
-                                                   ((__AIE_MODEL_VERSION__ >= 20000 && __AIE_MODEL_VERSION__ < 22500) || \
-                                                    (__AIE_MODEL_VERSION__ >= 10000 && __AIE_MODEL_VERSION__ < 12500)))
+#define __AIE_API_CINT_SUPPORT__              (__AIE_API_COMPLEX_VECTOR_SUPPORT__)
+
+#define __AIE_API_CFP32_SUPPORT__             (__AIE_API_COMPLEX_VECTOR_SUPPORT__)
+
+#define __AIE_API_FP32_SUPPORT__              1
 
 #define __AIE_API_COMPLEX_FP32_EMULATION__    0
-
-#define __AIE_API_BUILTIN_CLZ__               (__AIE_MODEL_VERSION__ >= 22700 && __AIE_CORE_BUILTIN_CLZ__)
 
 #endif

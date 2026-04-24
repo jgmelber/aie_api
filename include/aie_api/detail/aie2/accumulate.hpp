@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -359,6 +359,7 @@ struct consume_terms<64, Lanes, 16,  T_Coeff, N_Coeff, 32,  int32, Op, Step>
     using  data_vector_type = vector<T_Data, Lanes>;
 
     template <typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
     static accum_type<> consume_2(const coeff_vector_type &coeff, unsigned coeff_start, const data_vector_type &x, const data_vector_type &y, const Acc &... acc)
     {
         accum_type<> ret;
@@ -370,27 +371,14 @@ struct consume_terms<64, Lanes, 16,  T_Coeff, N_Coeff, 32,  int32, Op, Step>
     }
 
     template <typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
     static accum_type<> consume_1(const coeff_vector_type &coeff, unsigned coeff_start, const data_vector_type &v, const Acc &... acc)
     {
-        constexpr auto mul_op = get_mul_op<sizeof...(acc) == 1, Op, accum_type<>, 16, 32>();
-        constexpr unsigned num_mul = Lanes < 32? 1 : Lanes / 16;
-
-        auto [t1, t2] = interleave_zip<int16, 8>::run(broadcast<int16, 8>::run(coeff[coeff_start]),
-                                                      zeros<int16, 8>::run(),
-                                                      1);
-
-        vector<cint16, 8> coefs = concat_vector(t1, t2).template cast_to<cint16>();
-
-        accum_type<> ret;
-
-        utils::unroll_times<num_mul>([&](auto idx) __aie_inline {
-            accum_type<16> tmp = (v16acc64) mul_op((v.template grow_extract<16>(idx)).template cast_to<cint32>(),
-                                                   coefs.template grow<16>(),
-                                                   (v8cacc64) acc.template grow_extract<16>(idx)...);
-            ret.insert(idx, tmp.template extract<(Lanes < 16? Lanes : 16)>(0));
-        });
-
-        return ret;
+        constexpr MulMacroOp mul_op = sizeof...(Acc) == 0? MulMacroOp::Mul
+                                    : Op == Operation::Acc_Add? MulMacroOp::Add_Mul
+                                    : Op == Operation::Acc_Sub? MulMacroOp::Sub_Mul
+                                    : MulMacroOp::Mul;
+        return mul<mul_op, 64, T_Data, T_Coeff>::run(v, v.is_signed(), coeff[coeff_start], coeff.is_signed(), false, acc...);
     }
 };
 
@@ -407,6 +395,7 @@ struct consume_terms<64, Lanes, 32,  int32, N_Coeff, 16,  T_Data, Op, Step>
     using  data_vector_type = vector<T_Data, Lanes>;
 
     template <typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
     static accum_type<> consume_2(const coeff_vector_type &coeff, unsigned coeff_start, const data_vector_type &x, const data_vector_type &y, const Acc &... acc)
     {
         accum_type<> ret;
@@ -418,30 +407,14 @@ struct consume_terms<64, Lanes, 32,  int32, N_Coeff, 16,  T_Data, Op, Step>
     }
 
     template <typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
     static accum_type<> consume_1(const coeff_vector_type &coeff, unsigned coeff_start, const data_vector_type &v, const Acc &... acc)
     {
-        constexpr auto mul_op = get_mul_op<sizeof...(acc) == 1, Op, accum_type<>, 32, 16>();
-        constexpr unsigned num_mul = Lanes < 32? 1 : Lanes / 16;
-
-        auto [t1, t2] = interleave_zip<int32, 8>::run(broadcast<int32, 8>::run(coeff[coeff_start]),
-                                                      zeros<int32, 8>::run(),
-                                                      1);
-        vector<cint32, 8> coef_v = concat_vector(t1, t2).template cast_to<cint32>();
-
-        accum_type<> ret;
-
-        //This uses the intrinsics v8cint32*v16cint16 which lines up with what we need if we swap coef and data and cast to complex types
-        //The imaginary part of the coefs is left zeroed so real/imaginary of the data cint16 are treated as separate int16 values
-        //16 data int16 are selected (max we can process in one intrinsic call) and then grown to the necessary 512b, then casted to cint16
-        utils::unroll_times<num_mul>([&](auto idx) __aie_inline {
-            accum_type<16> tmp = (v16acc64) mul_op(coef_v,
-                                                   ((v.template grow_extract<16>(idx)).template grow<32>()).template cast_to<cint16>(),
-                                                   (v8cacc64) acc.template grow_extract<16>(idx)...);
-
-            ret.insert(idx, tmp.template extract<(Lanes < 16? Lanes : 16)>(0));
-        });
-
-        return ret;
+        constexpr MulMacroOp mul_op = sizeof...(Acc) == 0? MulMacroOp::Mul
+                                    : Op == Operation::Acc_Add? MulMacroOp::Add_Mul
+                                    : Op == Operation::Acc_Sub? MulMacroOp::Sub_Mul
+                                    : MulMacroOp::Mul;
+        return mul<mul_op, 64, T_Data, T_Coeff>::run(v, v.is_signed(), coeff[coeff_start], coeff.is_signed(), false, acc...);
     }
 };
 
@@ -470,29 +443,17 @@ struct consume_terms<64, Lanes, 32,  int32, N_Coeff, 32,  int32, Op, Step>
     }
 
     template <typename... Acc> requires((is_accum_v<Acc> && ...))
+    __aie_inline
     static accum_type<> consume_1(const coeff_vector_type &coeff, unsigned coeff_start, const data_vector_type &v, const Acc &... acc)
     {
-        constexpr auto mul_op = get_mul_op<sizeof...(acc) == 1, Op, accum_type<>, 32, 32>();
-        constexpr unsigned num_mul = Lanes < 32? 1 : Lanes / 16;
-
-        auto [t1, t2] = interleave_zip<int32, 8>::run(broadcast<int32, 8>::run(coeff[coeff_start]),
-                                                      zeros<int32, 8>::run(),
-                                                      1);
-
-        vector<cint32, 8> coefs = concat_vector(t1, t2).template cast_to<cint32>();
-
-        accum_type<> ret;
-
-        utils::unroll_times<num_mul>([&](auto idx) __aie_inline {
-            accum_type<16> tmp = (v16acc64) mul_op(v.template grow_extract<16>(idx).template cast_to<cint32>(),
-                                                   coefs,
-                                                   (v8cacc64) acc.template grow_extract<16>(idx)...);
-            ret.insert(idx, tmp.template extract<(Lanes < 16? Lanes : 16)>(0));
-        });
-
-        return ret;
+        constexpr MulMacroOp mul_op = sizeof...(Acc) == 0? MulMacroOp::Mul
+                                    : Op == Operation::Acc_Add? MulMacroOp::Add_Mul
+                                    : Op == Operation::Acc_Sub? MulMacroOp::Sub_Mul
+                                    : MulMacroOp::Mul;
+        return mul<mul_op, 64, T_Data, T_Coeff>::run(v, v.is_signed(), coeff[coeff_start], coeff.is_signed(), false, acc...);
     }
 };
-}
+
+} // namespace aie::detail
 
 #endif

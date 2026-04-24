@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -20,7 +20,7 @@ enum class AddSubOperation
 template <unsigned TypeBits, typename T, unsigned Elems, AddSubOperation Op>
 struct add_sub_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static vector_type run(const vector_type &v1, const vector_type &v2)
@@ -63,7 +63,7 @@ struct add_sub_bits_impl
 template <AccumElemBaseType AccumTag, unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using  accum_type = accum<AccumTag, Elems>;
 
     static accum_type run(const accum_type &acc1, bool zero_acc1, const accum_type &acc2)
@@ -85,7 +85,7 @@ struct add_sub_accum_bits_impl
 template <unsigned AccumBits, unsigned TypeBits, typename T, unsigned Elems, AddSubOperation Op>
 struct add_sub_accum_vector_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
     using   accum_tag = accum_tag_for_type<T, AccumBits>;
     using  accum_type = accum<accum_tag, Elems>;
@@ -123,7 +123,7 @@ struct add_sub_accum_vector_bits_impl
 template <unsigned TypeBits, typename T, unsigned Elems>
 struct add_reduce_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     static T run(const vector_type &v)
@@ -143,10 +143,11 @@ struct add_reduce_bits_impl
 template <unsigned TypeBits, typename T, unsigned Elems, unsigned N>
 struct add_reduce_v_bits_impl
 {
-#ifdef __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
+#if __AIE_API_PROVIDE_DEFAULT_SCALAR_IMPLEMENTATION__
     using vector_type = vector<T, Elems>;
 
     template <typename... Vectors>
+    __aie_inline
     static vector_type run(Vectors &&... vectors)
     {
         vector_type ret;
@@ -247,6 +248,19 @@ struct add_reduce_bits
     {
         return add_reduce_bits_impl<TypeBits, T, Elems>::run(v);
     }
+
+    __aie_inline
+    static T run(const T &partial, const vector_type &v)
+    {
+        return add_reduce_bits_impl<TypeBits, T, Elems>::run(partial, v);
+    }
+
+    template <AccumElemBaseType AccTag>
+    __aie_inline
+    static T run(const accum<AccTag, Elems> &acc)
+    {
+        return add_reduce_bits_impl<TypeBits, T, Elems>::run(acc);
+    }
 };
 
 template <unsigned TypeBits, typename T, unsigned Elems>
@@ -300,7 +314,7 @@ using sub_accum_vector = add_sub_accum_vector_bits<AccumBits, type_bits_v<T>, T,
 #include "aie2/add_accum.hpp"
 #include "aie2/add_reduce.hpp"
 
-#elif __AIE_ARCH__ == 21
+#elif __AIE_ARCH__ == 21 || __AIE_ARCH__ == 22
 
 #include "aie2/add.hpp"
 #include "aie2p/add_accum.hpp"

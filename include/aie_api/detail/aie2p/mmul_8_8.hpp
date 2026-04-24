@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -66,9 +66,28 @@ template <typename TypeA, typename TypeB>
 struct mmul_8_8<4, 16, 8, TypeA, TypeB, 32> : public C_block_larger_internal<TypeA, TypeB, 32, 32, 2>
 {
     using vector_A_type        = vector<TypeA, 64>;
+    using vector_B_type        = vector<TypeB, 128>;
     using vector_B_sparse_type = sparse_vector<TypeB, 128>;
 
     using C_block_larger_internal<TypeA, TypeB, 32, 32, 2>::C_block_larger_internal;
+
+    __aie_inline void mac(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
+    {
+        auto [tmp0, tmp1] = interleave_unzip<TypeA, 64>::run(a, vector<TypeA, 64>(), 8);
+
+        this->data = ::mac_8x8_8x8_conf(tmp0, a_sign, b.template extract<64>(0), b_sign, this->data, this->zero, 0, 0, 0);
+        this->data = ::mac_8x8_8x8     (tmp1, a_sign, b.template extract<64>(1), b_sign, this->data);
+        this->zero = false;
+    }
+
+    __aie_inline void mul(const vector_A_type &a, bool a_sign, const vector_B_type &b, bool b_sign)
+    {
+        auto [tmp0, tmp1] = interleave_unzip<TypeA, 64>::run(a, vector<TypeA, 64>(), 8);
+
+        this->data = ::mul_8x8_8x8(tmp0, a_sign, b.template extract<64>(0), b_sign);
+        this->data = ::mac_8x8_8x8(tmp1, a_sign, b.template extract<64>(1), b_sign, this->data);
+        this->zero = false;
+    }
 
     __aie_inline void mac(const vector_A_type &a, bool a_sign, const vector_B_sparse_type &b, bool b_sign)
     {

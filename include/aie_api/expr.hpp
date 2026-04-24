@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 /**
  * @file
@@ -32,6 +32,7 @@ enum class Operation
     Min,
     Sign,
     Zero,
+    Neg,
 };
 
 template <typename Parent, Operation Op>
@@ -181,6 +182,7 @@ struct is_block_vector_op<binary_op<Parent1, Parent2, Op>>
     static constexpr bool value = detail::is_block_vector_v<typename binary_op<Parent1, Parent2, Op>::result_type>;
 };
 
+#if __AIE_ARCH__ == 21
 template <typename T>
 struct is_bfp_vector_op
 {
@@ -199,6 +201,27 @@ struct is_bfp_vector_op<binary_op<Parent1, Parent2, Op>>
     static constexpr bool value = is_block_vector_op<binary_op<Parent1, Parent2, Op>>::value;
 };
 #endif
+
+#endif
+
+template <typename T>
+struct is_tbs_op
+{
+    static constexpr bool value = false;
+};
+
+template <typename Parent, Operation Op>
+struct is_tbs_op<unary_op<Parent, Op>>
+{
+    static constexpr bool value = detail::is_tbs_v<typename unary_op<aie_dm_resource_remove_t<std::decay_t<Parent>>, Op>::result_type>;
+};
+
+template <typename Parent1, typename Parent2, Operation Op>
+struct is_tbs_op<binary_op<Parent1, Parent2, Op>>
+{
+    static constexpr bool value = detail::is_tbs_v<typename binary_op<aie_dm_resource_remove_t<std::decay_t<Parent1>>,
+                                                                      aie_dm_resource_remove_t<std::decay_t<Parent2>>, Op>::result_type>;
+};
 
 template <typename T>
 struct is_mmul_op
@@ -232,6 +255,12 @@ static constexpr bool is_sparse_vector_op_v = is_sparse_vector_op<T>::value;
 
 template <typename T>
 static constexpr bool is_accum_op_v  = is_accum_op<T>::value;
+
+template <typename T>
+static constexpr bool is_block_vector_op_v = is_block_vector_op<T>::value;
+
+template <typename T>
+static constexpr bool is_tbs_op_v = is_tbs_op<T>::value;
 
 template <typename T>
 struct op_value_type_helper
@@ -285,6 +314,17 @@ struct op_value_type_helper<vector_elem_const_ref<T, Elems>>
     using type = typename vector_elem_const_ref<T, Elems>::value_type;
 };
 
+template <typename T, unsigned Elems,
+          unsigned Level, unsigned NumLevels, bool SlidingInner,
+          typename IterDesc, detail::data_layout Layout,
+          typename ResourceType, ResourceType Resource, detail::tbs_mode Mode,
+          bool Restrict, bool Unaligned,
+          typename U>
+struct op_value_type_helper<detail::tbs<T, Elems, Level, NumLevels, SlidingInner, IterDesc, Layout, ResourceType, Resource, Mode, Restrict, Unaligned, U>> 
+{ 
+    using type = typename detail::tbs<T, Elems, Level, NumLevels, SlidingInner, IterDesc, Layout, ResourceType, Resource, Mode, Restrict, Unaligned, U>::value_type;
+};
+
 template <typename Parent, Operation Op>
 struct op_value_type_helper<unary_op<Parent, Op>>
 {
@@ -331,6 +371,19 @@ template <typename T, unsigned Elems, Operation Op> requires(Op != Operation::No
 struct op_result_helper<vector_elem_const_ref<T, Elems>, Op>
 {
     using type = T;
+};
+
+template <typename T, unsigned Elems,
+          unsigned Level, unsigned NumLevels, bool SlidingInner,
+          typename IterDesc, detail::data_layout Layout,
+          typename ResourceType, ResourceType Resource, detail::tbs_mode Mode,
+          bool Restrict, bool Unaligned,
+          typename U,
+          Operation Op>
+    requires(Op != Operation::None)
+struct op_result_helper<detail::tbs<T, Elems, Level, NumLevels, SlidingInner, IterDesc, Layout, ResourceType, Resource, Mode, Restrict, Unaligned, U>, Op> 
+{ 
+    using type = detail::tbs<T, Elems, Level, NumLevels, SlidingInner, IterDesc, Layout, ResourceType, Resource, Mode, Restrict, Unaligned, U>;
 };
 
 template <typename Parent, Operation ParentOp, Operation Op>
@@ -406,20 +459,52 @@ struct unary_op_common
         return Op == Operation::None;
     }
 
+    static constexpr Operation operation = Op;
+};
+
+// Unary common with the input as a reference
+template <typename Parent, Operation Op>
+struct unary_op_common_ref : public unary_op_common<Parent, Op>
+{
+    using parent1_type = aie_dm_resource_remove_t<Parent>;
+
     __aie_inline
-    auto parent1() const //TODO: Use helper to decide between current + parent op, and drop redundant ones by returning parent's parent directly
+    auto &parent1()
     {
         if constexpr(is_op_v<parent1_type>)
-            return parent_();
+            return parent_.parent1();
         else
             return parent_;
     }
 
-    static constexpr Operation operation = Op;
+    __aie_inline
+    constexpr unary_op_common_ref(parent1_type & parent1) :
+        parent_(parent1)
+    {
+    }
+
+private:
+    parent1_type & parent_;
+};
+
+// Unary common with the input as a constant value
+template <typename Parent, Operation Op>
+struct unary_op_common_const : public unary_op_common<Parent, Op>
+{
+    using parent1_type = aie_dm_resource_remove_t<Parent>;
 
     __aie_inline
-    constexpr unary_op_common(const parent1_type parent) :
-        parent_(parent)
+    auto parent1() const
+    {
+        if constexpr(is_op_v<parent1_type>)
+            return parent_.parent1();
+        else
+            return parent_;
+    }
+
+    __aie_inline
+    constexpr unary_op_common_const(const parent1_type parent1) :
+        parent_(parent1)
     {
     }
 
@@ -430,22 +515,22 @@ private:
 template <typename Parent, Operation Op>
 struct unary_op;
 
-#define UNARY_OP(op)                                                                   \
-template <typename Parent>                                                             \
-struct unary_op<Parent, Operation::op> : public unary_op_common<Parent, Operation::op> \
-{                                                                                      \
-    using parent1_type = Parent;                                                        \
-    using result_type = op_result_type_t<parent1_type, Operation::op>;                  \
-    using  value_type = op_value_type_t<result_type>;                                  \
-                                                                                       \
-    using unary_op_common<Parent, Operation::op>::unary_op_common;                     \
-                                                                                       \
-    result_type operator()() const;                                                    \
+#define UNARY_OP(op)                                                                         \
+template <typename Parent>                                                                   \
+struct unary_op<Parent, Operation::op> : public unary_op_common_const<Parent, Operation::op> \
+{                                                                                            \
+    using parent1_type = Parent;                                                             \
+    using result_type = op_result_type_t<parent1_type, Operation::op>;                       \
+    using  value_type = op_value_type_t<result_type>;                                        \
+                                                                                             \
+    using unary_op_common_const<Parent, Operation::op>::unary_op_common_const;               \
+                                                                                             \
+    result_type operator()() const;                                                          \
 };
 
 #define UNARY_OP_IMPL(op)                                                                                 \
 template <typename Parent>                                                                                \
-__aie_inline                                                                            \
+__aie_inline                                                                                              \
 typename unary_op<Parent, Operation::op>::result_type unary_op<Parent, Operation::op>::operator()() const
 
 UNARY_OP(None)
@@ -455,6 +540,24 @@ UNARY_OP(Transpose)
 
 UNARY_OP(Acc_Add)
 UNARY_OP(Acc_Sub)
+
+// Unary none operation implementation for tensor buffer stream
+// Placed below UNARY_OP(None) to avoid issues in Native compilation
+template <TensorBufferStream Parent>
+struct unary_op<Parent, Operation::None> : public unary_op_common_ref<Parent, Operation::None>
+{
+    using parent1_type = Parent;
+    using result_type = op_result_type_t<parent1_type, Operation::None>;
+    using value_type = op_value_type_t<result_type>;
+    using elem_type = typename Parent::elem_type;
+
+    using unary_op_common_ref<Parent, Operation::None>::unary_op_common_ref;
+
+    result_type operator()() const 
+    {
+        return this->parent1();
+    }
+};
 
 UNARY_OP_IMPL(None)
 {
@@ -517,11 +620,21 @@ struct binary_op_common
         return false;
     }
 
+    static constexpr Operation operation = Op;
+};
+
+// Binary common with the first input as a reference
+template <typename Parent1, typename Parent2, Operation Op>
+struct binary_op_common_ref : public binary_op_common<Parent1, Parent2, Op>
+{
+    using parent1_type = aie_dm_resource_remove_t<Parent1>;
+    using parent2_type = aie_dm_resource_remove_t<Parent2>;
+
     __aie_inline
-    auto parent1() const
+    auto &parent1()
     {
-        if constexpr(is_op_v<parent1_type>) //TODO: Use helper to decide between current + parent op, and drop redundant ones by returning parent's parent directly
-            return parent1_();
+        if constexpr(is_op_v<parent1_type>)
+            return parent1_.parent1();
         else
             return parent1_;
     }
@@ -530,15 +643,50 @@ struct binary_op_common
     auto parent2() const
     {
         if constexpr(is_op_v<parent2_type>)
-            return parent2_();
+            return parent2_.parent2();
         else
             return parent2_;
     }
 
-    static constexpr Operation operation = Op;
+    __aie_inline
+    constexpr binary_op_common_ref(parent1_type & parent1, const parent2_type parent2) :
+        parent1_(parent1),
+        parent2_(parent2)
+    {
+    }
+
+private:
+    parent1_type & parent1_;
+    const parent2_type parent2_;
+};
+
+// Binary common with the first input as a constant value
+template <typename Parent1, typename Parent2, Operation Op>
+struct binary_op_common_const : public binary_op_common<Parent1, Parent2, Op>
+{
+    using parent1_type = aie_dm_resource_remove_t<Parent1>;
+    using parent2_type = aie_dm_resource_remove_t<Parent2>;
 
     __aie_inline
-    constexpr binary_op_common(const parent1_type parent1, const parent2_type parent2) :
+    auto parent1() const
+    {
+        if constexpr(is_op_v<parent1_type>)
+            return parent1_.parent1();
+        else
+            return parent1_;
+    }
+
+    __aie_inline
+    auto parent2() const
+    {
+        if constexpr(is_op_v<parent2_type>)
+            return parent2_.parent2();
+        else
+            return parent2_;
+    }
+
+    __aie_inline
+    constexpr binary_op_common_const(const parent1_type parent1, const parent2_type parent2) :
         parent1_(parent1),
         parent2_(parent2)
     {
@@ -552,30 +700,46 @@ private:
 template <typename Parent1, typename Parent2, Operation Op>
 struct binary_op;
 
-#define BINARY_OP(op)                                                                                        \
-                                                                                                             \
-template <typename Parent1, typename Parent2>                                                                \
-struct binary_op<Parent1, Parent2, Operation::op> : public binary_op_common<Parent1, Parent2, Operation::op> \
-{                                                                                                            \
-    using parent1_type = Parent1;                                                                            \
-    using parent2_type = Parent2;                                                                            \
-    using  result_type = op_result_type_t<parent1_type, Operation::op>;                                      \
-    using   value_type = op_value_type_t<result_type>;                                                       \
-                                                                                                             \
-    using binary_op_common<Parent1, Parent2, Operation::op>::binary_op_common;                               \
-                                                                                                             \
-    result_type operator()() const;                                                                          \
+// Binary sign operation implementation for tensor buffer stream
+template <TensorBufferStream Parent1, typename Parent2>
+struct binary_op<Parent1, Parent2, Operation::Sign> : public binary_op_common_ref<Parent1, Parent2, Operation::Sign>
+{
+    using parent1_type = Parent1;
+    using parent2_type = Parent2;
+    using result_type = op_result_type_t<parent1_type, Operation::Sign>;
+    using value_type = op_value_type_t<result_type>;
+    using elem_type = typename Parent1::elem_type;
+
+    using binary_op_common_ref<Parent1, Parent2, Operation::Sign>::binary_op_common_ref;
+
+    result_type operator()() const;
+};
+
+#define BINARY_OP(op)                                                                                              \
+                                                                                                                   \
+template <typename Parent1, typename Parent2>                                                                      \
+struct binary_op<Parent1, Parent2, Operation::op> : public binary_op_common_const<Parent1, Parent2, Operation::op> \
+{                                                                                                                  \
+    using parent1_type = Parent1;                                                                                  \
+    using parent2_type = Parent2;                                                                                  \
+    using  result_type = op_result_type_t<parent1_type, Operation::op>;                                            \
+    using   value_type = op_value_type_t<result_type>;                                                             \
+                                                                                                                   \
+    using binary_op_common_const<Parent1, Parent2, Operation::op>::binary_op_common_const;                         \
+                                                                                                                   \
+    result_type operator()() const;                                                                                \
 };
 
 #define BINARY_OP_IMPL(op)                                                                                                      \
 template <typename Parent1, typename Parent2>                                                                                   \
-__aie_inline                                                                                                  \
+__aie_inline                                                                                                                    \
 typename binary_op<Parent1, Parent2, Operation::op>::result_type binary_op<Parent1, Parent2, Operation::op>::operator()() const
 
 BINARY_OP(Max)
 BINARY_OP(Min)
 BINARY_OP(Sign)
 BINARY_OP(Zero)
+BINARY_OP(Neg)
 
 
 }

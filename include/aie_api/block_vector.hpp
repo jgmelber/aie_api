@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -14,7 +14,40 @@
 #include "concepts.hpp"
 #include "vector.hpp"
 
+namespace aie::detail {
+
+template <typename T>
+struct native_block_vector_length;
+
+template <typename T>
+static constexpr unsigned native_block_vector_length_v = native_block_vector_length<T>::value;
+
+
+template <typename T, unsigned Elems>
+struct native_block_vector_type;
+
+template <typename T, unsigned Elems>
+using native_block_vector_type_t = typename native_block_vector_type<T, Elems>::type;
+
+
+template <typename T, unsigned Elems>
+struct block_vector_storage;
+
+template <typename T, unsigned Elems>
+using block_vector_storage_t = typename block_vector_storage<T, Elems>::type;
+
+} // namespace aie::detail
+
+#if __AIE_ARCH__ == 21
+
 #include "detail/aie2p/block_vector_native_types.hpp"
+
+#elif __AIE_ARCH__ == 22
+
+#include "detail/aie2ps/block_vector_native_types.hpp"
+
+#endif
+
 #include "detail/aie2p/block_vector.hpp"
 
 namespace aie {
@@ -25,24 +58,13 @@ template <BlockType T, unsigned N> class block_vector;
 
 namespace detail {
 
-template <typename T>
-struct is_valid_block_type
-{
-    static constexpr bool value = false;
-};
+template <typename T> struct is_valid_block_type : std::false_type {};
 
-template <typename T>
-struct is_block_vector
-{
-    static constexpr bool value = false;
-};
+template <typename T> struct is_block_vector : std::false_type {};
 
 #if AIE_API_ML_VERSION >= 210
 template <BlockType T, unsigned Elems>
-struct is_block_vector<block_vector<T, Elems>>
-{
-    static constexpr bool value = true;
-};
+struct is_block_vector<block_vector<T, Elems>> : std::true_type {};
 #endif
 
 template <typename T>
@@ -221,8 +243,10 @@ public:
 template <detail::NativeBlockVector T>
 block_vector(const T&) -> block_vector<typename detail::native_vector_traits<T>::value_type, detail::native_vector_traits<T>::size>;
 
+#if __AIE_ARCH__ == 21
 template <BlockType T, unsigned Elems>
 using bfp_vector [[deprecated("Use block_vector<T, Elems> instead")]] = block_vector<T, Elems>;
+#endif
 
 #endif // AIE_API_ML_VERSION
 

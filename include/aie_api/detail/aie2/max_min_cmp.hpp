@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -24,7 +24,7 @@ static constexpr auto get_max_min_cmp_op()
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_cmp_bits_impl<4, T, Elems, Op>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems> / 2;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -117,11 +117,13 @@ struct max_min_cmp_bits_impl<4, T, Elems, Op>
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_cmp_bits_impl<8, T, Elems, Op>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
+    using   mask_type = mask<Elems>;
     using native_impl = max_min_cmp_bits_impl<8, T, native_elems, Op>;
+    using    cmp_type = unsigned long long;
 
     static constexpr auto op = get_max_min_cmp_op<Op>();
 
@@ -129,39 +131,29 @@ struct max_min_cmp_bits_impl<8, T, Elems, Op>
     static auto run(const vector_type &v1, const vector_type &v2)
     {
         vector_type ret;
+        mask_type ret_mask;
 
         if constexpr (Elems <= native_elems) {
-            unsigned long long cmp;
+            cmp_type cmp;
 
             const vector<T, native_elems> tmp = op(v1.template grow<native_elems>(),
                                                    v2.template grow<native_elems>(),
                                                    cmp);
             ret = tmp.template extract<Elems>(0);
 
-            if constexpr (Elems <= 32) {
-                // Avoid unnecessary register copy
-                return std::make_tuple(ret, mask<Elems>::from_uint32(cmp));
-            }
-            else {
-                return std::make_tuple(ret, mask<Elems>::from_uint64(cmp));
-            }
+                ret_mask = mask<Elems>::from_uint64(cmp);
         }
         else {
-            mask<Elems> ret_mask;
-
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                unsigned long long cmp;
+                auto [tmp_ret, tmp_m] = native_impl::run(v1.template extract<native_elems>(idx),
+                                                         v2.template extract<native_elems>(idx));
 
-                const vector<T, native_elems> tmp = op(v1.template extract<native_elems>(idx),
-                                                       v2.template extract<native_elems>(idx),
-                                                       cmp);
-
-                ret.insert(idx, tmp);
-                ret_mask.insert(idx, mask<native_elems>::from_uint64(cmp));
+                ret.insert(idx, tmp_ret);
+                ret_mask.insert(idx, tmp_m);
             });
-
-            return std::make_tuple(ret, ret_mask);
         }
+
+        return std::make_tuple(ret, ret_mask);
     }
 
     template <unsigned Elems2>
@@ -228,11 +220,13 @@ struct max_min_cmp_bits_impl<8, T, Elems, Op>
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_cmp_bits_impl<16, T, Elems, Op>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
+    using   mask_type = mask<Elems>;
     using native_impl = max_min_cmp_bits_impl<16, T, native_elems, Op>;
+    using    cmp_type = std::conditional_t<native_elems == 32, unsigned, unsigned long long>;
 
     static constexpr auto op = get_max_min_cmp_op<Op>();
 
@@ -240,33 +234,32 @@ struct max_min_cmp_bits_impl<16, T, Elems, Op>
     static auto run(const vector_type &v1, const vector_type &v2)
     {
         vector_type ret;
+        mask_type ret_mask;
 
         if constexpr (Elems <= native_elems) {
-            unsigned cmp;
+            cmp_type cmp;
 
             const vector<T, native_elems> tmp = op(v1.template grow<native_elems>(),
                                                    v2.template grow<native_elems>(),
                                                    cmp);
             ret = tmp.template extract<Elems>(0);
 
-            return std::make_tuple(ret, mask<Elems>::from_uint32(cmp));
+            if constexpr (native_elems == 32)
+                ret_mask = mask<Elems>::from_uint32(cmp);
+            else
+                ret_mask = mask<Elems>::from_uint64(cmp);
         }
         else {
-            mask<Elems> ret_mask;
-
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
-                unsigned cmp;
+                auto [tmp_ret, tmp_m] = native_impl::run(v1.template extract<native_elems>(idx),
+                                                         v2.template extract<native_elems>(idx));
 
-                const vector<T, native_elems> tmp = op(v1.template extract<native_elems>(idx),
-                                                       v2.template extract<native_elems>(idx),
-                                                       cmp);
-
-                ret.insert(idx, tmp);
-                ret_mask.insert(idx, mask<native_elems>::from_uint32(cmp));
+                ret.insert(idx, tmp_ret);
+                ret_mask.insert(idx, tmp_m);
             });
-
-            return std::make_tuple(ret, ret_mask);
         }
+
+        return std::make_tuple(ret, ret_mask);
     }
 
     template <unsigned Elems2>
@@ -290,7 +283,7 @@ struct max_min_cmp_bits_impl<16, T, Elems, Op>
             const vector<T, native_elems> vals = broadcast<T, native_elems>::run(a);
 
             vector_type ret;
-            mask<Elems> ret_mask;
+            mask_type ret_mask;
 
             utils::unroll_times<num_ops>([&](unsigned idx) __aie_inline {
                 auto [tmp, tmp_mask] = native_impl::run(vals, v.template extract<native_elems>(idx));
@@ -333,7 +326,7 @@ struct max_min_cmp_bits_impl<16, T, Elems, Op>
 template <typename T, unsigned Elems, MaxMinOperation Op>
 struct max_min_cmp_bits_impl<32, T, Elems, Op>
 {
-    static constexpr unsigned native_elems = native_vector_length_v<T>;
+    static constexpr unsigned native_elems = max_intrinsic_vector_elems_v<T, Elems>;
     static constexpr unsigned      num_ops = std::max(1u, Elems / native_elems);
 
     using vector_type = vector<T, Elems>;
@@ -371,7 +364,10 @@ struct max_min_cmp_bits_impl<32, T, Elems, Op>
 
                 ret.insert(2 * idx + 0, tmp1);
                 ret.insert(2 * idx + 1, tmp2);
-                ret_mask.insert(idx, mask<native_elems * 2>::from_uint32((cmp2 << 16) | cmp1));
+                if constexpr (native_elems == 16)
+                    ret_mask.insert(idx, mask<native_elems * 2>::from_uint32((cmp2 << 16) | cmp1));
+                else
+                    ret_mask.insert(idx, mask<native_elems * 2>::from_uint64((uint64_t(cmp2) << 32) | cmp1));
             });
 
             return std::make_tuple(ret, ret_mask);

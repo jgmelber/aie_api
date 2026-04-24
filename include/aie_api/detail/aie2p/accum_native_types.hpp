@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2022 Xilinx, Inc.
-// Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
+// Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
 
 #pragma once
 
@@ -21,6 +21,9 @@ template <> struct accum_native_type<acc48>    { using type = acc64; };
 template <> struct accum_native_type<acc56>    { using type = acc64; };
 template <> struct accum_native_type<acc64>    { using type = acc64; };
 
+template <> struct accum_native_type<accfloat> { using type = accfloat; };
+
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct accum_native_type<cacc16>   { using type = cacc64; };
 template <> struct accum_native_type<cacc24>   { using type = cacc64; };
 template <> struct accum_native_type<cacc32>   { using type = cacc64; };
@@ -29,8 +32,8 @@ template <> struct accum_native_type<cacc40>   { using type = cacc64; };
 template <> struct accum_native_type<cacc48>   { using type = cacc64; };
 template <> struct accum_native_type<cacc56>   { using type = cacc64; };
 template <> struct accum_native_type<cacc64>   { using type = cacc64; };
+#endif
 
-template <> struct accum_native_type<accfloat> { using type = accfloat; };
 #if __AIE_API_COMPLEX_FP32_EMULATION__
 template <> struct accum_native_type<caccfloat> { using type = caccfloat; };
 #endif
@@ -47,58 +50,48 @@ template <> struct accum_bits_for_tag<exact_acc64>  { static constexpr unsigned 
 template <typename T>
 struct accum_class_for_type;
 
-// TODO: remove accum_class_for_type as it is mainly required in the context of multiplications,
-// which is already handled by accum_class_for_mul_types
-template <> struct accum_class_for_type<int4>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<uint4>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<int8>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<uint8>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<int16>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<uint16>   { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<int32>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<uint32>   { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <> struct accum_class_for_type<cint16>   { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <> struct accum_class_for_type<cint32>   { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <> struct accum_class_for_type<bfloat16> { static constexpr AccumClass value() { return AccumClass::FP;   } };
-#if __AIE_API_FP32_EMULATION__
-template <> struct accum_class_for_type<float>    { static constexpr AccumClass value() { return AccumClass::FP;   } };
+template <> struct accum_class_for_type<int4>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<uint4>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<int8>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<uint8>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<int16>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<uint16>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<int32>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
+template <> struct accum_class_for_type<uint32>    { static constexpr AccumClass value() { return AccumClass::Int;  } };
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
+template <> struct accum_class_for_type<cint16>    { static constexpr AccumClass value() { return AccumClass::CInt; } };
+template <> struct accum_class_for_type<cint32>    { static constexpr AccumClass value() { return AccumClass::CInt; } };
+#endif
+template <> struct accum_class_for_type<bfloat16>  { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#if __AIE_API_FP8_SUPPORT__
+template <> struct accum_class_for_type<float8 >   { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#endif
+#if __AIE_API_BF8_SUPPORT__
+template <> struct accum_class_for_type<bfloat8>   { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#endif
+#if __AIE_API_FP16_SUPPORT__
+template <> struct accum_class_for_type<float16>   { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#endif
+#if __AIE_API_FP32_EMULATION__ || __AIE_API_FP32_SUPPORT__
+template <> struct accum_class_for_type<float>     { static constexpr AccumClass value() { return AccumClass::FP;   } };
 #endif
 #if __AIE_API_COMPLEX_FP32_EMULATION__
-template <> struct accum_class_for_type<cfloat>   { static constexpr AccumClass value() { return AccumClass::CFP; } };
+#if __AIE_API_CBF16_SUPPORT__
+template <> struct accum_class_for_type<cbfloat16> { static constexpr AccumClass value() { return AccumClass::CFP; } };
 #endif
-
-template <typename T, typename U>
-struct accum_class_for_mul_types;
-
-template <typename T> struct accum_class_for_mul_types<T,       int4>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,      uint4>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,       int8>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,      uint8>      { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,       int16>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,      uint16>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <>           struct accum_class_for_mul_types<cint16,  int16>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint16, uint16>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint32,  int16>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint32, uint16>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <typename T> struct accum_class_for_mul_types<T,       int32>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <typename T> struct accum_class_for_mul_types<T,      uint32>     { static constexpr AccumClass value() { return AccumClass::Int;  } };
-template <>           struct accum_class_for_mul_types<cint16,  int32>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint16, uint32>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint32,  int32>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<cint32, uint32>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <typename T> struct accum_class_for_mul_types<T,      cint16>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <typename T> struct accum_class_for_mul_types<T,      cint32>     { static constexpr AccumClass value() { return AccumClass::CInt; } };
-template <>           struct accum_class_for_mul_types<bfloat16, bfloat16> { static constexpr AccumClass value() { return AccumClass::FP;   } };
-template <>           struct accum_class_for_mul_types<float, float>       { static constexpr AccumClass value() { return AccumClass::FP;   } };
-
-template <typename T> struct accum_class_for_mul_types<T, bfp16ebs8>       { static constexpr AccumClass value() { return AccumClass::FP;   } };
-template <typename T> struct accum_class_for_mul_types<T, bfp16ebs16>      { static constexpr AccumClass value() { return AccumClass::FP;   } };
-#if __AIE_API_COMPLEX_FP32_EMULATION__
-template <>           struct accum_class_for_mul_types< float, cfloat>     { static constexpr AccumClass value() { return AccumClass::CFP;  } };
-template <>           struct accum_class_for_mul_types<cfloat,  float>     { static constexpr AccumClass value() { return AccumClass::CFP;  } };
-template <>           struct accum_class_for_mul_types<cfloat, cfloat>     { static constexpr AccumClass value() { return AccumClass::CFP;  } };
+template <> struct accum_class_for_type<cfloat>    { static constexpr AccumClass value() { return AccumClass::CFP; } };
 #endif
-
+#if __AIE_ARCH__ == 21
+template <> struct accum_class_for_type<bfp16ebs8>  { static constexpr AccumClass value() { return AccumClass::FP;   } };
+template <> struct accum_class_for_type<bfp16ebs16> { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#elif __AIE_ARCH__ == 22
+template <> struct accum_class_for_type<mx4>        { static constexpr AccumClass value() { return AccumClass::FP;   } };
+template <> struct accum_class_for_type<mx6>        { static constexpr AccumClass value() { return AccumClass::FP;   } };
+template <> struct accum_class_for_type<mx9>        { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#endif
+#if __AIE_API_MX6_SUPPORT__
+template <> struct accum_class_for_type<mx6>        { static constexpr AccumClass value() { return AccumClass::FP;   } };
+#endif
 
 template <typename T> struct native_accum_traits;
 
@@ -112,10 +105,12 @@ template <> struct native_accum_traits<     v8acc64> { using value_type =     ac
 template <> struct native_accum_traits<    v16acc64> { using value_type =     acc64; static constexpr unsigned size = 16; };
 template <> struct native_accum_traits<    v32acc64> { using value_type =     acc64; static constexpr unsigned size = 32; };
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <> struct native_accum_traits<    v2cacc64> { using value_type =    cacc64; static constexpr unsigned size =  2; };
 template <> struct native_accum_traits<    v4cacc64> { using value_type =    cacc64; static constexpr unsigned size =  4; };
 template <> struct native_accum_traits<    v8cacc64> { using value_type =    cacc64; static constexpr unsigned size =  8; };
 template <> struct native_accum_traits<   v16cacc64> { using value_type =    cacc64; static constexpr unsigned size = 16; };
+#endif
 
 template <> struct native_accum_traits<  v8accfloat> { using value_type =  accfloat; static constexpr unsigned size =  8; };
 template <> struct native_accum_traits< v16accfloat> { using value_type =  accfloat; static constexpr unsigned size = 16; };
@@ -161,11 +156,13 @@ template <>                               struct accum_storage<AccumClass::Int, 
 template <>                               struct accum_storage<AccumClass::Int,  64,  32> { using type = v32acc64; static type undef() { return undef_v32acc64(); } };
 template <unsigned N> requires (N >=  64) struct accum_storage<AccumClass::Int,  64,   N> : compound_accum_storage<N, accum_storage<AccumClass::Int, 64, 32>> {};
 
+#if __AIE_API_COMPLEX_VECTOR_SUPPORT__
 template <>                               struct accum_storage<AccumClass::CInt, 64,   2> { using type =  v2cacc64; static type undef() { return undef_v2cacc64();  } };
 template <>                               struct accum_storage<AccumClass::CInt, 64,   4> { using type =  v4cacc64; static type undef() { return undef_v4cacc64();  } };
 template <>                               struct accum_storage<AccumClass::CInt, 64,   8> { using type =  v8cacc64; static type undef() { return undef_v8cacc64();  } };
 template <>                               struct accum_storage<AccumClass::CInt, 64,  16> { using type = v16cacc64; static type undef() { return undef_v16cacc64(); } };
 template <unsigned N> requires (N >=  32) struct accum_storage<AccumClass::CInt, 64,   N> : compound_accum_storage<N, accum_storage<AccumClass::CInt, 64, 16>> {};
+#endif
 
 template <>                               struct accum_storage<AccumClass::FP,   32,   4> { using type =  v8accfloat; static type undef() { return undef_v8accfloat();  } };
 template <>                               struct accum_storage<AccumClass::FP,   32,   8> { using type =  v8accfloat; static type undef() { return undef_v8accfloat();  } };
