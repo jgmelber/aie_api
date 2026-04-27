@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2022 Xilinx, Inc.
+# Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
+
+CXX = clang++ --target=aie2-none-unknown-elf
+CXXFLAGS = -std=c++2b -Wno-unknown-attributes
+CPPFLAGS = -I../include -I$(XILINX_VITIS_AIETOOLS)/include
+
+SOURCES := add.cpp aligned_memcpy.cpp gemm_bf16xbf16.cpp gemm_int8xint8_sparse.cpp \
+		   lazy.cpp lookup_table.cpp mmul.cpp operators.cpp
+TARGETS := $(SOURCES:.cpp=.o)
+
+.PHONY: all clean
+
+all: $(TARGETS)
+
+clean:
+	rm -f $(TARGETS)
