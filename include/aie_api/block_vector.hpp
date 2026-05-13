@@ -174,14 +174,16 @@ public:
      *
      * @tparam ElemsOut Size of the returned subvector.
      *
-     * @param idx Index of the subvector to be returned.
+     * @param idx Index of the subvector to be returned. The vector is split into Elems / ElemsOut equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsOut - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      */
     template <unsigned ElemsOut>
     __aie_inline
     constexpr block_vector<value_type, ElemsOut> extract(unsigned idx) const
         requires(ElemsOut <= Elems)
     {
-        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the extract size, numbered from 0");
 
         return base_type::template extract<ElemsOut>(idx);
     }
@@ -191,7 +193,9 @@ public:
      *
      * The updated region will contain the values in the given subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v   Subvector to be written into the region.
      *
      * @returns a reference to the updated vector.
@@ -201,7 +205,7 @@ public:
     constexpr block_vector &insert(unsigned idx, const block_vector<T, ElemsIn> &v)
         requires(ElemsIn <= Elems)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         base_type::template insert<ElemsIn>(idx, v);
 
@@ -213,7 +217,9 @@ public:
      *
      * The updated region will contain the values in the given native subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v   Native subvector to be written into the region.
      *
      * @returns a reference to the updated vector.
@@ -223,7 +229,7 @@ public:
     constexpr block_vector &insert(unsigned idx, typename block_vector<T, ElemsIn>::native_type v)
         requires(ElemsIn <= Elems)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         const block_vector<T, ElemsIn> in = v;
 

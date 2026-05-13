@@ -240,7 +240,9 @@ public:
      *
      * The updated region will contain the values in the given subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v Subvector to be written into the region.
      * @returns a reference to the updated vector.
      */
@@ -249,7 +251,7 @@ public:
     sparse_vector &insert(unsigned idx, const sparse_vector<T, ElemsIn> &v)
         requires(ElemsIn == Elems / 2 || ElemsIn == Elems)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         if constexpr (ElemsIn == Elems) {
             data = v.data;
@@ -265,7 +267,9 @@ public:
      * \brief Returns a subvector with the contents of a region of the sparse_vector.
      *
      * @tparam ElemsOut Size of the returned subvector.
-     * @param idx Index of the subvector to be returned.
+     * @param idx Index of the subvector to be returned. The vector is split into Elems / ElemsOut equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsOut - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      */
     template <unsigned Elems2>
     __aie_inline

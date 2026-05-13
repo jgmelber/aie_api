@@ -545,7 +545,7 @@ public:
     __aie_inline
     vector_base &insert(unsigned idx, const vector_base<T, ElemsIn> &v)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         constexpr unsigned input_bits = type_bits() * ElemsIn;
 
@@ -654,7 +654,7 @@ public:
     __aie_inline
     vector_base &insert(unsigned idx, typename vector_base<T, ElemsIn>::native_type v)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         const vector_base<T, ElemsIn> in = v;
 
@@ -665,7 +665,7 @@ public:
     __aie_inline
     vector_base<value_type, ElemsOut> extract(unsigned idx) const
     {
-        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the extract size, numbered from 0");
 
         constexpr unsigned output_bits = type_bits() * ElemsOut;
 

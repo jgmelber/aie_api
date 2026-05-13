@@ -827,6 +827,15 @@ constexpr Operation evaluate_mul_operation()
         return T::operation;
 }
 
+// AIE2+: avoid compiling unsupported fallback; surface guidance via static_assert below.
+#define AIE_API_MUL_BITS_FALLBACK_UNSUPPORTED                                                     \
+    "This multiply or multiply-accumulate is not supported for these operand types and "          \
+    "accumulator choice on this architecture."
+
+// Always false when instantiated; name is chosen so diagnostics list operand types and accum tag clearly.
+template <typename Operand1, typename Operand2, typename AccumulatorTag>
+inline constexpr bool unsupported_mul_mac_configuration_v = false;
+
 template <MulMacroOp MulOp, unsigned AccumBits, unsigned Type1Bits, typename T1, unsigned Type2Bits, typename T2>
 struct mul_bits_impl
 {
@@ -850,7 +859,7 @@ struct mul_bits_impl
 #endif
                                  const Acc &... acc)
     {
-        // Add subscript operator for accumulators
+#if __AIE_ARCH__ == 10
         accum_type<Elems> ret;
         auto mul_op = get_scalar_mul_op<MulOp>();
 
@@ -858,6 +867,10 @@ struct mul_bits_impl
             ret[i] = mul_op(v1[i], v2[i], acc...);
 
         return ret;
+#else
+        static_assert(unsupported_mul_mac_configuration_v<T1, T2, accum_tag>,
+                      AIE_API_MUL_BITS_FALLBACK_UNSUPPORTED);
+#endif
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
@@ -869,6 +882,7 @@ struct mul_bits_impl
 #endif
                                  const Acc &... acc)
     {
+#if __AIE_ARCH__ == 10
         accum_type<Elems> ret;
         auto mul_op = get_scalar_mul_op<MulOp>();
 
@@ -876,6 +890,10 @@ struct mul_bits_impl
             ret[i] = mul_op(a, v[i], acc...);
 
         return ret;
+#else
+        static_assert(unsupported_mul_mac_configuration_v<T1, T2, accum_tag>,
+                      AIE_API_MUL_BITS_FALLBACK_UNSUPPORTED);
+#endif
     }
 
     template <unsigned Elems, typename... Acc> requires((is_accum_v<Acc> && ...))
@@ -887,6 +905,7 @@ struct mul_bits_impl
 #endif
                                  const Acc &... acc)
     {
+#if __AIE_ARCH__ == 10
         accum_type<Elems> ret;
         auto mul_op = get_scalar_mul_op<MulOp>();
 
@@ -894,9 +913,15 @@ struct mul_bits_impl
             ret[i] = mul_op(v[i], a, acc...);
 
         return ret;
+#else
+        static_assert(unsupported_mul_mac_configuration_v<T1, T2, accum_tag>,
+                      AIE_API_MUL_BITS_FALLBACK_UNSUPPORTED);
+#endif
     }
 #endif
 };
+
+#undef AIE_API_MUL_BITS_FALLBACK_UNSUPPORTED
 
 template <MulMacroOp MulOp, unsigned AccumBits, unsigned Type1Bits, typename T1, unsigned Type2Bits, typename T2>
 struct mul_maxmin_bits_impl

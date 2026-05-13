@@ -287,6 +287,10 @@ struct fft_dit<Vectorization, 0, 3, cbfloat16, cbfloat16, cbfloat16> : public ff
         accum<caccfloat, 8> d_acc = ::mul_elem_8_2_conf(::concat(data.b, zeros_), ::concat(w1, zeros_), cmplx_mask_, 0);
         accum<caccfloat, 8> e_acc = ::mul_elem_8_2_conf(::concat(data.c, zeros_), ::concat(w2, zeros_), cmplx_mask_, 0);
 
+#if __AIE_API_CR_1269001_FFT_CBF16_WORKAROUND__
+        chess_separator_scheduler();
+#endif
+
         vector<twiddle_type, 8> d = d_acc.template to_vector<twiddle_type>();
         vector<twiddle_type, 8> e = e_acc.template to_vector<twiddle_type>();
 

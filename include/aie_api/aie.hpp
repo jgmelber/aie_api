@@ -7363,12 +7363,16 @@ auto sincos_complex(const Vec &v) -> vector<std::conditional_t<Vec::is_floating_
 /**
  * @ingroup group_fp_conversion
  *
- * Convert a floating point value into a fixed-point value.
+ * Convert a floating-point value into a fixed-point value, rounded to the nearest integer.
  *
  * @param a     Input value.
  * @param shift Position of the point in the output value.
  *
  * @tparam TR   Type of the returned fixed-point value.
+ *
+ * \note Global settings, such as rounding and saturation modes, do not affect this API.
+ *       The conversion relies on a hardware @c float2fix() implementation that applies a
+ *       fixed round-to-nearest behavior (e.g. @ref aie::set_rounding "aie::set_rounding(aie::rounding_mode::floor)" has no effect here).
  */
 template <typename TR = int32> requires(Utils::is_one_of_v<TR, int8, int16, int32>)
 __aie_inline
@@ -7380,12 +7384,17 @@ auto to_fixed(float a, int shift = 0)
 /**
  * @ingroup group_fp_conversion
  *
- * Convert a floating point value into a fixed-point value.
+ * Convert a complex floating-point value into a complex fixed-point value, with each component rounded to the nearest integer.
  *
  * @param a     Input value.
  * @param shift Position of the point in the output value.
  *
  * @tparam TR   Type of the returned fixed-point value.
+ *
+ * \note Global settings, such as rounding and saturation modes, do not affect this API.
+ *       The conversion relies on a hardware @c float2fix() implementation that applies a
+ *       fixed round-to-nearest behavior and does not observe software-configured rounding modes
+ *       (e.g. @ref aie::set_rounding "aie::set_rounding(aie::rounding_mode::floor)" has no effect here).
  */
 template <typename TR = cint32> requires(arch::is(arch::AIE, arch::AIE_ML) &&
                                          Utils::is_one_of_v<TR, cint16, cint32>)

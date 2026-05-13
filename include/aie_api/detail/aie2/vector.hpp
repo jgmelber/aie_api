@@ -964,7 +964,7 @@ public:
     __aie_inline
     vector_base &insert(unsigned idx, const vector_base<T, ElemsIn> &v)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         insert_helper<ElemsIn>(idx, v);
 
@@ -984,7 +984,7 @@ public:
     __aie_inline
     vector_base<T, ElemsOut> extract(unsigned idx) const
     {
-        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsOut, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the extract size, numbered from 0");
 
         return extract_helper<ElemsOut>(idx);
     }

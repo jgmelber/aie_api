@@ -362,7 +362,9 @@ public:
      *
      * The updated region will contain the values in the given subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v Subvector to be written into the region.
      * @returns a reference to the updated vector.
      */
@@ -379,7 +381,9 @@ public:
      *
      * The updated region will contain the values in the given native subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v Native subvector to be written into the region.
      * @returns a reference to the updated vector.
      */
@@ -387,7 +391,7 @@ public:
     __aie_inline
     vector &insert(unsigned idx, typename vector<T, ElemsIn>::native_type v)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
 
         const vector<T, ElemsIn> in = v;
 
@@ -399,7 +403,9 @@ public:
      *
      * The updated region will contain the values in the given native subvector.
      *
-     * @param idx Index of the subvector to be replaced.
+     * @param idx Index of the subvector to be replaced. The vector is split into Elems / ElemsIn equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param v Native subvector to be written into the region.
      * @returns a reference to the updated vector.
      */
@@ -412,7 +418,7 @@ public:
 
         static_assert(std::is_same_v<T, U>, "Mismatched types cannot be inserted");
 
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the vector into equal groups of the insert size, numbered from 0");
         
         const vector<T, ElemsIn> in = v;
 
@@ -423,7 +429,9 @@ public:
      * \brief Returns a subvector with the contents of a region of the vector.
      *
      * @tparam ElemsOut Size of the returned subvector.
-     * @param idx Index of the subvector to be returned.
+     * @param idx Index of the subvector to be returned. The vector is split into Elems / ElemsOut equally sized
+     *            subvectors, so valid indices range from 0 to Elems / ElemsOut - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      */
     template <unsigned ElemsOut>
     __aie_inline

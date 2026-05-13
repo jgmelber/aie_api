@@ -463,7 +463,9 @@ public:
      *
      * The updated region will contain the values in the given submask.
      *
-     * @param idx Index of the submask to be replaced.
+     * @param idx Index of the submask to be replaced. The mask is split into Elems / ElemsIn equally sized
+     *            submasks, so valid indices range from 0 to Elems / ElemsIn - 1. This is a partition index,
+     *            not an element offset. An invalid index may be reported at compile time if the value is known.
      * @param m Submask to be written into the region.
      * @returns a reference to the updated mask.
      */
@@ -471,7 +473,7 @@ public:
     __aie_inline
     constexpr mask& insert(unsigned idx, const mask<ElemsIn>& m)
     {
-        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index");
+        REQUIRES_MSG(idx < Elems / ElemsIn, "idx needs to be a valid subvector index. Subvector indices split the mask into equal groups of the insert size, numbered from 0");
 
         base_type::template insert<ElemsIn>(idx, m);
 

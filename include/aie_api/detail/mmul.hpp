@@ -122,7 +122,7 @@
  *     <td style="vertical-align:top">
  *         4x16x16<sup>ab</sup><br> 8x8x8
  *     <td style="vertical-align:top">
- *         4x8x8<br> 8x8x8
+ *         4x8x8<sup>32</sup><br> 8x8x8<sup>32</sup>
  *     <td style="vertical-align:top">
  *         8x2x8<sup>b</sup><br> 8x4x8<sup>ab</sup><br> 4x4x8<sup>b</sup> <br> 4x8x8<sup>ab</sup>
  *     <td style="vertical-align:top">
