@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['buffered_5finput_0',['buffered_input',['../namespaceaie_1_1sync.html#a3e240cf2ef066cd2631ebebc35ab5cee',1,'aie::sync']]],
-  ['buffered_5foutput_1',['buffered_output',['../namespaceaie_1_1sync.html#ad1cd4e3a9431d6ef55ca1cc309a84499',1,'aie::sync']]]
+  ['buffered_5finput_0',['buffered_input',['../namespaceaie_1_1sync.html#a35404b7434ffd45e2774b0e1f66f0c5a',1,'aie::sync']]],
+  ['buffered_5foutput_1',['buffered_output',['../namespaceaie_1_1sync.html#a6d2f55e9f26d3a36fa0cd23c90dcee5c',1,'aie::sync']]]
 ];

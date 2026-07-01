@@ -7,6 +7,7 @@ var searchData=
   ['flow_20adf_20graph_20abstractions_4',['Interoperability with Adaptive Data Flow (ADF) Graph Abstractions',['../group__group__adf.html',1,'']]],
   ['for_20basic_20types_5',['Concepts for Basic Types',['../group__group__basic__types__concepts.html',1,'']]],
   ['fourier_20transform_20fft_6',['Fast Fourier Transform (FFT)',['../group__group__fft.html',1,'']]],
-  ['functions_7',['functions',['../group__group__elementary.html',1,'Elementary Functions'],['../group__group__utility__unroll.html',1,'Loop unrolling functions'],['../group__group__utility__print.html',1,'Print functions']]],
-  ['functions_20and_20classes_8',['Uility functions and classes',['../group__group__utility__functions.html',1,'']]]
+  ['functions_7',['Elementary Functions',['../group__group__elementary.html',1,'']]],
+  ['functions_8',['functions',['../group__group__utility__loops.html',1,'Loop functions'],['../group__group__utility__print.html',1,'Print functions']]],
+  ['functions_20and_20classes_9',['Uility functions and classes',['../group__group__utility__functions.html',1,'']]]
 ];

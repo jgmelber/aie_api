@@ -9,5 +9,7 @@ var searchData=
   ['cacc80_6',['cacc80',['../group__group__basic__types__accum.html#structcacc80',1,'']]],
   ['caccfloat_7',['caccfloat',['../group__group__basic__types__accum.html#structcaccfloat',1,'']]],
   ['cbfloat16_8',['cbfloat16',['../types_8hpp.html#structcbfloat16',1,'']]],
-  ['circular_5fiterator_9',['circular_iterator',['../group__group__memory.html#classaie_1_1circular__iterator',1,'aie']]]
+  ['circular_5findex_9',['circular_index',['../namespaceaie.html#structaie_1_1circular__index',1,'aie']]],
+  ['circular_5fiterator_10',['circular_iterator',['../group__group__memory.html#classaie_1_1circular__iterator',1,'aie']]],
+  ['circular_5fiterator_3c_20const_20t_2c_20size_2c_20resource_20_3e_11',['circular_iterator&lt; const T, Size, Resource &gt;',['../group__group__memory.html',1,'aie']]]
 ];
